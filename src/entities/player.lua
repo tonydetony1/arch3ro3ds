@@ -234,6 +234,11 @@ function Player:handleInput(dt)
         end
     end
 
+    -- Banc d'essai PC (src/dev/bench.lua) : pilote automatique
+    if self.benchInputX then
+        inputX, inputY = self.benchInputX, self.benchInputY
+    end
+
     -- Règle d'or Move vs Attack : Détection stricte d'input
     local hasInput = (inputX ~= 0 or inputY ~= 0)
     self.hasInput = hasInput

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Génère toute la bande-son du jeu (effets + musiques) sans aucune dépendance.
 
-Synthèse pure Python -> WAV 16 bits mono 22050 Hz, puis conversion en OGG via ffmpeg
-(les .ogg sont lus tels quels par LÖVE 11 et LÖVE Potion 3DS).
+Synthèse pure Python -> WAV 16 bits mono 22050 Hz. Les effets restent en WAV (lecture
+instantanée sur 3DS, pas de décodage Vorbis au démarrage) ; les musiques passent en OGG via ffmpeg.
 
 Usage :  python3 tools/gen_audio.py
-Sortie :  assets/audio/sfx/*.ogg  et  assets/audio/music/*.ogg
+Sortie :  assets/audio/sfx/*.wav  et  assets/audio/music/*.ogg
 """
 
 import math
@@ -168,6 +168,9 @@ def emit(name, buf, directory, quality="1"):
     wav = os.path.join(directory, name + ".wav")
     ogg = os.path.join(directory, name + ".ogg")
     save_wav(buf, wav)
+    if directory == SFX_DIR:
+        print("  " + os.path.relpath(wav, ROOT))
+        return
     if to_ogg(wav, ogg, quality):
         print("  " + os.path.relpath(ogg, ROOT))
     else:

@@ -1,7 +1,7 @@
 -- tools/bake/main.lua
 -- Script autonome de précompilation de l'atlas graphique Arch3ro
 -- Exécuté par love.appimage lors du build pour générer :
---   1. assets/atlas.png (512x512 PNG optimisé)
+--   1. assets/atlas.png (1024x512 PNG optimisé)
 --   2. src/render/atlas_data.lua (mapping coordonnées + quads + fonts)
 
 local ROOT = love.filesystem.getSource()
@@ -47,7 +47,7 @@ function love.load()
     local t0 = os.clock()
 
     -- 1. Construction complète de l'atlas en mémoire
-    local atlas = SpriteAtlas.new(512, 512)
+    local atlas = SpriteAtlas.new(1024, 512)
     local SPRITE_MODULES = {
         "src.render.sprites.heroes",
         "src.render.sprites.monsters",
@@ -124,6 +124,7 @@ function love.load()
                 yoff = g.yoff,
                 nameO = g.nameO,
                 nameP = g.nameP,
+                nameC = g.nameC,
             }
         end
         cleanFonts[id] = fEntry

@@ -57,6 +57,7 @@ function GameState:enter(params)
     self.arena = Arena.new()
     self.hud = HUD.new()
     self.camera = Camera.new()
+    self.arena.camera = self.camera
     self.obstacleManager = ObstacleManager.new()
     self.specialRoomManager = SpecialRoomManager.new()
     self.mapW = 640

@@ -10,8 +10,8 @@ local Art = require("src.render.art")
 local Palette = require("src.render.palette")
 local Depth = require("src.render.depth")
 local WorldManager = require("src.core.world_manager")
+local Gpu = require("src.core.gpu")
 
-local is3DS = (love._console == "3DS" or love._os == "3DS" or (love.graphics and love.graphics.setActiveScreen ~= nil))
 
 local Arena = {}
 Arena.__index = Arena
@@ -43,8 +43,8 @@ function Arena.new()
     self.canvas = nil
     self.canvasW = 0
     self.canvasH = 0
-    self.skyStrip = nil
-    self.vignette = nil
+    self.skyBands = nil
+    self.camera = nil -- caméra de la salle (culling du sol), fournie par GameState
     self.wallBatch = nil
     self.theme = WorldManager.getTheme(1)
     self.themeId = 1
@@ -74,8 +74,7 @@ function Arena:setTheme(chapterIndex)
     if self.themeId == idx and self.theme then return end
     self.themeId = idx
     self.theme = WorldManager.getTheme(idx)
-    if self.skyStrip and self.skyStrip.release then pcall(function() self.skyStrip:release() end) end
-    self.skyStrip = nil
+    self.skyBands = nil
     self.canvasW = 0 -- force la reconstruction du sol
 end
 
@@ -97,46 +96,36 @@ end
 -- ============================================================================
 -- 1. CIEL EN COUCHES
 -- ============================================================================
-local function newCanvas(w, h)
-    -- 3DS PICA200 max framebuffer : 512x512 ; refuser les Canvas trop grands
-    if is3DS and (w > 512 or h > 512) then return nil end
-    local ok, cv = pcall(love.graphics.newCanvas, w, h)
-    if not ok or not cv then return nil end
-    cv:setFilter("nearest", "nearest")
-    return cv
-end
-
-local function buildSkyStrip(theme)
+-- Dégradé du ciel en bandes pleines (4 sommets par bande, aucun Canvas)
+local SKY_BANDS = 16
+local function buildSkyBands(theme)
     local top = Palette.hex(theme and theme.skyTop or "4f9be8")
     local bottom = Palette.hex(theme and theme.skyBottom or "cdeeff")
-    local steps = 60
-    local prev = love.graphics.getCanvas()
-    local strip = newCanvas(1, steps)
-    love.graphics.setCanvas(strip)
-    for i = 0, steps - 1 do
-        local f = i / (steps - 1)
-        love.graphics.setColor(
+    local bands = {}
+    for i = 0, SKY_BANDS - 1 do
+        local f = i / (SKY_BANDS - 1)
+        bands[i + 1] = {
             top[1] + (bottom[1] - top[1]) * f,
             top[2] + (bottom[2] - top[2]) * f,
-            top[3] + (bottom[3] - top[3]) * f, 1)
-        love.graphics.rectangle("fill", 0, i, 1, 1)
+            top[3] + (bottom[3] - top[3]) * f,
+        }
     end
-    love.graphics.setCanvas(prev)
-    return strip
+    return bands
 end
 
 function Arena:drawSky(camX, camY)
     local w, h = Config.TOP_WIDTH, Config.TOP_HEIGHT
     local t = love.timer.getTime()
-    if not self.skyStrip and love.graphics.newCanvas then self.skyStrip = buildSkyStrip(self.theme) end
+    if not self.skyBands or self._skyTheme ~= self.theme then
+        self.skyBands = buildSkyBands(self.theme)
+        self._skyTheme = self.theme
+    end
 
     Depth.push(Depth.SKY)
-    if self.skyStrip then
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.draw(self.skyStrip, -16, 0, 0, w + 32, h / 60)
-    else
-        Palette.set(Palette.hex(self.theme and self.theme.skyTop or "4f9be8"))
-        love.graphics.rectangle("fill", -16, 0, w + 32, h)
+    local bandH = math.ceil(h / SKY_BANDS)
+    for i, c in ipairs(self.skyBands) do
+        love.graphics.setColor(c[1], c[2], c[3], 1)
+        love.graphics.rectangle("fill", -16, (i - 1) * bandH, w + 32, bandH)
     end
     Depth.pop()
 
@@ -165,11 +154,33 @@ end
 -- ============================================================================
 -- 2. SOL CUIT DANS UN SPRITEBATCH (1 SEUL DRAW CALL GPU POUR TOUT LE DÉCOR)
 -- ============================================================================
-local function addRect(batch, x, y, w, h, color, alpha)
-    local f = Art.frame("fx_pixel", 1)
-    if not f then return end
-    batch:setColor(color[1], color[2], color[3], alpha or 1)
-    batch:add(f.quad, math.floor(x), math.floor(y), 0, w, h, 0, 0)
+-- Aplats teintés : hors du lot de sprites (sur 3DS un sprite teinté = 1 appel GPU, et un
+-- aplat découpé par tuile en coûtait des dizaines). Ils sont mémorisés en deux listes :
+--   * rectSink = "under" : sous tous les sprites du sol (couleur de base de l'île)
+--   * rectSink = "over"  : par-dessus (brume, lumière, ombres des murs, ombrage de falaise)
+local rectLists = { under = {}, over = {} }
+local rectSink = "over"
+
+local function addRect(_, x, y, w, h, color, alpha)
+    local list = rectLists[rectSink]
+    list[#list + 1] = { math.floor(x), math.floor(y), math.floor(w + 0.5), math.floor(h + 0.5),
+        color[1], color[2], color[3], alpha or 1 }
+end
+
+local function drawRectList(list, x0, y0, x1, y1)
+    for i = 1, #list do
+        local r = list[i]
+        if r[1] < x1 and r[1] + r[3] > x0 and r[2] < y1 and r[2] + r[4] > y0 then
+            love.graphics.setColor(r[5], r[6], r[7], r[8])
+            love.graphics.rectangle("fill", r[1], r[2], r[3], r[4])
+        end
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+-- Couches du sol découpé (ordre de superposition global)
+local function layer(b, n)
+    if b.setLayer then b:setLayer(n) end
 end
 
 local function addSprite(batch, name, frame, x, y, sx, sy, r, g, b, a)
@@ -205,7 +216,10 @@ local function fillCliff(b, w, h, rng, theme)
 end
 
 local function fillGround(b, w, h, theme, rng)
+    rectSink = "under"
     addRect(b, 16, GROUND_TOP, w - 32, h - GROUND_TOP - 14, Palette.hex(theme.ground))
+    rectSink = "over"
+    layer(b, 3)
     local area = w * h
     for _ = 1, math.floor(area / 7000) do
         local name = (rng() < 0.55) and theme.patchLight or theme.patchDark
@@ -214,6 +228,7 @@ local function fillGround(b, w, h, theme, rng)
     for _ = 1, math.floor(area / 60000) do
         addSpriteV(b, theme.patchExtra, 1, 40 + rng() * (w - 80), 60 + rng() * (h - 120), theme.variant)
     end
+    layer(b, 4)
     local bands = 8
     local hazeH = math.floor((h - GROUND_TOP) * 0.45 / bands)
     for i = 0, bands - 1 do
@@ -276,21 +291,30 @@ function Arena:buildGround(mapW, mapH, palette, obstacleManager)
     self._groundTheme = self.theme or WorldManager.getTheme(1)
 
     if not self.groundBatch then
-        self.groundBatch = love.graphics.newSpriteBatch(Art.image, 1400, "static")
+        -- Sol découpé en tuiles de 128 px : seules les tuiles visibles partent au GPU
+        self.groundBatch = Gpu.newChunkedBatch(Art.image, 192, 400)
     end
     self.canvas = self.groundBatch
     self.canvasW = w
     self.canvasH = h
     local b = self.groundBatch
-    b:clear()
+    b:reset(w, h, -48, -48)
+    rectLists = { under = {}, over = {} }
+    self.rectsUnder = rectLists.under
+    self.rectsOver = rectLists.over
+    rectSink = "over"
 
     local theme = self._groundTheme
     local rng = makeRng(w * 7 + h * 13)
 
+    layer(b, 1)
     fillCliff(b, w, h, rng, theme)
     fillGround(b, w, h, theme, rng)
+    layer(b, 5)
     fillPlazas(b, w, h, theme)
+    layer(b, 6)
     fillDecals(b, w, h, rng, theme)
+    layer(b, 7)
     fillWallShadows(b, w, h)
 
     b:setColor(1, 1, 1, 1)
@@ -315,7 +339,7 @@ end
 function Arena:buildWalls(w, h, rng, theme)
     theme = theme or self.theme or WorldManager.getTheme(1)
     if not self.wallBatch then
-        self.wallBatch = love.graphics.newSpriteBatch(Art.image, WALL_BATCH_SIZE, "static")
+        self.wallBatch = Gpu.newBatch(Art.image, WALL_BATCH_SIZE, "static")
     end
     local b = self.wallBatch
     b:clear()
@@ -370,7 +394,17 @@ function Arena:draw(isGateOpen, palette, spawnWarnings, mapW, mapH)
 
     love.graphics.setColor(1, 1, 1, 1)
     if self.groundBatch then
-        love.graphics.draw(self.groundBatch)
+        local cam = self.camera
+        local x0, y0, x1, y1 = -64, -64, w + 64, h + 96
+        if cam then
+            x0 = cam.x - cam.halfW - 16
+            y0 = cam.y - cam.halfH - 16
+            x1 = x0 + cam.viewportW + 32
+            y1 = y0 + cam.viewportH + 32
+        end
+        drawRectList(self.rectsUnder, x0, y0, x1, y1)
+        self.groundBatch:drawView(x0, y0, x1, y1)
+        drawRectList(self.rectsOver, x0, y0, x1, y1)
     end
 
     if spawnWarnings and #spawnWarnings > 0 then
@@ -396,27 +430,12 @@ local function drawVignetteDirect(w, h)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
-local function buildVignette(w, h)
-    local cv = newCanvas(w, h)
-    if not cv then return nil end
-    local prev = love.graphics.getCanvas()
-    love.graphics.push()
-    love.graphics.origin()
-    love.graphics.setCanvas(cv)
-    love.graphics.clear(0, 0, 0, 0)
-    drawVignetteDirect(w, h)
-    love.graphics.setCanvas(prev)
-    love.graphics.pop()
-    love.graphics.setColor(1, 1, 1, 1)
-    return cv
-end
-
 -- Murs + porte (couche Depth.WALLS, 1 seul draw call SpriteBatch)
 function Arena:drawWalls(isGateOpen, mapW)
     local w = mapW or Config.TOP_WIDTH
     local t = love.timer.getTime()
     love.graphics.setColor(1, 1, 1, 1)
-    if self.wallBatch then love.graphics.draw(self.wallBatch) end
+    if self.wallBatch then self.wallBatch:draw() end
 
     local gx, gy = math.floor(w / 2), 32
     if not isGateOpen then
@@ -428,17 +447,8 @@ function Arena:drawWalls(isGateOpen, mapW)
 end
 
 function Arena:drawAtmosphere()
-    if not self.vignette and not self._vignetteAttempted then
-        self._vignetteAttempted = true
-        self.vignette = buildVignette(Config.TOP_WIDTH, Config.TOP_HEIGHT)
-    end
-    if self.vignette then
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.draw(self.vignette, 0, 0)
-    else
-        -- 3DS: dessin direct de la vignette (légèrement simplifié)
-        drawVignetteDirect(Config.TOP_WIDTH, Config.TOP_HEIGHT)
-    end
+    -- 4 aplats : moins cher qu'une texture plein écran et sans Canvas
+    drawVignetteDirect(Config.TOP_WIDTH, Config.TOP_HEIGHT)
 end
 
 return Arena

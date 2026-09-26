@@ -116,10 +116,12 @@ function VFX.buildTextureAtlas()
     VFX.quads = {}
     for k, f in pairs(VFX.frames) do VFX.quads[k] = f.quad end
 
-    VFX.projectileBatch = love.graphics.newSpriteBatch(VFX.atlasImage, 240, "dynamic")
-    VFX.lootBatch       = love.graphics.newSpriteBatch(VFX.atlasImage, 140, "dynamic")
-    VFX.shadowBatch     = love.graphics.newSpriteBatch(VFX.atlasImage, 100, "dynamic")
-    VFX.particleBatch   = love.graphics.newSpriteBatch(VFX.atlasImage, 80,  "dynamic")
+    -- Lots portables : sur 3DS, SpriteBatch ignore les couleurs (voir src/core/gpu.lua)
+    local Gpu = require("src.core.gpu")
+    VFX.projectileBatch = Gpu.newBatch(VFX.atlasImage, 240, "dynamic")
+    VFX.lootBatch       = Gpu.newBatch(VFX.atlasImage, 140, "dynamic")
+    VFX.shadowBatch     = Gpu.newBatch(VFX.atlasImage, 100, "dynamic")
+    VFX.particleBatch   = Gpu.newBatch(VFX.atlasImage, 80,  "dynamic")
     VFX.isBatchReady    = true
 end
 
@@ -319,8 +321,6 @@ end
 -- ============================================================================
 -- Ligne laser des tireurs d'élite avec pulsation (0.3 - 0.8) et verrouillage opaque (1.0)
 function VFX.drawSniperLine(startX, startY, targetX, targetY, isLocked, progressTimer)
-    local prevBlend, prevAlphaMode = love.graphics.getBlendMode()
-    love.graphics.setBlendMode("alpha")
 
     local t = love.timer.getTime()
 
@@ -349,13 +349,10 @@ function VFX.drawSniperLine(startX, startY, targetX, targetY, isLocked, progress
     end
 
     love.graphics.setLineWidth(1)
-    love.graphics.setBlendMode(prevBlend, prevAlphaMode)
 end
 
 -- Cercle de mortier / bombe avec cercle intérieur qui grandit jusqu'à l'explosion
 function VFX.drawBombTelegraph(cx, cy, maxRadius, currentProgress, friendly)
-    local prevBlend, prevAlphaMode = love.graphics.getBlendMode()
-    love.graphics.setBlendMode("alpha")
 
     maxRadius = maxRadius or 30
     local progress = math.min(1.0, math.max(0, currentProgress or 0))
@@ -386,8 +383,6 @@ function VFX.drawBombTelegraph(cx, cy, maxRadius, currentProgress, friendly)
     love.graphics.setColor(1.0, 0.92, 0.35, 0.9)
     love.graphics.rectangle("fill", math.floor(cx) - 4, math.floor(cy), 9, 1)
     love.graphics.rectangle("fill", math.floor(cx), math.floor(cy) - 4, 1, 9)
-
-    love.graphics.setBlendMode(prevBlend, prevAlphaMode)
 end
 
 -- ============================================================================
@@ -449,8 +444,7 @@ function VFX.drawProjectileBatch(projectilePool)
         end
     end
 
-    love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.draw(batch)
+    batch:draw()
 end
 
 -- Rendu groupé de tout le butin au sol en un SEUL draw call
@@ -475,8 +469,7 @@ function VFX.drawLootBatch(lootPool)
         end
     end
 
-    love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.draw(batch)
+    batch:draw()
 end
 
 -- Rendu de toutes les particules d'impact en un SEUL draw call
@@ -496,8 +489,7 @@ function VFX.drawParticles()
         end
     end
 
-    love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.draw(batch)
+    batch:draw()
 end
 
 -- ============================================================================

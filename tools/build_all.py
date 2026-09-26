@@ -29,6 +29,9 @@ SDMC_LP_DIR = os.path.expanduser("~/.var/app/org.azahar_emu.Azahar/data/azahar-e
 
 os.chdir(ROOT_DIR)
 
+# --fast : itération rapide (pas de précompilation d'atlas, pas de CIA, pas d'installation)
+FAST = "--fast" in sys.argv
+
 print("=" * 60)
 print(" ARCH3RO - COMPILATION UNIFIÉE 3DSX & CIA (NINTENDO 3DS)")
 print("=" * 60)
@@ -39,10 +42,17 @@ print("=" * 60)
 print("\n[0/5] Précompilation de l'atlas de sprites (boot instantané)...")
 bake_tool = os.path.join(TOOLS_DIR, "bake")
 love_bin = "/home/tonydetony/AppImages/löve.appimage"
-if os.path.exists(love_bin):
+if FAST:
+    print(" -> --fast : atlas existant conservé.")
+elif os.path.exists(love_bin):
     subprocess.run([love_bin, bake_tool], check=True)
 else:
     print(" -> Attention: AppImage löve introuvable, utilisation de l'atlas existant.")
+
+# Texture native 3DS : LÖVE Potion charge assets/atlas.t3x à la place de assets/atlas.png
+subprocess.run([sys.executable, os.path.join(TOOLS_DIR, "png2t3x.py"),
+                os.path.join(ROOT_DIR, "assets", "atlas.png"),
+                os.path.join(ROOT_DIR, "assets", "atlas.t3x")], check=True)
 
 # -------------------------------------------------------------
 # 1. Vérification / Création de l'archive .love optimisée
@@ -61,6 +71,12 @@ with zipfile.ZipFile(love_archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for root, _, files in os.walk(folder):
                 for f in sorted(files):
                     if f.endswith(("_hd.png", ".DS_Store", ".tmp")):
+                        continue
+                    # Images du menu HOME (icône, bannière, logo) : inutiles dans le jeu
+                    if root == "assets" and f.endswith(".png") and f != "atlas.png":
+                        continue
+                    # Outils de développement : jamais embarqués
+                    if root.startswith(os.path.join("src", "dev")):
                         continue
                     fp = os.path.join(root, f)
                     arcname = os.path.relpath(fp, ROOT_DIR)
@@ -185,6 +201,12 @@ with open(out_3dsx, "wb") as f:
 
 size_3dsx = os.path.getsize(out_3dsx)
 print(f" -> SUCCÈS : Arch3ro.3dsx généré ({size_3dsx / (1024*1024):.2f} Mo)")
+
+if FAST:
+    os.makedirs(SDMC_3DS_DIR, exist_ok=True)
+    shutil.copyfile(out_3dsx, os.path.join(SDMC_3DS_DIR, "Arch3ro.3dsx"))
+    print("\n --fast : Arch3ro.3dsx copié dans la SD de l'émulateur.")
+    sys.exit(0)
 
 # -------------------------------------------------------------
 # 5. Construction d'Arch3ro.cia

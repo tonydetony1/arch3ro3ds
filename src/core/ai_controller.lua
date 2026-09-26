@@ -659,8 +659,6 @@ function AIController.drawTelegraph(dummy, playerX, playerY)
 
     -- 3. MELEE CHARGERS : FLÈCHE ROUGE D'ANTICIPATION DU DASH (0.2s)
     elseif (mType == "wolf" or mType == "bat" or mType == "raven" or mType == "gargoyle") and dummy.aiState == "aim" then
-        local prevBlend, prevAlphaMode = love.graphics.getBlendMode()
-        love.graphics.setBlendMode("alpha")
 
         local len = (mType == "wolf" or mType == "gargoyle") and 55 or 45
         local endX = dummy.x + (dummy.targetDirX or 1) * len
@@ -672,7 +670,6 @@ function AIController.drawTelegraph(dummy, playerX, playerY)
         -- Pointe de flèche
         love.graphics.circle("fill", endX, endY, 3.5)
         love.graphics.setLineWidth(1)
-        love.graphics.setBlendMode(prevBlend, prevAlphaMode)
 
     -- 4. HIDDEN / BURROWER : MONTICULE DE TERRE QUAND SOUS TERRE
     elseif mType == "burrower" and dummy.isBurrowed then

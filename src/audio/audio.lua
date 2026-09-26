@@ -41,12 +41,19 @@ function Audio.init()
         return
     end
 
+    -- Effets en WAV (PCM brut : aucun décodage Vorbis sur le processeur 3DS). Chaque son est
+    -- décodé une fois en SoundData ; ses voix partagent ces échantillons en mémoire.
     for _, name in ipairs(SFX_LIST) do
-        local path = SFX_PATH .. name .. ".ogg"
+        local path = SFX_PATH .. name .. ".wav"
+        if not fileExists(path) then path = SFX_PATH .. name .. ".ogg" end
         if fileExists(path) then
+            local okData, data = false, nil
+            if love.sound and love.sound.newSoundData then
+                okData, data = pcall(love.sound.newSoundData, path)
+            end
             local voices = { index = 1 }
             for i = 1, VOICES do
-                local ok, src = pcall(love.audio.newSource, path, "static")
+                local ok, src = pcall(love.audio.newSource, okData and data or path, "static")
                 if ok and src then
                     voices[i] = src
                 end
@@ -55,6 +62,7 @@ function Audio.init()
         end
     end
 
+    require("src.core.boot_profile").mark("  audio: effets")
     for _, name in ipairs(MUSIC_LIST) do
         local path = MUSIC_PATH .. name .. ".ogg"
         if fileExists(path) then

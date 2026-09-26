@@ -4,6 +4,7 @@
 
 local SpriteAtlas = require("src.render.sprite_atlas")
 local PixelFont = require("src.ui.pixel_font")
+local Boot = require("src.core.boot_profile")
 
 local Art = {
     ready = false,
@@ -26,60 +27,30 @@ function Art.init()
     -- 1. Mode Ultra-Rapide (Boot Instantané < 0.05s) : Chargement du pack précompilé
     local prebakedImg = "assets/atlas.png"
     local hasPrebakedData, prebakedData = pcall(require, "src.render.atlas_data")
-
-    local diagLog = {}
-    local function logDiag(msg)
-        table.insert(diagLog, msg)
-        pcall(function()
-            local f = io.open("test_diag.txt", "a")
-            if f then f:write(msg .. "\n"); f:close() end
-        end)
-    end
-
-    logDiag("=== Art.init DIAGNOSTIC ===")
-    local testData = string.rep("\0\0\0\0", 64 * 64)
-    local okRaw1, idRaw1 = pcall(love.image.newImageData, 64, 64, "rgba8", testData)
-    logDiag("newImageData(64, 64, 'rgba8', str): ok=" .. tostring(okRaw1) .. " res=" .. tostring(idRaw1))
-    local okRaw2, idRaw2 = pcall(love.image.newImageData, 64, 64, testData)
-    logDiag("newImageData(64, 64, str): ok=" .. tostring(okRaw2) .. " res=" .. tostring(idRaw2))
-
-    local okImgRaw, imgRaw = false, nil
-    if okRaw1 and idRaw1 then
-        logDiag("idRaw1 format: " .. tostring(idRaw1:getFormat()))
-        okImgRaw, imgRaw = pcall(love.graphics.newImage, idRaw1)
-        logDiag("newImage(idRaw1): ok=" .. tostring(okImgRaw) .. " res=" .. tostring(imgRaw))
-        if okImgRaw and imgRaw then
-            logDiag("imgRaw format: " .. tostring(imgRaw:getFormat()))
-        end
-    end
-    local info = love.filesystem.getInfo and love.filesystem.getInfo(prebakedImg)
-    logDiag("getInfo(atlas.png): " .. tostring(info and (info.size or true)))
+    Boot.mark("  atlas: données Lua " .. (hasPrebakedData and type(prebakedData) or tostring(prebakedData)))
 
     local okData, imgData = pcall(love.image.newImageData, prebakedImg)
-    logDiag("newImageData(atlas.png): ok=" .. tostring(okData) .. " res=" .. tostring(imgData))
-    if okData and imgData then
-        local fmt = tostring(imgData:getFormat())
-        local r0, g0, b0, a0 = imgData:getPixel(0, 0)
-        logDiag(string.format("imgData fmt=%s, p(0,0)=(%s,%s,%s,%s)", fmt, tostring(r0), tostring(g0), tostring(b0), tostring(a0)))
-    end
-
-    local okImg, rawImg = pcall(love.graphics.newImage, prebakedImg)
-    logDiag("newImage(atlas.png): ok=" .. tostring(okImg) .. " res=" .. tostring(rawImg))
+    local okImg, rawImg = false, nil
+    if not okData then okImg, rawImg = pcall(love.graphics.newImage, prebakedImg) end
+    Boot.mark("  atlas: PNG " .. tostring(okData) .. " " .. tostring(okData and "" or imgData) .. " / " .. tostring(okImg) .. " " .. tostring(rawImg))
 
     if hasPrebakedData and type(prebakedData) == "table" and (okData or okImg) then
         local img = okData and love.graphics.newImage(imgData) or rawImg
         img:setFilter("nearest", "nearest")
+        Boot.mark("  atlas: texture GPU")
         local atlas = SpriteAtlas.loadPrebaked(prebakedData, img)
+        Boot.mark("  atlas: quads")
         PixelFont.loadPrebaked(prebakedData.fonts, atlas)
+        Boot.mark("  atlas: police")
         Art.atlas = atlas
         Art.image = img
         Art.ready = true
-        logDiag("Prebaked pack successfully loaded!")
+        require("src.core.gpu").setAutoBatchImage(img)
         return
     end
 
     -- 2. Secours : Génération procédurale si les fichiers précompilés sont absents
-    local atlas = SpriteAtlas.new(512, 512)
+    local atlas = SpriteAtlas.new(1024, 512)
     for _, modName in ipairs(SPRITE_MODULES) do
         require(modName).define(atlas)
     end
@@ -89,6 +60,7 @@ function Art.init()
     Art.atlas = atlas
     Art.image = atlas.image
     Art.ready = true
+    require("src.core.gpu").setAutoBatchImage(atlas.image)
 end
 
 function Art.draw(name, frame, x, y, flipX, flash, variant)

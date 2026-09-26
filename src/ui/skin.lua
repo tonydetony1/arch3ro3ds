@@ -38,14 +38,18 @@ function Skin.roundRect(c, x, y, w, h, r, a)
     end
 end
 
--- Disque pixel (balayage horizontal)
+-- Disque : un seul polygone (l'ancien balayage ligne par ligne coûtait 2r+1 appels GPU,
+-- soit ~250 appels pour une icône ronde : c'était la moitié du coût du HUD sur 3DS)
+local discSegments = {}
 function Skin.disc(c, cx, cy, r, a)
+    if r <= 0 then return end
     set(c, a)
-    cx, cy = floor(cx), floor(cy)
-    for dy = -r, r do
-        local half = floor(math.sqrt(r * r - dy * dy) + 0.35)
-        love.graphics.rectangle("fill", cx - half, cy + dy, half * 2 + 1, 1)
+    local seg = discSegments[r]
+    if not seg then
+        seg = math.max(10, math.min(32, floor(r * 1.4)))
+        discSegments[r] = seg
     end
+    love.graphics.circle("fill", floor(cx) + 0.5, floor(cy) + 0.5, r + 0.5, seg)
 end
 
 -- ---------------------------------------------------------------------------
@@ -204,7 +208,8 @@ local bgCache = {}
 function Skin.background(w, h)
     local key = w * 10000 + h
     local cv = bgCache[key]
-    if not cv and love.graphics.newCanvas then
+    -- Pas de Canvas sur 3DS : setCanvas en plein rendu désynchronise la cible de l'écran
+    if not cv and love.graphics.newCanvas and not require("src.core.gpu").is3DS then
         local prev = love.graphics.getCanvas()
         local ok; ok, cv = pcall(love.graphics.newCanvas, w, h)
         if not ok or not cv then cv = nil end
@@ -233,6 +238,14 @@ function Skin.background(w, h)
         love.graphics.draw(cv, 0, 0)
     else
         rect(C.night, 0, 0, w, h)
+        set(Palette.hex("2b3150"))
+        for d = -h, w, 16 do
+            love.graphics.polygon("fill", d, h, d + 3, h, d + 3 + h, 0, d + h, 0)
+        end
+        set(C.ink, 0.35)
+        love.graphics.rectangle("fill", 0, 0, w, 2)
+        love.graphics.rectangle("fill", 0, h - 2, w, 2)
+        love.graphics.setColor(1, 1, 1, 1)
     end
 end
 

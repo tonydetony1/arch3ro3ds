@@ -14,6 +14,37 @@ local PixelFont = {
 
 local floor = math.floor
 
+-- Couleurs de texte précuites dans l'atlas (lettre colorée + contour encre).
+-- Un texte dans une de ces couleurs se dessine en blanc "neutre" : l'auto-batcher de
+-- src/core/gpu.lua peut alors fusionner toutes ses lettres en un seul appel GPU (3DS).
+local BAKED_COLORS = { "white", "yellow", "silver", "fog", "steel", "cyan", "red", "amber", "leaf", "orange", "ink", "pink" }
+PixelFont.BAKED_COLORS = BAKED_COLORS
+
+-- Table couleur -> clé précuite (identité de table, puis comparaison RVB tolérante)
+local bakedByTable = {}
+local bakedList = {}
+for _, key in ipairs(BAKED_COLORS) do
+    local c = Palette.C[key]
+    bakedByTable[c] = key
+    bakedList[#bakedList + 1] = { key = key, c = c }
+end
+
+local function bakedKey(color)
+    if not color then return "white" end
+    if (color[4] or 1) < 0.999 then return nil end
+    local k = bakedByTable[color]
+    if k then return k end
+    local r, g, b = color[1], color[2], color[3]
+    for i = 1, #bakedList do
+        local c = bakedList[i].c
+        if math.abs(c[1] - r) < 0.004 and math.abs(c[2] - g) < 0.004 and math.abs(c[3] - b) < 0.004 then
+            bakedByTable[color] = bakedList[i].key
+            return bakedList[i].key
+        end
+    end
+    return nil
+end
+
 -- Décodage UTF-8 sans allocation
 local function decode(s, i)
     local c = s:byte(i)
@@ -86,7 +117,13 @@ local function defineFont(atlas, id, def)
         local base = id .. ":" .. cp
         atlas:define(base .. ":o", { frames = { rows }, palette = white, outline = Palette.C.ink, anchor = "topleft" })
         atlas:define(base .. ":p", { frames = { rows }, palette = white, anchor = "topleft" })
-        font.pending[cp] = { w = #rows[1], yoff = g[1], nameO = base .. ":o", nameP = base .. ":p" }
+        local nameC = {}
+        for _, key in ipairs(BAKED_COLORS) do
+            local name = base .. ":c:" .. key
+            atlas:define(name, { frames = { rows }, palette = { ["#"] = Palette.C[key] }, outline = Palette.C.ink, anchor = "topleft" })
+            nameC[key] = name
+        end
+        font.pending[cp] = { w = #rows[1], yoff = g[1], nameO = base .. ":o", nameP = base .. ":p", nameC = nameC }
     end
 
     for key, g in pairs(def.glyphs) do add(key, g) end
@@ -119,9 +156,14 @@ function PixelFont.finalize(atlas)
                 yoff = p.yoff,
                 o = atlas:getFrame(p.nameO, 1),
                 p = atlas:getFrame(p.nameP, 1),
+                c = {},
                 nameO = p.nameO,
                 nameP = p.nameP,
+                nameC = p.nameC,
             }
+            for key, name in pairs(p.nameC or {}) do
+                font.glyphs[cp].c[key] = atlas:getFrame(name, 1)
+            end
         end
         font.pending = nil
         font.fallback = font.glyphs[63] -- "?"
@@ -159,9 +201,14 @@ function PixelFont.loadPrebaked(fontsData, atlas)
                 yoff = g.yoff,
                 o = atlas:getFrame(g.nameO, 1),
                 p = atlas:getFrame(g.nameP, 1),
+                c = {},
                 nameO = g.nameO,
                 nameP = g.nameP,
+                nameC = g.nameC,
             }
+            for key, name in pairs(g.nameC or {}) do
+                font.glyphs[cp].c[key] = atlas:getFrame(name, 1)
+            end
         end
         font.fallback = font.glyphs[63] -- "?"
         PixelFont.fonts[id] = font
@@ -238,11 +285,14 @@ function PixelFont.print(text, x, y, color, id, scale, style)
 
     if style == "shadow" then
         local c = Palette.C.ink
-        love.graphics.setColor(c[1], c[2], c[3], color and color[4] or 1)
-        PixelFont.print(text, x, y + s, c, id, s, nil)
+        PixelFont.print(text, x, y + s, (color and (color[4] or 1) < 1) and { c[1], c[2], c[3], color[4] } or c, id, s, nil)
     end
 
-    if color then
+    -- Couleur précuite : lettres déjà colorées, dessinées en blanc (fusionnables en 1 appel)
+    local key = (not plain) and bakedKey(color) or nil
+    if key then
+        love.graphics.setColor(1, 1, 1, 1)
+    elseif color then
         love.graphics.setColor(color[1], color[2], color[3], color[4] or 1)
     else
         love.graphics.setColor(1, 1, 1, 1)
@@ -261,7 +311,7 @@ function PixelFont.print(text, x, y, color, id, scale, style)
         else
             local g = f.glyphs[cp] or f.fallback
             if g then
-                local fr = plain and g.p or g.o
+                local fr = plain and g.p or (key and g.c and g.c[key]) or g.o
                 love.graphics.draw(img, fr.quad, pen - off, penY + g.yoff * s - off, 0, s, s)
                 pen = pen + (g.w + 1) * s
             end
