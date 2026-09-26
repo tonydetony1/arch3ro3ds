@@ -1,0 +1,167 @@
+BasicInfo:
+  Title                   : "Arch3ro"
+  CompanyCode             : "00"
+  ProductCode             : "CTR-P-ARCH"
+  ContentType             : Application
+  Logo                    : Nintendo
+
+RomFs:
+  RootPath                : /home/tonydetony/Documents/Arch3ro 3ds/tools/romfs_dir
+
+TitleInfo:
+  Category                : Application
+  UniqueId                : 0xFF3FF
+
+Option:
+  UseOnSD                 : true
+  FreeProductCode         : true
+  MediaFootPadding        : false
+  EnableCompress          : true
+  EnableCrypt             : false
+
+AccessControlInfo:
+  CoreVersion                   : 2
+  DescVersion                   : 2
+
+  UseExtSaveData                : false
+  FileSystemAccess:
+   - CategorySystemApplication
+   - CategoryHardwareCheck
+   - CategoryFileSystemTool
+   - Debug
+   - TwlCardBackup
+   - TwlNandData
+   - Boss
+   - DirectSdmc
+   - Core
+   - CtrNandRo
+   - CtrNandRw
+   - CtrNandRoWrite
+   - CategorySystemSettings
+   - CardBoard
+   - ExportImportIvs
+   - DirectSdmcWrite
+   - SwitchCleanup
+   - SaveDataMove
+   - Shop
+   - Shell
+   - CategoryHomeMenu
+
+  IdealProcessor                : 0
+  AffinityMask                  : 1
+  Priority                      : 16
+  MaxCpu                        : 0x9E
+  HandleTableSize               : 512
+  DisableDebug                  : false
+  EnableForceDebug               : false
+  CanWriteSharedPage            : true
+  CanUsePrivilegedPriority      : false
+  CanUseNonAlphabetAndNumber    : true
+  PermitMainFunctionArgument    : true
+  CanShareDeviceMemory          : true
+  RunnableOnSleep               : false
+  SpecialMemoryArrange          : true
+
+  MemoryType                    : Application
+  SystemMode                    : 64MB
+  SystemModeExt                 : Legacy
+  CpuSpeed                      : 268MHz
+  EnableL2Cache                 : false
+  CanAccessCore2                : true
+
+  IORegisterMapping:
+   - 1ff00000-1ff7ffff
+  MemoryMapping:
+   - 1f000000-1f5fffff:r
+
+  SystemCallAccess:
+    ArbitrateAddress: 34
+    Break: 60
+    CancelTimer: 28
+    ClearEvent: 25
+    ClearTimer: 29
+    CloseHandle: 35
+    ConnectToPort: 45
+    ControlMemory: 1
+    CreateAddressArbiter: 33
+    CreateEvent: 23
+    CreateMemoryBlock: 30
+    CreateMutex: 19
+    CreateSemaphore: 21
+    CreateThread: 8
+    CreateTimer: 26
+    DuplicateHandle: 39
+    ExitProcess: 3
+    ExitThread: 9
+    GetCurrentProcessorNumber: 17
+    GetHandleInfo: 41
+    GetProcessId: 53
+    GetProcessIdOfThread: 54
+    GetProcessIdealProcessor: 6
+    GetProcessInfo: 43
+    GetResourceLimit: 56
+    GetResourceLimitCurrentValues: 58
+    GetResourceLimitLimitValues: 57
+    GetSystemInfo: 42
+    GetSystemTick: 40
+    GetThreadContext: 59
+    GetThreadId: 55
+    GetThreadIdealProcessor: 15
+    GetThreadInfo: 44
+    GetThreadPriority: 11
+    MapMemoryBlock: 31
+    OutputDebugString: 61
+    QueryMemory: 2
+    ReleaseMutex: 20
+    ReleaseSemaphore: 22
+    SendSyncRequest1: 46
+    SendSyncRequest2: 47
+    SendSyncRequest3: 48
+    SendSyncRequest4: 49
+    SendSyncRequest: 50
+    SetThreadPriority: 12
+    SetTimer: 27
+    SignalEvent: 24
+    SleepThread: 10
+    UnmapMemoryBlock: 32
+    WaitSynchronization1: 36
+    WaitSynchronizationN: 37
+
+  ServiceAccessControl:
+   - APT:U
+   - ac:u
+   - am:net
+   - boss:U
+   - cam:u
+   - cecd:u
+   - cfg:nor
+   - cfg:u
+   - csnd:SND
+   - dsp::DSP
+   - frd:u
+   - fs:USER
+   - gsp::Gpu
+   - gsp::Lcd
+   - hid:USER
+   - http:C
+   - ir:rst
+   - ir:u
+   - ir:USER
+   - ldr:ro
+   - mic:u
+   - ndm:u
+   - news:u
+   - nim:aoc
+   - nwm::UDS
+   - ptm:sysm
+   - ptm:u
+   - pxi:dev
+   - soc:U
+   - ssl:C
+   - y2r:u
+
+SystemControlInfo:
+  SaveDataSize: 0K
+  RemasterVersion: 0
+  StackSize: 0x40000
+  JumpId: 0
