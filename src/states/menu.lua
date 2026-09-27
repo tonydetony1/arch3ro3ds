@@ -23,6 +23,8 @@ local Balance = require("src.data.balance")
 local MenuState = {}
 MenuState.__index = MenuState
 
+local MODE_LABELS = { ascension = "Ascension", infinite = "Le Gouffre", boss_rush = "Boss Rush", survival = "Arène" }
+
 function MenuState.new(stateMachine)
     local self = setmetatable({}, MenuState)
     self.sm = stateMachine
@@ -444,7 +446,7 @@ function MenuState:drawPlayTab()
     UI.drawText(string.format("+%d G", patrolAmt), px + 38, py + 26, {0.35, 0.95, 0.55, 1.0})
 
     -- Bouton micro-pill Récolter
-    UI.drawPillButton(px + 8, py + 54, pw - 16, 24, "RECOLTER", canClaim and "gold" or "gray", self.pressedBtn == "claim_patrol", "gold")
+    UI.drawPillButton(px + 10, py + 58, pw - 20, 20, "RÉCOLTER", canClaim and "gold" or "gray", self.pressedBtn == "claim_patrol", "gold")
 
     -- Feedback texte de récolte
     if self.patrolRewardTimer and self.patrolRewardTimer > 0 then
@@ -495,31 +497,26 @@ function MenuState:drawPlayTab()
         hasEnergy and {0.30, 0.85, 0.50, 0.9} or {0.35, 0.40, 0.50, 0.9},
         hasEnergy and {0.80, 1.0, 0.90, 1.0} or {0.65, 0.70, 0.80, 1.0}, "energy")
 
-    -- Grand Libellé JOUER avec Épées croisées
-    local isPlayPressed = (self.pressedBtn == "play")
-    love.graphics.push()
-    if isPlayPressed then
-        love.graphics.translate(lx + lw / 2, ly + lh / 2 + 1)
-        love.graphics.scale(0.97, 0.97)
-        love.graphics.translate(-(lx + lw / 2), -(ly + lh / 2))
-    end
-
+    -- Bouton principal : vrai bouton bombé (action n°1 de l'écran), pastille A à droite
     -- Course interrompue : le bouton devient REPRENDRE (+ bouton pour abandonner)
     local run = Save.getRun()
-    UI.drawIcon("swords", lx + 44, ly + 52, 15, {1, 1, 1, 1})
-    local prevFTitle = love.graphics.getFont()
-    love.graphics.setFont(UI.getFont("title"))
-    UI.drawText(run and "REPRENDRE" or "JOUER", lx + 66, ly + 42, {1, 1, 1, 1}, {0.04, 0.12, 0.06, 1.0})
-    love.graphics.setFont(prevFTitle)
+    local bx, by, bw, bh = lx + 8, ly + 30, lw - 16, 40
+    if hasEnergy then
+        Skin.roundRect(Palette.C.yellow, bx - 2, by - 2, bw + 4, bh + 4, 3, 0.25 + pulse * 0.35)
+    end
+    local oy = Skin.button(bx, by, bw, bh, run and "gold" or "green", self.pressedBtn == "play")
+    local label = run and "REPRENDRE" or "JOUER"
+    local labelW = PixelFont.getWidth(label, "main", 2)
+    local tx = math.floor(bx + (bw - 18 - (labelW + 20)) / 2)
+    local midY = by + oy + math.floor((bh - 3) / 2)
+    UI.drawIcon("swords", tx + 7, midY, 15)
+    PixelFont.print(label, tx + 20, midY - 11, Palette.C.white, "main", 2, "shadow")
+    Skin.pill(bx + bw - 20, midY - 6, 14, 12, "dark", "A")
 
     -- Sous-titre Mode & Chapitre
-    love.graphics.setFont(UI.getFont("tiny"))
-    local modeLabel = (self.selectedMode == "ascension" and "Ascension" or "Gouffre")
     local subLabel = run and string.format("Salle %d - partie en cours", run.room or 1)
-        or string.format("%s - Ch.%d", modeLabel, chap.id)
-    UI.drawTextAligned(subLabel, lx, ly + 74, lw, "center", {0.60, 0.95, 0.75, 0.9})
-    love.graphics.setFont(prevFTitle)
-    love.graphics.pop()
+        or string.format("%s - Ch.%d", MODE_LABELS[self.selectedMode] or "Ascension", chap.id)
+    PixelFont.printf(subLabel, lx, ly + 78, lw, "center", {0.60, 0.95, 0.75, 1.0}, "main")
     if run then
         UI.drawPillButton(lx + lw - 66, ly + 8, 58, 18, "ABANDON", "red", self.pressedBtn == "abandon_run")
     end

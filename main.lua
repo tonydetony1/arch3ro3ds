@@ -150,8 +150,8 @@ function love.draw(screen)
         love.graphics.setColor(0, 0, 0, 0.7)
         love.graphics.rectangle("fill", 0, 0, 250, 12)
         love.graphics.setColor(st.skipped > 0 and 1 or 0.6, 1, 0.6, 1)
-        love.graphics.print(string.format("GPU %d/%d sommets  %d appels  %d rejets  pic %d  %d FPS",
-            st.vertices, Gpu.VERTEX_CAPACITY, st.calls, st.skipped, st.peak, love.timer.getFPS()), 2, 0)
+        require("src.ui.pixel_font").print(string.format("%d FPS  %d sommets  %d appels  %d rejets",
+            love.timer.getFPS(), st.vertices, st.calls, st.skipped), 2, 2, require("src.render.palette").C.white, "tiny")
         love.graphics.setColor(1, 1, 1, 1)
     end
 end
@@ -225,6 +225,11 @@ end
 
 -- Boutons physiques de la console 3DS (A, B, X, Y, D-Pad, Gâchettes)
 function love.gamepadpressed(joystick, button)
+    -- SELECT : affiche / masque les performances (FPS, sommets, appels GPU) sur la console
+    if button == "back" then
+        showGpuStats = not showGpuStats
+        return
+    end
     gameStateMachine:gamepadpressed(joystick, button)
 end
 
