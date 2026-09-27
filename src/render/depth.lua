@@ -21,15 +21,24 @@ Depth.ACTORS     = 2
 Depth.FX         = 3
 Depth.TEXT       = 4
 
+-- Position du curseur 3D (0..1). LÖVE Potion 3.x : love.graphics.getDepth ;
+-- anciennes versions : get3DDepth. Sur PC : 0.
+local sliderFn = love.graphics and (love.graphics.getDepth or love.graphics.get3DDepth)
+function Depth.slider()
+    if not sliderFn then return 0 end
+    local ok, v = pcall(sliderFn)
+    if ok and type(v) == "number" then return v end
+    return 0
+end
+
 function Depth.begin(eye)
     Depth.eye = eye or 0
     local s = 0
     if Depth.eye ~= 0 then
         if Depth.override then
             s = Depth.override
-        elseif love.graphics.get3DDepth then
-            local ok, v = pcall(love.graphics.get3DDepth)
-            if ok and type(v) == "number" then s = v end
+        else
+            s = Depth.slider()
         end
     end
     Depth.strength = s

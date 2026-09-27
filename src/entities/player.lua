@@ -206,6 +206,17 @@ function Player:handleInput(dt)
             inputX = (rawX / mag) * factor
             inputY = (rawY / mag) * factor
         end
+
+        -- Croix directionnelle (3DS) : même déplacement que le Circle Pad, vitesse pleine
+        if inputX == 0 and inputY == 0 and joy.isGamepad and joy:isGamepad() then
+            if joy:isGamepadDown("dpleft") then inputX = inputX - 1 end
+            if joy:isGamepadDown("dpright") then inputX = inputX + 1 end
+            if joy:isGamepadDown("dpup") then inputY = inputY - 1 end
+            if joy:isGamepadDown("dpdown") then inputY = inputY + 1 end
+            if inputX ~= 0 and inputY ~= 0 then
+                inputX, inputY = inputX * 0.70710678, inputY * 0.70710678
+            end
+        end
     end
 
     -- 2. Clavier PC (uniquement hors console 3DS)

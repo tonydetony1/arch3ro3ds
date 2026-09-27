@@ -623,7 +623,7 @@ end
 function ObstacleManager:buildProps()
     if self.props then
         for _, p in ipairs(self.props) do
-            if p.canvas and p.canvas.release then p.canvas:release() end
+            -- Images partagées via le cache de blocs (blockImage) : ne pas les libérer ici
         end
     end
     self.props = {}

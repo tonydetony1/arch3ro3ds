@@ -7,6 +7,20 @@
 -- utilisées), ce qui libère le processeur pour l'écran du haut où se joue l'action.
 
 local Screen = require("src.core.screen")
+local Depth = require("src.render.depth")
+
+-- LÖVE Potion active la stéréo au démarrage (gfxSet3D(true)) : l'écran du haut est alors
+-- rendu deux fois par image (œil gauche + œil droit) même curseur 3D à zéro. On ne garde la
+-- stéréo que si le curseur est levé et que le relief n'est pas désactivé dans les Paramètres.
+local stereoOn = nil
+local function updateStereo()
+    if not love.graphics.set3D then return end
+    local want = Depth.slider() > 0.01 and (Depth.userScale or 1) > 0
+    if want ~= stereoOn then
+        love.graphics.set3D(want)
+        stereoOn = want
+    end
+end
 
 local RunLoop = {
     BOTTOM_EVERY = 3,
@@ -50,6 +64,7 @@ function RunLoop.run()
         if love.update then love.update(delta) end
 
         if love.graphics and love.graphics.isActive() then
+            updateStereo()
             frame = frame + 1
             local drawBottom = Screen.bottomDirty or Screen.bottomAlways or (frame % RunLoop.BOTTOM_EVERY == 0) or frame < 4
             for _, screen in ipairs(love.graphics.getScreens()) do

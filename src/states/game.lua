@@ -276,6 +276,7 @@ end
 function GameState:openDraft()
     Audio.play("level_up", 0, 0.9)
     self.isDrafting = true
+    self.draftCursor = 2
     self.draftOptions = Skills.getRandomDraft(3, self.acquiredSkills)
     VFX.shakeLight()
 end
@@ -1115,36 +1116,45 @@ function GameState:touchpressed(id, tx, ty)
 
     if self.isDrafting then
         local cardIdx = self.hud:checkCardTouch(tx, ty)
-        if cardIdx and self.draftOptions[cardIdx] then
-            local skill = self.draftOptions[cardIdx]
-            if skill.hooks and skill.hooks.onApply then
-                skill.hooks.onApply(self.player)
-            end
-            table.insert(self.acquiredSkills, skill)
-            Save.addQuestProgress("skills", 1)
-
-            -- Vérification des fusions légendaires de compétences (Synergies)
-            local Skills = require("src.data.skills")
-            local newSynergies = Skills.checkSynergies(self.player, self.acquiredSkills)
-            if newSynergies and #newSynergies > 0 then
-                for _, syn in ipairs(newSynergies) do
-                    VFX.addFCT(self.player.x, self.player.y - 20, "FUSION : " .. syn.name, true)
-                    VFX.shakeHeavy()
-                end
-            end
-
-            self.isDrafting = false
-            self:triggerShake(0.1, 2.5)
-        end
+        if cardIdx then self:pickDraft(cardIdx) end
     else
         if self.hud:checkUltimateTouch(tx, ty) then
-            if self.ultimateCharge >= 1.0 then
-                self:triggerUltimate()
-                self.ultimateCharge = 0
-            end
+            self:tryUltimate()
         elseif self.hud:checkDashTouch(tx, ty) then
             self.player:triggerDash()
         end
+    end
+end
+
+-- Applique la compétence n° idx du tirage (toucher, bouton A ou touches 1-3)
+function GameState:pickDraft(idx)
+    local skill = self.draftOptions[idx]
+    if not skill then return end
+    if skill.hooks and skill.hooks.onApply then
+        skill.hooks.onApply(self.player)
+    end
+    table.insert(self.acquiredSkills, skill)
+    Save.addQuestProgress("skills", 1)
+
+    -- Vérification des fusions légendaires de compétences (Synergies)
+    local newSynergies = Skills.checkSynergies(self.player, self.acquiredSkills)
+    if newSynergies and #newSynergies > 0 then
+        for _, syn in ipairs(newSynergies) do
+            VFX.addFCT(self.player.x, self.player.y - 20, "FUSION : " .. syn.name, true)
+            VFX.shakeHeavy()
+        end
+    end
+
+    Audio.play("ui_confirm", 0, 0.9)
+    self.isDrafting = false
+    self:triggerShake(0.1, 2.5)
+end
+
+-- Ultime : uniquement si la jauge est pleine
+function GameState:tryUltimate()
+    if self.ultimateCharge >= 1.0 then
+        self:triggerUltimate()
+        self.ultimateCharge = 0
     end
 end
 
@@ -1294,14 +1304,40 @@ function GameState:triggerUltimate()
     end
 end
 
+-- Boutons de la console : Circle Pad / croix = déplacement (tir automatique à l'arrêt),
+-- R ou B = esquive, L ou Y = ultime, Start = pause ; tirage de compétence : croix + A.
 function GameState:gamepadpressed(joystick, button)
-    if button == "b" or button == "leftshoulder" or button == "rightshoulder" or button == "l" or button == "r" then
-        if not self.isDrafting and not (self.specialRoomManager and self.specialRoomManager.isActive) then
-            self.player:triggerDash()
-            return
-        end
+    if button == "start" then
+        self:triggerPause()
+        return
     end
-    self:keypressed(button)
+
+    if self.specialRoomManager and self.specialRoomManager.isActive then
+        local key = ({ a = "a", b = "b", x = "x", y = "b" })[button]
+        if key then self:keypressed(key) end
+        return
+    end
+
+    if self.isDrafting then
+        local n = math.max(1, #self.draftOptions)
+        self.draftCursor = self.draftCursor or 2
+        if button == "dpleft" then
+            self.draftCursor = (self.draftCursor - 2) % n + 1
+            Audio.play("ui_click", 0, 0.6)
+        elseif button == "dpright" then
+            self.draftCursor = self.draftCursor % n + 1
+            Audio.play("ui_click", 0, 0.6)
+        elseif button == "a" then
+            self:pickDraft(self.draftCursor)
+        end
+        return
+    end
+
+    if button == "b" or button == "rightshoulder" then
+        self.player:triggerDash()
+    elseif button == "y" or button == "x" or button == "leftshoulder" then
+        self:tryUltimate()
+    end
 end
 
 function GameState:keypressed(key)
@@ -1370,68 +1406,46 @@ function GameState:keypressed(key)
         if key == "1" or key == "a" then idx = 1
         elseif key == "2" or key == "b" then idx = 2
         elseif key == "3" or key == "x" then idx = 3
+        elseif key == "left" then
+            self.draftCursor = ((self.draftCursor or 2) - 2) % 3 + 1
+        elseif key == "right" then
+            self.draftCursor = (self.draftCursor or 2) % 3 + 1
+        elseif key == "return" or key == "space" or key == "k" then
+            idx = self.draftCursor or 2
         end
-        if idx and self.draftOptions[idx] then
-            local skill = self.draftOptions[idx]
-            if skill.hooks and skill.hooks.onApply then
-                skill.hooks.onApply(self.player)
-            end
-            table.insert(self.acquiredSkills, skill)
-            Save.addQuestProgress("skills", 1)
-
-            -- Vérification des fusions légendaires de compétences (Synergies)
-            local Skills = require("src.data.skills")
-            local newSynergies = Skills.checkSynergies(self.player, self.acquiredSkills)
-            if newSynergies and #newSynergies > 0 then
-                for _, syn in ipairs(newSynergies) do
-                    VFX.addFCT(self.player.x, self.player.y - 20, "FUSION : " .. syn.name, true)
-                    VFX.shakeHeavy()
-                end
-            end
-
-            self.isDrafting = false
-            self:triggerShake(0.1, 2.5)
-        end
+        if idx then self:pickDraft(idx) end
         return
     end
 
-    -- Touche Dash / Roulade d'esquive [B, L, R, Shift]
-    if key == "b" or key == "l" or key == "r" or key == "lshift" or key == "rshift" or key == "leftshoulder" or key == "rightshoulder" then
+    -- Clavier PC : esquive (Maj, J, B) et ultime (Espace, K, U)
+    if key == "lshift" or key == "rshift" or key == "j" or key == "b" then
         self.player:triggerDash()
         return
+    elseif key == "space" or key == "k" or key == "u" then
+        self:tryUltimate()
+        return
     end
 
-    -- Touches Développeur PC
-    if key == "e" or key == "m" then
-        local types = { "slime", "bat", "skeleton", "plant", "golem" }
-        local rx = math.random(80, self.mapW - 80)
-        local ry = math.random(80, self.mapH - 80)
-        local d = self.dummyPool:obtain()
-        if d then d:spawn(rx, ry, 60, types[math.random(1, #types)]) end
-    elseif key == "c" then
-        self.dummyPool:clear()
-    elseif key == "x" then
-        local leveledUp = self.player:addXp(40)
-        if leveledUp then self:openDraft() end
-    elseif key == "1" then
-        self.player:equipWeapon("starter_bow")
-    elseif key == "2" then
-        self.player:equipWeapon("death_scythe")
-    elseif key == "3" then
-        self.player:equipWeapon("stalker_staff")
-    elseif key == "4" then
-        self.player:equipWeapon("tornado_boomerang")
-    elseif key == "5" then
-        self.player:equipWeapon("brightspear")
-    elseif key == "f1" or key == "d" then
+    -- F1 : mode développeur (PC uniquement) ; les raccourcis de triche n'existent qu'en mode dev
+    if key == "f1" then
         Config.DEBUG_MODE = not Config.DEBUG_MODE
-    elseif key == "space" or key == "u" then
-        if self.ultimateCharge >= 1.0 then
-            self:triggerUltimate()
-            self.ultimateCharge = 0
-        else
-            self.ultimateCharge = 1.0
-        end
+        return
+    end
+    if not Config.DEBUG_MODE then return end
+    if key == "f2" then
+        local types = { "slime", "bat", "skeleton", "plant", "golem" }
+        local d = self.dummyPool:obtain()
+        if d then d:spawn(math.random(80, self.mapW - 80), math.random(80, self.mapH - 80), 60, types[math.random(1, #types)]) end
+    elseif key == "f4" then
+        self.dummyPool:clear()
+    elseif key == "f5" then
+        if self.player:addXp(40) then self:openDraft() end
+    elseif key == "f6" then
+        self.ultimateCharge = 1.0
+    elseif key == "f7" then
+        local weapons = { "starter_bow", "death_scythe", "stalker_staff", "tornado_boomerang", "brightspear" }
+        self.weaponCycle = (self.weaponCycle or 0) % #weapons + 1
+        self.player:equipWeapon(weapons[self.weaponCycle])
     end
 end
 
