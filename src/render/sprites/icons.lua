@@ -99,6 +99,27 @@ local ICONS = {
         grid = { "....Y....", "....Y....", "...YYY...", "YYYYWYYYY", ".YYYYYYY.", "..YYYYY..", "..YYoYY..", ".YYo.oYY.", ".Yo...oY." },
         pal = { Y = "fee761", W = "ffffff", o = "feae34" },
     },
+    -- Mini-carte de l'écran tactile (points lisibles à 1:4)
+    mm_player = {
+        grid = { ".BBB.", "BWWWB", "BWBWB", "BWWWB", ".BBB." },
+        pal = { B = "0099db", W = "2ce8f5" },
+    },
+    mm_enemy = {
+        grid = { "RRR", "RrR", "RRR" },
+        pal = { R = "e43b44", r = "f6757a" },
+    },
+    mm_boss = {
+        grid = { ".RRRRR.", "RRWRWRR", "RRRRRRR", "RWRRRWR", ".RWWWR.", "..RRR.." },
+        pal = { R = "e43b44", W = "ffffff" },
+    },
+    mm_gate_open = {
+        grid = { "..G..", ".GGG.", "GGGGG", ".GGG.", ".GGG." },
+        pal = { G = "63c74d" },
+    },
+    mm_gate_closed = {
+        grid = { "SSSSS", "S.S.S", "S.S.S", "SSSSS" },
+        pal = { S = "8b9bb4" },
+    },
     skill_shield = {
         grid = { "GGGGGGGGG", "GBBBBBBBG", "GBWBBBBBG", "GBWBBBBBG", "GBBBBBBBG", ".GBBBBBG.", ".GBBBBBG.", "..GBBBG..", "...GBG...", "....G...." },
         pal = { G = "feae34", B = "0099db", W = "2ce8f5" },

@@ -22,6 +22,8 @@ local VFX = require("src.render.vfx_manager")
 local SpecialRoomManager = require("src.core.special_room_manager")
 local Depth = require("src.render.depth")
 local Audio = require("src.audio.audio")
+local Banner = require("src.ui.banner")
+local Bestiary = require("src.data.bestiary")
 local Bestiary = require("src.data.bestiary")
 local Balance = require("src.data.balance")
 
@@ -50,6 +52,10 @@ function GameState:enter(params)
 
     -- Initialisation du moteur VFX, Atlas et SpriteBatches matériels 3DS
     VFX.init()
+    Banner.clear()
+    self.slowmoTimer = 0
+    self.flashTimer = 0
+    self.bossIntroTimer = 0
 
     local saveData = Save.get()
 
@@ -154,7 +160,7 @@ function GameState:enter(params)
     end
 
     -- Bouton tactile Pause
-    self.pauseBtn = { x = 284, y = 4, w = 32, h = 26 }
+    self.pauseBtn = { x = 290, y = 2, w = 28, h = 21 }
 
     -- Lancement de la première salle
     self:setupRoom(self.roomNumber)
@@ -217,6 +223,16 @@ function GameState:setupRoom(roomNum)
         spawns, chap = WorldManager.generateWave(self.chapterIndex, roomNum, self.mapW, self.mapH)
     end
     self.currentChapter = chap
+    self.roomGoldStart = self.goldEarnedRun or 0
+
+    -- Bannière d'entrée : nouveau chapitre (salles 1, 11, 21…) ou simple rappel de salle
+    if self.gameMode == "ascension" and (roomNum - 1) % 10 == 0 then
+        Banner.show("chapter", "CHAPITRE " .. self.chapterIndex, chap and chap.name or "")
+    elseif self.gameMode == "boss_rush" then
+        Banner.show("room", "BOSS " .. roomNum)
+    elseif self.gameMode ~= "survival" then
+        Banner.show("room", "SALLE " .. roomNum .. " / 50")
+    end
 
     -- Décor du chapitre (prairie, désert, cristal, enfer) puis pré-rendu sur Canvas
     self.arena:setTheme(self.chapterIndex)
@@ -262,15 +278,26 @@ function GameState:setupRoom(roomNum)
 end
 
 function GameState:spawnMonstersNow()
+    local bossType = nil
     for _, sp in ipairs(self.pendingSpawns) do
         local d = self.dummyPool:obtain()
         if d then
             d:spawn(sp.x, sp.y, sp.hp, sp.type)
             d.isBoss = sp.isBoss or false
+            if d.isBoss then bossType = sp.type end
         end
     end
     self.pendingSpawns = {}
     VFX.shakeLight()
+
+    -- Intro de boss : bannière, rugissement, boss figé le temps de la présentation
+    if bossType then
+        self.bossName = Bestiary.nameOf(bossType):upper()
+        Banner.show("boss", self.bossName)
+        Audio.play("boss_roar", 0, 1.0)
+        VFX.shakeHeavy()
+        self.bossIntroTimer = 1.3
+    end
 end
 
 function GameState:openDraft()
@@ -353,7 +380,16 @@ function GameState:handleMonsterDeath(target)
     Save.addQuestProgress("kills", 1)
     if target.isBoss then Save.addQuestProgress("bosses", 1) end
     VFX.shakeHeavy()
-    VFX.hitStop(0.05)
+    if target.isBoss then
+        -- Mort du boss : arrêt sur image, flash blanc puis ralenti
+        VFX.hitStop(0.14)
+        VFX.addSparks(target.x, target.y, 8, { 1.0, 0.85, 0.3, 1.0 })
+        self.slowmoTimer = 0.9
+        self.flashTimer = 0.22
+    else
+        VFX.hitStop(0.04)
+        VFX.addSparks(target.x, target.y, 5, { 1.0, 1.0, 1.0, 1.0 })
+    end
     AIController.onDeath(target, self.dummyPool, self.fctPool)
     self.dummyPool:free(target)
     self.kills = self.kills + 1
@@ -433,9 +469,19 @@ end
 -- BOUCLE DE MISE À JOUR PRINCIPALE
 -- ============================================================================
 function GameState:update(dt)
+    -- Bannières et flash : temps réel (non affectés par le ralenti ni l'arrêt sur image)
+    Banner.update(dt)
+    if self.flashTimer > 0 then self.flashTimer = self.flashTimer - dt end
+
     -- 1. Moteur VFX : Screen Shake, FCT, Particules & Hit-Stop micro-pause (0.05s sur crit / mort)
     if VFX.update(dt) then
         return -- Fige complètement le jeu pendant 0.05s !
+    end
+
+    -- Ralenti (mort d'un boss) : tout le gameplay tourne à 30 %
+    if self.slowmoTimer > 0 then
+        self.slowmoTimer = self.slowmoTimer - dt
+        dt = dt * 0.3
     end
 
     -- Gestion du Game Over (Transition cinématique vers GameOverState)
@@ -572,7 +618,11 @@ function GameState:update(dt)
 
     -- 5. Mise à jour des projectiles (couverture tactique rocheuse), monstres (IA) et textes
     self.projectilePool:update(dt, self.mapW, self.mapH, self.obstacleManager, self.dummyPool, self.player)
-    self.dummyPool:update(dt, self.player, self.projectilePool, self.obstacleManager, self.dummyPool, self.fctPool, self.mapW, self.mapH)
+    if self.bossIntroTimer > 0 then
+        self.bossIntroTimer = self.bossIntroTimer - dt -- monstres figés pendant l'intro du boss
+    else
+        self.dummyPool:update(dt, self.player, self.projectilePool, self.obstacleManager, self.dummyPool, self.fctPool, self.mapW, self.mapH)
+    end
     self.fctPool:update(dt)
 
     -- 6. Mise à jour et ramassage du butin physique au sol
@@ -884,6 +934,7 @@ function GameState:update(dt)
             self.phase = "clear"
             Audio.play("gate_open", 0, 0.7)
             self:triggerShake(0.18, 2.5)
+            Banner.show("clear", "SALLE TERMINÉE !", "+" .. math.max(0, (self.goldEarnedRun or 0) - (self.roomGoldStart or 0)) .. " OR")
 
             -- TOUT LE BUTIN AU SOL VOLE VERS LE JOUEUR (Effet aimant ultra-satisfaisant !)
             for i = 1, self.lootPool.activeCount do
@@ -910,6 +961,7 @@ end
 -- ============================================================================
 -- RENDU TOP SCREEN (400x240) AVEC CAMÉRA 2D FLUIDE ET SPRITEBATCHING 3DS
 local SORT_PROP, SORT_MONSTER, SORT_PLAYER, SORT_PET = 1, 2, 3, 4
+local C_WIPE = { 0.094, 0.078, 0.145 } -- encre de la palette (transition entre salles)
 
 local function queueSlot(q, n)
     local e = q[n]
@@ -1054,9 +1106,27 @@ function GameState:drawTop(eye)
     -- 8. Atmosphère écran (vignettage, lumière)
     self.arena:drawAtmosphere()
 
-    if self.fadeAlpha > 0 then
-        love.graphics.setColor(0, 0, 0, self.fadeAlpha)
+    -- 9. Barre de vie du boss, bannières, flash de mort du boss
+    local boss = self.hud:findBoss(self)
+    if boss then Banner.drawBossBar(boss, self.bossName) end
+    Banner.draw()
+    if self.flashTimer > 0 then
+        love.graphics.setColor(1, 1, 1, math.min(1, self.flashTimer / 0.22) * 0.8)
         love.graphics.rectangle("fill", 0, 0, Config.TOP_WIDTH, Config.TOP_HEIGHT)
+    end
+
+    -- 10. Transition entre salles : balayage diagonal (sortie vers la droite, entrée par la gauche)
+    if self.fadeAlpha > 0 then
+        local W, Hh = Config.TOP_WIDTH, Config.TOP_HEIGHT
+        local span = W + Hh + 40
+        love.graphics.setColor(C_WIPE[1], C_WIPE[2], C_WIPE[3], 1)
+        if self.fadeDirection >= 0 then
+            local p = self.fadeAlpha * span
+            love.graphics.polygon("fill", -Hh - 20, 0, p - 20, 0, p - Hh - 20, Hh, -Hh - 20, Hh)
+        else
+            local q = (1 - self.fadeAlpha) * span
+            love.graphics.polygon("fill", q - 20, 0, W + Hh + 20, 0, W + Hh + 20, Hh, q - Hh - 20, Hh)
+        end
     end
     if self.isGameOver then
         local deathAlpha = math.min(1.0, self.gameOverTimer / 1.0)
@@ -1077,18 +1147,12 @@ function GameState:drawBottom()
         return
     end
 
-    self.hud:drawBackground()
-    self.hud:drawTopBar(self.player, self.goldEarnedRun)
-    self.hud:drawPauseButton(self.pauseBtn, false)
-
-    local chapterName = self.currentChapter and self.currentChapter.name or nil
-    self.hud:drawStatusArea(self.player, self.kills, self.roomNumber, chapterName, self.acquiredSkills)
-    self.hud:drawCircularUltimate(self.ultimateCharge, self.player)
+    self.hud:drawDashboard(self, self.pauseBtn)
     self.hud:drawLowHpOverlay(self.player)
 
     -- Choix de compétence en surimpression plein écran
     if self.isDrafting then
-        self.hud:drawDraftModal(self.draftOptions, self.acquiredSkills)
+        self.hud:drawDraftModal(self.draftOptions, self.acquiredSkills, self.draftCursor)
     end
 
     -- Voile sombre lors du Game Over
@@ -1122,6 +1186,8 @@ function GameState:touchpressed(id, tx, ty)
             self:tryUltimate()
         elseif self.hud:checkDashTouch(tx, ty) then
             self.player:triggerDash()
+        else
+            self.hud:checkSkillTouch(tx, ty, self.acquiredSkills)
         end
     end
 end

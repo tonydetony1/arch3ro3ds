@@ -69,4 +69,14 @@ function Bestiary.buildMasteryTable(counters)
     return t
 end
 
+-- Nom affiché d'un type de monstre (repli : le type lui-même)
+local namesByType = nil
+function Bestiary.nameOf(monsterType)
+    if not namesByType then
+        namesByType = {}
+        for _, e in ipairs(Bestiary.ENTRIES) do namesByType[e.type] = e.name end
+    end
+    return namesByType[monsterType] or tostring(monsterType or "?")
+end
+
 return Bestiary

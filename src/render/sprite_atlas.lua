@@ -395,7 +395,7 @@ local function pick(s, frame, flash, variant)
     local frames = s.frames
     if flash and s.flash then
         frames = s.flash
-    elseif variant and s.variants[variant] then
+    elseif variant and s.variants and s.variants[variant] then
         frames = s.variants[variant]
     end
     local n = #frames
