@@ -97,7 +97,7 @@ end
 -- 1. CIEL EN COUCHES
 -- ============================================================================
 -- Dégradé du ciel en bandes pleines (4 sommets par bande, aucun Canvas)
-local SKY_BANDS = 16
+local SKY_BANDS = 8
 local function buildSkyBands(theme)
     local top = Palette.hex(theme and theme.skyTop or "4f9be8")
     local bottom = Palette.hex(theme and theme.skyBottom or "cdeeff")
@@ -178,10 +178,9 @@ local function drawRectList(list, x0, y0, x1, y1)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
--- Couches du sol découpé (ordre de superposition global)
-local function layer(b, n)
-    if b.setLayer then b:setLayer(n) end
-end
+-- Couches du sol découpé : une seule couche suffit (dans une tuile, l'ordre d'insertion
+-- falaise -> motifs -> dalles -> détails est conservé) et divise le nombre d'appels GPU par 4
+local function layer(_, _) end
 
 local function addSprite(batch, name, frame, x, y, sx, sy, r, g, b, a)
     local f = Art.frame(name, frame or 1)
@@ -229,7 +228,7 @@ local function fillGround(b, w, h, theme, rng)
         addSpriteV(b, theme.patchExtra, 1, 40 + rng() * (w - 80), 60 + rng() * (h - 120), theme.variant)
     end
     layer(b, 4)
-    local bands = 8
+    local bands = 4
     local hazeH = math.floor((h - GROUND_TOP) * 0.45 / bands)
     for i = 0, bands - 1 do
         addRect(b, 16, GROUND_TOP + i * hazeH, w - 32, hazeH, C.cyan, 0.075 * (1 - i / bands))
@@ -238,9 +237,9 @@ local function fillGround(b, w, h, theme, rng)
     for i = 0, bands - 1 do
         addRect(b, 16, h - 16 - (i + 1) * nearH, w - 32, nearH, C.abyss, 0.09 * (1 - i / bands))
     end
-    for i = 0, 4 do
-        addRect(b, 16, GROUND_TOP + i * 18, (w - 32) * (1 - i / 5), 18, C.yellow, 0.035)
-        addRect(b, 16 + (w - 32) * (i / 5), h - 16 - (i + 1) * 18, (w - 32) * (1 - i / 5), 18, C.navy, 0.035)
+    for i = 0, 2 do
+        addRect(b, 16, GROUND_TOP + i * 30, (w - 32) * (1 - i / 3), 30, C.yellow, 0.05)
+        addRect(b, 16 + (w - 32) * (i / 3), h - 16 - (i + 1) * 30, (w - 32) * (1 - i / 3), 30, C.navy, 0.05)
     end
 end
 
@@ -292,7 +291,7 @@ function Arena:buildGround(mapW, mapH, palette, obstacleManager)
 
     if not self.groundBatch then
         -- Sol découpé en tuiles de 128 px : seules les tuiles visibles partent au GPU
-        self.groundBatch = Gpu.newChunkedBatch(Art.image, 192, 400)
+        self.groundBatch = Gpu.newChunkedBatch(Art.image, 128, 260)
     end
     self.canvas = self.groundBatch
     self.canvasW = w
@@ -339,10 +338,10 @@ end
 function Arena:buildWalls(w, h, rng, theme)
     theme = theme or self.theme or WorldManager.getTheme(1)
     if not self.wallBatch then
-        self.wallBatch = Gpu.newBatch(Art.image, WALL_BATCH_SIZE, "static")
+        self.wallBatch = Gpu.newChunkedBatch(Art.image, 160, WALL_BATCH_SIZE)
     end
     local b = self.wallBatch
-    b:clear()
+    b:reset(w, h, -64, -64)
     local cx = w / 2
 
     -- Arbres du fond (au-dessus de l'île, derrière la haie)
@@ -404,6 +403,9 @@ function Arena:draw(isGateOpen, palette, spawnWarnings, mapW, mapH)
         end
         drawRectList(self.rectsUnder, x0, y0, x1, y1)
         self.groundBatch:drawView(x0, y0, x1, y1)
+        if self.obstacleManager and self.obstacleManager.drawStaticGround then
+            self.obstacleManager:drawStaticGround(x0, y0, x1, y1)
+        end
         drawRectList(self.rectsOver, x0, y0, x1, y1)
     end
 
@@ -435,7 +437,15 @@ function Arena:drawWalls(isGateOpen, mapW)
     local w = mapW or Config.TOP_WIDTH
     local t = love.timer.getTime()
     love.graphics.setColor(1, 1, 1, 1)
-    if self.wallBatch then self.wallBatch:draw() end
+    if self.wallBatch then
+        local cam = self.camera
+        if cam then
+            local x0, y0 = cam.x - cam.halfW, cam.y - cam.halfH
+            self.wallBatch:drawView(x0, y0, x0 + cam.viewportW, y0 + cam.viewportH, 56)
+        else
+            self.wallBatch:drawView(-64, -64, w + 64, (self._groundH or 480) + 64, 56)
+        end
+    end
 
     local gx, gy = math.floor(w / 2), 32
     if not isGateOpen then

@@ -117,9 +117,7 @@ function Skin.button(x, y, w, h, themeName, pressed)
     Skin.roundRect(C.ink, x, y + oy, w, h - oy, 3)
     Skin.roundRect(th.lip, x + 1, y + oy + 1, w - 2, h - oy - 2, 2)
     Skin.roundRect(th.main, x + 1, y + oy + 1, w - 2, h - oy - 1 - lip, 2)
-    rect(th.dark, x + 2, y + h - lip - 2, w - 4, 1)
     rect(th.light, x + 3, y + oy + 2, w - 6, 2)
-    rect(C.white, x + 3, y + oy + 2, 3, 1, 0.9)
     return oy
 end
 

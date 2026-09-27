@@ -175,20 +175,16 @@ function MenuState:drawHubBackdrop(t)
 
     -- Ciel dégradé
     local top, bottom = Palette.hex("2c4a86"), Palette.hex("7fc0ea")
-    local bands = 24
+    local bands = 10
     for i = 0, bands - 1 do
         local f = i / (bands - 1)
         love.graphics.setColor(top[1] + (bottom[1] - top[1]) * f, top[2] + (bottom[2] - top[2]) * f, top[3] + (bottom[3] - top[3]) * f, 1)
         love.graphics.rectangle("fill", 0, i * (h / bands), w, h / bands + 1)
     end
 
-    -- Étoiles et nuages en lente dérive
-    for _, p in ipairs(self.bgParticles) do
-        local px = (p.x + t * 4 * (p.driftSpeed or 1)) % (w + 20) - 10
-        love.graphics.setColor(1, 1, 1, (p.baseAlpha or 0.5) * 0.5)
-        love.graphics.rectangle("fill", math.floor(px), math.floor(p.y * 0.55), 1, 1)
-    end
-    love.graphics.setColor(1, 1, 1, 0.9)
+    -- Nuages en lente dérive (les étoiles d'un pixel coûtaient 24 appels GPU pour un effet
+    -- invisible sur l'écran 3DS : retirées)
+    love.graphics.setColor(1, 1, 1, 1)
     Art.draw("cloud_c", 1, (40 + t * 5) % (w + 120) - 60, 42)
     Art.draw("cloud_a", 1, (250 - t * 4) % (w + 120) - 60, 26)
     Art.draw("cloud_b", 1, (150 + t * 3) % (w + 120) - 60, 66)

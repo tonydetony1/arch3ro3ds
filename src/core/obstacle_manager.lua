@@ -415,7 +415,72 @@ local WATER_MID = Palette.hex("2a78c2")
 local WATER_LIGHT = Palette.hex("5fb3e6")
 local SPIKE_CELL = 14
 
+-- ============================================================================
+-- Peintre hors écran : les fonds statiques d'une salle (eau, lave, glace, sable, plaques
+-- de pics) sont rastérisés UNE fois dans un tampon Lua puis envoyés en texture. Avant, ils
+-- étaient dessinés directement pendant la construction de la salle (reliquat de l'ancien
+-- Canvas) et n'apparaissaient donc jamais à l'écran.
+-- ============================================================================
+local Painter = {}
+Painter.__index = Painter
+
+function Painter.new(x, y, w, h)
+    local self = setmetatable({ ox = math.floor(x), oy = math.floor(y), w = math.floor(w), h = math.floor(h) }, Painter)
+    local n = self.w * self.h
+    self.r, self.g, self.b, self.a = {}, {}, {}, {}
+    for i = 1, n do self.r[i], self.g[i], self.b[i], self.a[i] = 0, 0, 0, 0 end
+    return self
+end
+
+-- Rectangle plein avec mélange alpha "par-dessus"
+function Painter:rect(c, x, y, w, h, alpha)
+    local sa = alpha or 1
+    if sa <= 0 then return end
+    local x0 = math.max(0, math.floor(x) - self.ox)
+    local y0 = math.max(0, math.floor(y) - self.oy)
+    local x1 = math.min(self.w, math.floor(x + w) - self.ox)
+    local y1 = math.min(self.h, math.floor(y + h) - self.oy)
+    local cr, cg, cb = c[1], c[2], c[3]
+    local R, G, B, A = self.r, self.g, self.b, self.a
+    for py = y0, y1 - 1 do
+        local row = py * self.w
+        for px = x0, x1 - 1 do
+            local i = row + px + 1
+            local da = A[i]
+            local oa = sa + da * (1 - sa)
+            if oa > 0 then
+                local k = da * (1 - sa)
+                R[i] = (cr * sa + R[i] * k) / oa
+                G[i] = (cg * sa + G[i] * k) / oa
+                B[i] = (cb * sa + B[i] * k) / oa
+                A[i] = oa
+            end
+        end
+    end
+end
+
+function Painter:toImage()
+    local data = love.image.newImageData(self.w, self.h)
+    local R, G, B, A = self.r, self.g, self.b, self.a
+    for py = 0, self.h - 1 do
+        local row = py * self.w
+        for px = 0, self.w - 1 do
+            local i = row + px + 1
+            if A[i] > 0 then data:setPixel(px, py, R[i], G[i], B[i], A[i]) end
+        end
+    end
+    local img = love.graphics.newImage(data)
+    img:setFilter("nearest", "nearest")
+    return img
+end
+
+local paint = nil -- peintre actif pendant bakeStatic (nil = dessin direct à l'écran)
+
 local function fill(color, x, y, w, h, alpha)
+    if paint then
+        paint:rect(color, x, y, w, h, alpha)
+        return
+    end
     love.graphics.setColor(color[1], color[2], color[3], alpha or 1)
     love.graphics.rectangle("fill", x, y, w, h)
     love.graphics.setColor(1, 1, 1, 1)
@@ -423,16 +488,15 @@ end
 
 -- Rectangle aux coins arrondis "pixel" (coupe de r pixels en escalier)
 local function roundRect(color, x, y, w, h, r, alpha)
-    love.graphics.setColor(color[1], color[2], color[3], alpha or 1)
     if r <= 0 then
-        love.graphics.rectangle("fill", x, y, w, h)
+        fill(color, x, y, w, h, alpha)
         return
     end
-    love.graphics.rectangle("fill", x + r, y, w - r * 2, h)
+    fill(color, x + r, y, w - r * 2, h, alpha)
     for i = 1, r do
         local inset = r - i + 1
-        love.graphics.rectangle("fill", x + i - 1, y + inset, 1, h - inset * 2)
-        love.graphics.rectangle("fill", x + w - i, y + inset, 1, h - inset * 2)
+        fill(color, x + i - 1, y + inset, 1, h - inset * 2, alpha)
+        fill(color, x + w - i, y + inset, 1, h - inset * 2, alpha)
     end
 end
 ObstacleManager.roundRect = roundRect
@@ -529,16 +593,17 @@ local function bakeWater(wtr, rng, theme)
         local lx = x + 5 + math.floor(rng() * math.max(1, w - 30))
         fill(light, lx, ly, 8 + math.floor(rng() * 10), 1)
     end
-    love.graphics.setColor(1, 1, 1, 1)
     if theme then return end
+    local out = paint and paint.sprites
+    if not out then return end
     if w >= 40 and h >= 30 then
-        Art.draw("lily", 1, x + 12 + rng() * 6, y + 14 + rng() * 4)
-        Art.draw("lily", 2, x + w - 14 - rng() * 6, y + h - 12 - rng() * 4)
+        out[#out + 1] = { "lily", 1, x + 12 + rng() * 6, y + 14 + rng() * 4 }
+        out[#out + 1] = { "lily", 2, x + w - 14 - rng() * 6, y + h - 12 - rng() * 4 }
     else
-        Art.draw("lily", 2, x + w / 2, y + h / 2)
+        out[#out + 1] = { "lily", 2, x + w / 2, y + h / 2 }
     end
-    Art.draw("reeds", 1, x - 1, y + h + 2)
-    Art.draw("reeds", 1, x + w + 1, y + 6)
+    out[#out + 1] = { "reeds", 1, x - 1, y + h + 2 }
+    out[#out + 1] = { "reeds", 1, x + w + 1, y + 6 }
 end
 
 local function bakeSpikePlate(s)
@@ -600,20 +665,91 @@ local function bakeHazard(hz, rng)
     end
 end
 
+-- Fonds statiques de la salle : une texture par zone (eau, danger, plaque de pics),
+-- mise en cache d'une salle à l'autre, + sprites de berge et ombres portées des rochers.
+local STATIC_CACHE_MAX = 24
+local staticCache = {}
+local staticOrder = {}
+
+local function bakeRegion(key, x, y, w, h, bakeFn)
+    local entry = staticCache[key]
+    if not entry then
+        paint = Painter.new(x - 6, y - 6, w + 12, h + 12)
+        paint.sprites = {}
+        bakeFn()
+        entry = { img = paint:toImage(), sprites = paint.sprites, dx = -6, dy = -6 }
+        paint = nil
+        staticCache[key] = entry
+        staticOrder[#staticOrder + 1] = key
+        if #staticOrder > STATIC_CACHE_MAX then
+            staticCache[table.remove(staticOrder, 1)] = nil
+        end
+    end
+    return entry
+end
+
 function ObstacleManager:bakeStatic()
     local rng = makeRng(#self.rocks * 31 + #self.waters * 17 + #self.spikes * 7 + 3)
-    for _, hz in ipairs(self.hazards) do bakeHazard(hz, rng) end
-    for _, wtr in ipairs(self.waters) do bakeWater(wtr, rng, self.waterTheme) end
-    for _, s in ipairs(self.spikes) do bakeSpikePlate(s) end
+    self.staticImages = {}
+    self.staticSprites = {}
+    local function add(entry, x, y)
+        self.staticImages[#self.staticImages + 1] = { entry.img, x + entry.dx, y + entry.dy, entry.img:getWidth(), entry.img:getHeight() }
+        for _, sp in ipairs(entry.sprites) do
+            -- les sprites sont enregistrés en coordonnées absolues de la première salle qui les a cuits
+            self.staticSprites[#self.staticSprites + 1] = { sp[1], sp[2], sp[3] - entry.bx + x, sp[4] - entry.by + y }
+        end
+    end
+    local theme = self.waterTheme
+    for i, hz in ipairs(self.hazards) do
+        local key = "hz:" .. hz.kind .. ":" .. hz.w .. "x" .. hz.h .. ":" .. i
+        local e = bakeRegion(key, hz.x, hz.y, hz.w, hz.h, function() bakeHazard(hz, rng) end)
+        e.bx, e.by = e.bx or hz.x, e.by or hz.y
+        add(e, hz.x, hz.y)
+    end
+    for i, wtr in ipairs(self.waters) do
+        local key = "wt:" .. tostring(theme) .. ":" .. wtr.w .. "x" .. wtr.h .. ":" .. i
+        local e = bakeRegion(key, wtr.x, wtr.y, wtr.w, wtr.h, function() bakeWater(wtr, rng, theme) end)
+        e.bx, e.by = e.bx or wtr.x, e.by or wtr.y
+        add(e, wtr.x, wtr.y)
+    end
+    for _, sp in ipairs(self.spikes) do
+        local key = "sp:" .. sp.w .. "x" .. sp.h
+        local e = bakeRegion(key, sp.x, sp.y, sp.w, sp.h, function() bakeSpikePlate(sp) end)
+        e.bx, e.by = e.bx or sp.x, e.by or sp.y
+        add(e, sp.x, sp.y)
+    end
+
+    -- Ombres portées des rochers et souches (polygones rejoués à chaque image)
+    self.rockShadows = {}
     for i, r in ipairs(self.rocks) do
-        local ink = C.abyss
-        love.graphics.setColor(ink[1], ink[2], ink[3], 0.38)
         if isStump(i, r) then
-            love.graphics.ellipse("fill", r.x + r.w / 2 + 6, r.y + r.h - 3, r.w * 0.52, r.h * 0.26)
+            self.rockShadows[#self.rockShadows + 1] = { "ellipse", r.x + r.w / 2 + 6, r.y + r.h - 3, r.w * 0.52, r.h * 0.26 }
         else
             local x, y, w, h = r.x, r.y, r.w, r.h
-            love.graphics.polygon("fill", x + 4, y + h, x + w, y + h, x + w + 10, y + h + 6, x + 14, y + h + 6)
-            love.graphics.polygon("fill", x + w, y + 2, x + w + 10, y + 8, x + w + 10, y + h + 6, x + w, y + h)
+            self.rockShadows[#self.rockShadows + 1] = { "poly", x + 4, y + h, x + w, y + h, x + w + 10, y + h + 6, x + 14, y + h + 6 }
+            self.rockShadows[#self.rockShadows + 1] = { "poly", x + w, y + 2, x + w + 10, y + 8, x + w + 10, y + h + 6, x + w, y + h }
+        end
+    end
+end
+
+-- Dessin des fonds statiques visibles (appelé par l'arène, sous les personnages)
+function ObstacleManager:drawStaticGround(x0, y0, x1, y1)
+    love.graphics.setColor(1, 1, 1, 1)
+    for _, e in ipairs(self.staticImages or {}) do
+        if e[2] < x1 and e[2] + e[4] > x0 and e[3] < y1 and e[3] + e[5] > y0 then
+            love.graphics.draw(e[1], e[2], e[3])
+        end
+    end
+    for _, sp in ipairs(self.staticSprites or {}) do
+        Art.draw(sp[1], sp[2], sp[3], sp[4])
+    end
+    local ink = C.abyss
+    love.graphics.setColor(ink[1], ink[2], ink[3], 0.38)
+    for _, sh in ipairs(self.rockShadows or {}) do
+        if sh[1] == "ellipse" then
+            love.graphics.ellipse("fill", sh[2], sh[3], sh[4], sh[5])
+        else
+            love.graphics.polygon("fill", sh[2], sh[3], sh[4], sh[5], sh[6], sh[7], sh[8], sh[9])
         end
     end
     love.graphics.setColor(1, 1, 1, 1)

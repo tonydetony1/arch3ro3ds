@@ -23,6 +23,7 @@ function Bench.parse(args)
         if a == "--bench" then Bench.active = true end
         if a == "--profile" then Gpu.profile = {} end
         if a == "--lprof" then Bench.lprof = {} end
+        if a == "--menu" then Bench.menu = true end
         local r = a:match("^%-%-room=(%d+)$")
         if r then Bench.room = tonumber(r) end
         local d = a:match("^%-%-duration=(%d+)$")
@@ -49,11 +50,19 @@ end
 function Bench.start(sm)
     Bench.sm = sm
     if Bench.lprof then startLuaProfiler() end
+    if Bench.menu then
+        print("[BENCH] menu principal")
+        return
+    end
     sm:switch("game", { mode = "ascension" })
     local g = sm.current
     g.hasSpunStartWheel = true -- saute la roue de départ
     g:setupRoom(Bench.room)
     g.isDrafting = false
+    if g.arena and g.arena.groundBatch then
+        print(string.format("[BENCH] sol : %d sprites, murs : %d sprites, carte %dx%d",
+            g.arena.groundBatch:getCount(), g.arena.wallBatch and g.arena.wallBatch:getCount() or 0, g.mapW, g.mapH))
+    end
     print(string.format("[BENCH] partie lancée (salle %d, chapitre %d, 3DS simulée : %s)",
         Bench.room, g.chapterIndex, tostring(Gpu.is3DS)))
 end
@@ -82,7 +91,7 @@ function Bench.update(dt)
     Bench.t = Bench.t + dt
     Bench.frames = (Bench.frames or 0) + 1
     local g = Bench.sm.current
-    if g and g.player then autopilot(g, Bench.t) end
+    if g and g.player and not Bench.menu then autopilot(g, Bench.t) end
 
     local st = Gpu.stats
     if st.vertices > Bench.peakVertices then Bench.peakVertices = st.vertices end

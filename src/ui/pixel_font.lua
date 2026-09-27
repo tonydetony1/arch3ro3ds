@@ -20,8 +20,13 @@ local floor = math.floor
 local BAKED_COLORS = { "white", "yellow", "silver", "fog", "steel", "cyan", "red", "amber", "leaf", "orange", "ink", "pink" }
 PixelFont.BAKED_COLORS = BAKED_COLORS
 
--- Table couleur -> clé précuite (identité de table, puis comparaison RVB tolérante)
-local bakedByTable = {}
+-- Table couleur -> clé précuite (identité de table, puis couleur précuite la plus proche).
+-- Les écrans passent souvent des couleurs RVB libres (ex. {0.98, 0.98, 1}) : on les aimante
+-- vers la couleur précuite la plus proche si l'écart est imperceptible, sinon la lettre est
+-- teintée (1 appel GPU par lettre). Cache à clés faibles : les tables créées à chaque image
+-- ne s'accumulent pas.
+local NEAR = 0.13 * 0.13 * 3
+local bakedByTable = setmetatable({}, { __mode = "k" })
 local bakedList = {}
 for _, key in ipairs(BAKED_COLORS) do
     local c = Palette.C[key]
@@ -31,18 +36,19 @@ end
 
 local function bakedKey(color)
     if not color then return "white" end
-    if (color[4] or 1) < 0.999 then return nil end
+    if (color[4] or 1) < 0.85 then return nil end
     local k = bakedByTable[color]
-    if k then return k end
+    if k ~= nil then return k or nil end
     local r, g, b = color[1], color[2], color[3]
+    local best, bestD = false, NEAR
     for i = 1, #bakedList do
         local c = bakedList[i].c
-        if math.abs(c[1] - r) < 0.004 and math.abs(c[2] - g) < 0.004 and math.abs(c[3] - b) < 0.004 then
-            bakedByTable[color] = bakedList[i].key
-            return bakedList[i].key
-        end
+        local dr, dg, db = c[1] - r, c[2] - g, c[3] - b
+        local d = dr * dr + dg * dg + db * db
+        if d < bestD then best, bestD = bakedList[i].key, d end
     end
-    return nil
+    bakedByTable[color] = best
+    return best or nil
 end
 
 -- Décodage UTF-8 sans allocation
@@ -250,7 +256,7 @@ end
 -- Cache de mise en page : layouts[id][text] = { n, width, [k] = { g, dx, dy } } (unités de police)
 local layouts = { }
 local layoutCount = 0
-local LAYOUT_CACHE_MAX = 600
+local LAYOUT_CACHE_MAX = 300
 
 local function layoutOf(f, id, text)
     local byFont = layouts[id]
@@ -331,6 +337,36 @@ function PixelFont.print(text, x, y, color, id, scale, style)
     -- Mise en page mise en cache par (police, texte) : plus de décodage UTF-8 ni de
     -- recherche de glyphe à chaque image (le HUD réaffiche les mêmes chaînes en boucle)
     local layout = layoutOf(f, id or "main", text)
+
+    -- Couleur précuite : la chaîne entière est un SpriteBatch construit une fois,
+    -- dessiné en 1 appel GPU sans boucle Lua par lettre
+    if key and layout.n > 0 then
+        local bkey = plain and "p" or key
+        local batches = layout.batches
+        if not batches then
+            batches = {}
+            layout.batches = batches
+        end
+        local byScale = batches[s]
+        if not byScale then
+            byScale = {}
+            batches[s] = byScale
+        end
+        local sb = byScale[bkey]
+        if not sb then
+            sb = love.graphics.newSpriteBatch(PixelFont.image, layout.n, "static")
+            for k = 1, layout.n do
+                local e = layout[k]
+                local g = e.g
+                local fr = plain and g.p or (g.c and g.c[key]) or g.o
+                sb:add(fr.quad, e.dx * s, e.dy * s + g.yoff * s, 0, s, s)
+            end
+            byScale[bkey] = sb
+        end
+        love.graphics.draw(sb, x - off, y - off)
+        return layout.width * s
+    end
+
     local img = PixelFont.image
     local draw = love.graphics.draw
     local pen = x
