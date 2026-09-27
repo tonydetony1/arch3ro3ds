@@ -6,8 +6,12 @@ local Balance = require("src.data.balance")
 
 local Save = {
     SAVE_FILE = "arch3ro_save.lua",
+    BACKUP_FILE = "arch3ro_save_secours.lua",
     data = nil,
 }
+
+-- Marqueur de fin : un fichier sans lui a été tronqué (coupure pendant l'écriture)
+local END_MARK = "-- fin arch3ro"
 
 -- Données par défaut pour une nouvelle partie
 local function getDefaultData()
@@ -128,67 +132,78 @@ local function serializeTable(val, indent)
     end
 end
 
--- Chargement depuis le stockage persistant
+-- Lit un fichier de sauvegarde en sécurité : contenu complet (marqueur de fin) et exécuté
+-- dans un environnement vide (une sauvegarde modifiée ne peut appeler aucune fonction).
+local function readSaveFile(path)
+    if not love.filesystem.getInfo(path) then return nil end
+    local okRead, content = pcall(love.filesystem.read, path)
+    if not okRead or type(content) ~= "string" then return nil end
+    -- Les anciennes sauvegardes (avant le marqueur) restent acceptées si elles se terminent par "}"
+    if not content:find(END_MARK, 1, true) and not content:match("}%s*$") then return nil end
+    local chunk = loadstring(content, "=" .. path)
+    if not chunk then return nil end
+    setfenv(chunk, {})
+    local ok, data = pcall(chunk)
+    if ok and type(data) == "table" then return data end
+    return nil
+end
+
+-- Chargement depuis le stockage persistant (fichier principal, sinon copie de secours)
 function Save.load()
     if Save.data then return Save.data end
 
-    if love.filesystem.getInfo(Save.SAVE_FILE) then
-        local chunk, err = love.filesystem.load(Save.SAVE_FILE)
-        if chunk then
-            local success, loadedData = pcall(chunk)
-            if success and type(loadedData) == "table" then
-                Save.data = loadedData
-                -- Sécurité : injection des valeurs manquantes si mise à jour du schéma
-                local defaultData = getDefaultData()
-                for k, v in pairs(defaultData) do
-                    if Save.data[k] == nil then
-                        Save.data[k] = v
-                    end
-                end
-                if Save.data.equipped then
-                    Save.data.equipped.ring1 = Save.data.equipped.ring1 or Save.data.equipped.ring or "wolf_ring"
-                    Save.data.equipped.ring2 = Save.data.equipped.ring2 or "bear_ring"
-                    Save.data.equipped.pet1 = Save.data.equipped.pet1 or Save.data.equipped.pet or "bat_companion"
-                    Save.data.equipped.pet2 = Save.data.equipped.pet2 or "ghost_familiar"
-                end
-                if Save.data.inventory then
-                    local existing = {}
-                    for _, id in ipairs(Save.data.inventory) do
-                        existing[id] = true
-                    end
-                    for _, id in ipairs(defaultData.inventory) do
-                        if not existing[id] then
-                            table.insert(Save.data.inventory, id)
-                            existing[id] = true
-                        end
-                    end
-                end
-                if Save.data.itemLevels then
-                    for k, lvl in pairs(defaultData.itemLevels) do
-                        if Save.data.itemLevels[k] == nil then
-                            Save.data.itemLevels[k] = lvl
-                        end
-                    end
-                end
-                if Save.data.talents == nil then
-                    Save.data.talents = {
-                        strength = 0,
-                        vitality = 0,
-                        recovery = 0,
-                        agility = 0,
-                        glory = 0,
-                    }
-                end
-                -- Migration : les anciennes sauvegardes donnaient tout le catalogue d'entrée.
-                -- On ne garde que la panoplie de départ ; le reste se débloque en coffre.
-                if not Save.data.itemUnlockRework then
-                    Save.applyUnlockRework()
-                end
-                Save.sanitizeEquipment()
-                Save.save()
-                return Save.data
+    local loadedData = readSaveFile(Save.SAVE_FILE) or readSaveFile(Save.BACKUP_FILE)
+    if loadedData then
+        Save.data = loadedData
+        -- Sécurité : injection des valeurs manquantes si mise à jour du schéma
+        local defaultData = getDefaultData()
+        for k, v in pairs(defaultData) do
+            if Save.data[k] == nil then
+                Save.data[k] = v
             end
         end
+        if Save.data.equipped then
+            Save.data.equipped.ring1 = Save.data.equipped.ring1 or Save.data.equipped.ring or "wolf_ring"
+            Save.data.equipped.ring2 = Save.data.equipped.ring2 or "bear_ring"
+            Save.data.equipped.pet1 = Save.data.equipped.pet1 or Save.data.equipped.pet or "bat_companion"
+            Save.data.equipped.pet2 = Save.data.equipped.pet2 or "ghost_familiar"
+        end
+        if Save.data.inventory then
+            local existing = {}
+            for _, id in ipairs(Save.data.inventory) do
+                existing[id] = true
+            end
+            for _, id in ipairs(defaultData.inventory) do
+                if not existing[id] then
+                    table.insert(Save.data.inventory, id)
+                    existing[id] = true
+                end
+            end
+        end
+        if Save.data.itemLevels then
+            for k, lvl in pairs(defaultData.itemLevels) do
+                if Save.data.itemLevels[k] == nil then
+                    Save.data.itemLevels[k] = lvl
+                end
+            end
+        end
+        if Save.data.talents == nil then
+            Save.data.talents = {
+                strength = 0,
+                vitality = 0,
+                recovery = 0,
+                agility = 0,
+                glory = 0,
+            }
+        end
+        -- Migration : les anciennes sauvegardes donnaient tout le catalogue d'entrée.
+        -- On ne garde que la panoplie de départ ; le reste se débloque en coffre.
+        if not Save.data.itemUnlockRework then
+            Save.applyUnlockRework()
+        end
+        Save.sanitizeEquipment()
+        Save.save()
+        return Save.data
     end
 
     -- Première partie ou fichier corrompu : initialisation par défaut
@@ -272,12 +287,63 @@ function Save.sanitizeEquipment()
     d.equipped.pet = d.equipped.pet1
 end
 
--- Écriture sur disque
+-- Écriture sur disque en deux temps : copie de secours puis fichier principal.
+-- Une coupure (batterie, console éteinte) pendant l'une des deux écritures laisse
+-- toujours l'autre fichier complet ; Save.load prend le premier fichier valide.
 function Save.save()
     if not Save.data then return false end
-    local content = "return " .. serializeTable(Save.data) .. "\n"
-    local ok, err = love.filesystem.write(Save.SAVE_FILE, content)
-    return ok
+    local content = "return " .. serializeTable(Save.data) .. "\n" .. END_MARK .. "\n"
+    local okBackup = love.filesystem.write(Save.BACKUP_FILE, content)
+    local ok = love.filesystem.write(Save.SAVE_FILE, content)
+    return ok or okBackup
+end
+
+-- ============================================================================
+-- REPRISE DE PARTIE : instantané de la course au début de chaque salle
+-- ============================================================================
+-- Champs du héros qui ne doivent pas être restaurés (position, vitesse, minuteries)
+local RUN_SKIP = {
+    x = true, y = true, vx = true, vy = true, targetAngle = true, currentTarget = true,
+    isMoving = true, wasMoving = true, hasInput = true, benchInputX = true, benchInputY = true,
+}
+
+function Save.saveRun(game)
+    local d = Save.get()
+    if game.gameMode ~= "ascension" and game.gameMode ~= "infinite" then return end
+    local stats = {}
+    for k, v in pairs(game.player) do
+        local t = type(v)
+        if not RUN_SKIP[k] and (t == "number" or t == "boolean" or t == "string") then
+            stats[k] = v
+        end
+    end
+    local skills = {}
+    for i, sk in ipairs(game.acquiredSkills or {}) do skills[i] = sk.id end
+    d.run = {
+        mode = game.gameMode,
+        room = game.roomNumber,
+        gold = game.goldEarnedRun or 0,
+        kills = game.kills or 0,
+        ultimate = game.ultimateCharge or 0,
+        heroId = game.player.heroId,
+        weapon = game.player.currentWeapon and game.player.currentWeapon.id,
+        skills = skills,
+        player = stats,
+    }
+    Save.save()
+end
+
+function Save.getRun()
+    local d = Save.get()
+    return d.run
+end
+
+function Save.clearRun()
+    local d = Save.get()
+    if d.run then
+        d.run = nil
+        Save.save()
+    end
 end
 
 function Save.get()

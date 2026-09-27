@@ -216,6 +216,7 @@ function PauseState:touchpressed(id, tx, ty)
             end
             -- Dépile la pause et bascule sur le Menu Hub
             self.sm:pop()
+            Save.clearRun() -- quitter = abandonner la course
             self.sm:switch("menu")
             return
         end

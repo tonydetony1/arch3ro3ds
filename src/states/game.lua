@@ -162,6 +162,11 @@ function GameState:enter(params)
     -- Bouton tactile Pause
     self.pauseBtn = { x = 290, y = 2, w = 28, h = 21 }
 
+    -- Reprise d'une course interrompue (console éteinte en pleine partie)
+    if params.resume then
+        self:applyResume(params.resume)
+    end
+
     -- Lancement de la première salle
     self:setupRoom(self.roomNumber)
 
@@ -173,6 +178,24 @@ function GameState:enter(params)
         else
             self:openDraft()
         end
+    end
+end
+
+-- Restaure une course sauvegardée par Save.saveRun (statistiques du héros, compétences, or)
+function GameState:applyResume(run)
+    self.hasSpunStartWheel = true
+    self.roomNumber = run.room or 1
+    self.goldEarnedRun = run.gold or 0
+    self.kills = run.kills or 0
+    self.ultimateCharge = run.ultimate or 0
+    if run.weapon then self.player:equipWeapon(run.weapon) end
+    for k, v in pairs(run.player or {}) do
+        if type(self.player[k]) ~= "function" then self.player[k] = v end
+    end
+    self.acquiredSkills = {}
+    for _, id in ipairs(run.skills or {}) do
+        local sk = Skills.get(id)
+        if sk then table.insert(self.acquiredSkills, sk) end
     end
 end
 
@@ -275,6 +298,11 @@ function GameState:setupRoom(roomNum)
     self.player.vx = 0
     self.player.vy = 0
     self.camera:setPosition(self.player.x, self.player.y)
+
+    -- Sauvegarde automatique : la course reprend ici si la console est éteinte
+    if roomNum > 1 and not self.isGameOver then
+        Save.saveRun(self)
+    end
 end
 
 function GameState:spawnMonstersNow()
@@ -504,6 +532,7 @@ function GameState:update(dt)
             end
             Audio.play("defeat", 0, 0.9)
             Audio.playMusic("hub", 0.8)
+            Save.clearRun()
             if self.gameMode == "survival" then
                 Save.setEventRecord("survival", self.waveCount or 0)
             elseif self.gameMode == "boss_rush" then

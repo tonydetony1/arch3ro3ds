@@ -974,6 +974,26 @@ function SelfTest.update(gameStateMachine, testFrames)
             end
             print("[TEST] Equipment Unlocks VALIDATED: rarity-weighted chests gated by room progress.")
 
+        elseif testFrames == 115 then
+            -- Reprise de partie : instantané en début de salle puis restauration
+            local g = gameStateMachine.states["game"]
+            g.gameMode = "ascension"
+            g.roomNumber = 7
+            g.goldEarnedRun = 123
+            g.kills = 42
+            g.player.damageMult = 3.25
+            Save.saveRun(g)
+            local run = Save.getRun()
+            assert(run and run.room == 7 and run.gold == 123, "Run snapshot must be saved")
+            gameStateMachine:switch("game", { mode = run.mode, resume = run })
+            local r = gameStateMachine.current
+            assert(r.roomNumber == 7, "Resumed run must restart at the saved room")
+            assert(r.goldEarnedRun == 123 and r.kills == 42, "Resumed run must keep gold and kills")
+            assert(math.abs(r.player.damageMult - 3.25) < 1e-6, "Resumed run must keep hero stats")
+            Save.clearRun()
+            assert(Save.getRun() == nil, "Abandon must clear the saved run")
+            print("[TEST] Run Resume VALIDATED: autosave snapshot, restore at room 7, abandon clears it.")
+
         elseif testFrames >= 118 then
             collectgarbage("collect")
             local mem = collectgarbage("count")

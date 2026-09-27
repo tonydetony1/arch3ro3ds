@@ -508,18 +508,25 @@ function MenuState:drawPlayTab()
         love.graphics.translate(-(lx + lw / 2), -(ly + lh / 2))
     end
 
+    -- Course interrompue : le bouton devient REPRENDRE (+ bouton pour abandonner)
+    local run = Save.getRun()
     UI.drawIcon("swords", lx + 44, ly + 52, 15, {1, 1, 1, 1})
     local prevFTitle = love.graphics.getFont()
     love.graphics.setFont(UI.getFont("title"))
-    UI.drawText("JOUER", lx + 66, ly + 42, {1, 1, 1, 1}, {0.04, 0.12, 0.06, 1.0})
+    UI.drawText(run and "REPRENDRE" or "JOUER", lx + 66, ly + 42, {1, 1, 1, 1}, {0.04, 0.12, 0.06, 1.0})
     love.graphics.setFont(prevFTitle)
 
     -- Sous-titre Mode & Chapitre
     love.graphics.setFont(UI.getFont("tiny"))
     local modeLabel = (self.selectedMode == "ascension" and "Ascension" or "Gouffre")
-    UI.drawTextAligned(string.format("%s - Ch.%d", modeLabel, chap.id), lx, ly + 74, lw, "center", {0.60, 0.95, 0.75, 0.9})
+    local subLabel = run and string.format("Salle %d - partie en cours", run.room or 1)
+        or string.format("%s - Ch.%d", modeLabel, chap.id)
+    UI.drawTextAligned(subLabel, lx, ly + 74, lw, "center", {0.60, 0.95, 0.75, 0.9})
     love.graphics.setFont(prevFTitle)
     love.graphics.pop()
+    if run then
+        UI.drawPillButton(lx + lw - 66, ly + 8, 58, 18, "ABANDON", "red", self.pressedBtn == "abandon_run")
+    end
 end
 
 -- ============================================================================
@@ -1383,6 +1390,9 @@ function MenuState:touchpressed(id, tx, ty)
         -- Récolte Patrouille AFK
         elseif tx >= 206 and tx <= 316 and ty >= 6 and ty <= 96 then
             self.pressedBtn = "claim_patrol"
+        -- Abandon de la course sauvegardée (pastille en haut à droite du bouton Jouer)
+        elseif Save.getRun() and tx >= 248 and tx <= 308 and ty >= 106 and ty <= 128 then
+            self.pressedBtn = "abandon_run"
         -- Bouton Master Jouer
         elseif tx >= 130 and tx <= 316 and ty >= 100 and ty <= 198 then
             self.pressedBtn = "play"
@@ -1521,6 +1531,12 @@ function MenuState:touchreleased(id, tx, ty)
             self.selectedMode = "survival"
         elseif self.pressedBtn == "play" then
             self:launchGame()
+        elseif self.pressedBtn == "abandon_run" then
+            local run = Save.getRun()
+            if run and (run.gold or 0) > 0 then Save.addGold(run.gold) end
+            Save.clearRun()
+            Audio.play("ui_cancel", 0, 0.8)
+            self.saveData = Save.get()
         end
 
     elseif self.currentTab == "quests" then
@@ -1623,6 +1639,11 @@ end
 
 function MenuState:launchGame()
     Audio.play("ui_confirm", 0, 0.8)
+    local run = Save.getRun()
+    if run then
+        self.sm:switch("game", { mode = run.mode, resume = run })
+        return
+    end
     -- La partie se lance toujours ; l'énergie disponible sert uniquement de bonus d'or.
     local boosted = Save.spendEnergy(self.selectedMode)
     self.saveData = Save.get()
