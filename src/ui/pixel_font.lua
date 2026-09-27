@@ -247,28 +247,59 @@ function PixelFont.lineHeight(id, scale)
     return (f and f.lineH or 12) * (scale or 1)
 end
 
-function PixelFont.getWidth(text, id, scale)
-    text = tostring(text)
-    local f = getFont(id)
-    if not f then return 0 end
-    local s = scale or 1
-    local w, i, n = 0, 1, #text
-    local lineMax = 0
+-- Cache de mise en page : layouts[id][text] = { n, width, [k] = { g, dx, dy } } (unités de police)
+local layouts = { }
+local layoutCount = 0
+local LAYOUT_CACHE_MAX = 600
+
+local function layoutOf(f, id, text)
+    local byFont = layouts[id]
+    if not byFont then
+        byFont = {}
+        layouts[id] = byFont
+    end
+    local l = byFont[text]
+    if l then return l end
+    if layoutCount >= LAYOUT_CACHE_MAX then
+        -- Chaînes dynamiques (compteurs) : on repart d'un cache vide plutôt que de grossir sans fin
+        layouts = { [id] = {} }
+        byFont = layouts[id]
+        layoutCount = 0
+    end
+    l = { n = 0, width = 0, maxWidth = 0 }
+    local pen, penY = 0, 0
+    local i, n = 1, #text
     while i <= n do
         local cp
         cp, i = decode(text, i)
         if cp == 10 then
-            if w > lineMax then lineMax = w end
-            w = 0
+            if pen > l.maxWidth then l.maxWidth = pen end
+            pen = 0
+            penY = penY + f.lineH
         elseif cp == 32 then
-            w = w + (f.space + 1) * s
+            pen = pen + f.space + 1
         else
             local g = f.glyphs[cp] or f.fallback
-            if g then w = w + (g.w + 1) * s end
+            if g then
+                l.n = l.n + 1
+                l[l.n] = { g = g, dx = pen, dy = penY }
+                pen = pen + g.w + 1
+            end
         end
     end
-    if w > lineMax then lineMax = w end
-    return math.max(0, lineMax - s)
+    l.width = pen
+    if pen > l.maxWidth then l.maxWidth = pen end
+    byFont[text] = l
+    layoutCount = layoutCount + 1
+    return l
+end
+
+function PixelFont.getWidth(text, id, scale)
+    local f = getFont(id)
+    if not f then return 0 end
+    local s = scale or 1
+    local l = layoutOf(f, id or "main", tostring(text))
+    return math.max(0, l.maxWidth * s - s)
 end
 
 -- style : nil (contour), "plain" (sans contour), "shadow" (contour + ombre portée)
@@ -277,7 +308,6 @@ function PixelFont.print(text, x, y, color, id, scale, style)
     text = tostring(text)
     local f = getFont(id)
     local s = scale or 1
-    local img = PixelFont.image
     local plain = (style == "plain")
     local off = plain and 0 or s
     x = floor(x + 0.5)
@@ -298,25 +328,20 @@ function PixelFont.print(text, x, y, color, id, scale, style)
         love.graphics.setColor(1, 1, 1, 1)
     end
 
-    local pen, penY = x, y
-    local i, n = 1, #text
-    while i <= n do
-        local cp
-        cp, i = decode(text, i)
-        if cp == 10 then
-            pen = x
-            penY = penY + f.lineH * s
-        elseif cp == 32 then
-            pen = pen + (f.space + 1) * s
-        else
-            local g = f.glyphs[cp] or f.fallback
-            if g then
-                local fr = plain and g.p or (key and g.c and g.c[key]) or g.o
-                love.graphics.draw(img, fr.quad, pen - off, penY + g.yoff * s - off, 0, s, s)
-                pen = pen + (g.w + 1) * s
-            end
-        end
+    -- Mise en page mise en cache par (police, texte) : plus de décodage UTF-8 ni de
+    -- recherche de glyphe à chaque image (le HUD réaffiche les mêmes chaînes en boucle)
+    local layout = layoutOf(f, id or "main", text)
+    local img = PixelFont.image
+    local draw = love.graphics.draw
+    local pen = x
+    for k = 1, layout.n do
+        local e = layout[k]
+        local g = e.g
+        local fr = plain and g.p or (key and g.c and g.c[key]) or g.o
+        pen = x + e.dx * s
+        draw(img, fr.quad, pen - off, y + e.dy * s + g.yoff * s - off, 0, s, s)
     end
+    pen = x + layout.width * s
     return pen - x
 end
 

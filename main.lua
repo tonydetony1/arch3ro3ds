@@ -51,6 +51,7 @@ function love.load(arg)
             -- Banc d'essai PC avec les contraintes GPU de la 3DS (budget de sommets, lots ordonnés)
             if a == "--sim3ds" then Gpu.simulate3DS(); showGpuStats = true end
             if a == "--gpustats" then showGpuStats = true end
+            if a == "--profile" then Gpu.profile = {} end
             if a == "--bench" then benchMode = true end
         end
     end

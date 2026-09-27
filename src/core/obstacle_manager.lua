@@ -640,13 +640,34 @@ function ObstacleManager:buildProps()
             prop.x = r.x + r.w / 2
             prop.y = r.y + r.h / 2 - STUMP_LIFT
         elseif love.graphics.newCanvas then
-            local grid = blockGrid(r.w, r.h, BLOCK_HEIGHT, i * 97 + r.w)
-            prop.canvas = SpriteAtlas.gridToCanvas(grid, self.blockPalette or BLOCK_PAL, "262b44", { depth = 6, strength = 0.75 })
+            prop.canvas = self:blockImage(r.w, r.h, i * 97 + r.w)
             prop.x = r.x - 1
             prop.y = r.y - BLOCK_HEIGHT - 1
         end
         self.props[#self.props + 1] = prop
     end
+end
+
+-- Images de blocs de pierre : générées pixel par pixel (coûteux sur 3DS, ~0,1 s chacune),
+-- donc mises en cache par (taille, graine, palette) et réutilisées d'une salle à l'autre.
+local BLOCK_CACHE_MAX = 48
+local blockCache = {}
+local blockCacheOrder = {}
+
+function ObstacleManager:blockImage(w, h, seed)
+    local pal = self.blockPalette or BLOCK_PAL
+    local key = w .. "x" .. h .. ":" .. seed .. ":" .. tostring(pal)
+    local img = blockCache[key]
+    if img then return img end
+    local grid = blockGrid(w, h, BLOCK_HEIGHT, seed)
+    img = SpriteAtlas.gridToCanvas(grid, pal, "262b44", { depth = 6, strength = 0.75 })
+    blockCache[key] = img
+    blockCacheOrder[#blockCacheOrder + 1] = key
+    if #blockCacheOrder > BLOCK_CACHE_MAX then
+        -- Pas de release() : la salle courante peut encore l'afficher ; le GC la libérera
+        blockCache[table.remove(blockCacheOrder, 1)] = nil
+    end
+    return img
 end
 
 function ObstacleManager:drawProp(prop)

@@ -186,15 +186,20 @@ end
 -- ============================================================================
 -- BAS DE L'ÉCRAN : esquive et ultime (anneaux de charge segmentés)
 -- ============================================================================
-local function ringGauge(cx, cy, r, ratio, lit, dim, segments)
-    segments = segments or 28
-    local n = floor(math.min(1, math.max(0, ratio)) * segments + 0.5)
-    for i = 0, segments - 1 do
-        local a = -math.pi / 2 + (i + 0.5) / segments * math.pi * 2
-        local px = floor(cx + math.cos(a) * r + 0.5)
-        local py = floor(cy + math.sin(a) * r + 0.5)
-        Skin.rect(i < n and lit or dim, px - 1, py - 1, 3, 3)
+-- Anneau de charge : secteur allumé + secteur éteint + disque central (3 appels au lieu de 30)
+local function ringGauge(cx, cy, r, ratio, lit, dim, _segments)
+    ratio = math.min(1, math.max(0, ratio))
+    local top = -math.pi / 2
+    local split = top + ratio * math.pi * 2
+    if ratio < 1 then
+        love.graphics.setColor(dim[1], dim[2], dim[3], 1)
+        love.graphics.arc("fill", cx, cy, r + 1, split, top + math.pi * 2, 24)
     end
+    if ratio > 0 then
+        love.graphics.setColor(lit[1], lit[2], lit[3], 1)
+        love.graphics.arc("fill", cx, cy, r + 1, top, split, 24)
+    end
+    Skin.disc(C.ink, cx, cy, r - 2)
 end
 
 function HUD:drawCircularUltimate(ultCharge, player)

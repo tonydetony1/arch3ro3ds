@@ -22,6 +22,7 @@ function Bench.parse(args)
     for _, a in ipairs(args or {}) do
         if a == "--bench" then Bench.active = true end
         if a == "--profile" then Gpu.profile = {} end
+        if a == "--lprof" then Bench.lprof = {} end
         local r = a:match("^%-%-room=(%d+)$")
         if r then Bench.room = tonumber(r) end
         local d = a:match("^%-%-duration=(%d+)$")
@@ -30,8 +31,24 @@ function Bench.parse(args)
     return Bench.active
 end
 
+-- Profil Lua par échantillonnage (JIT coupé : proche du Lua 5.1 interprété de la 3DS)
+local function startLuaProfiler()
+    if jit then jit.off() end
+    local prof = Bench.lprof
+    debug.sethook(function()
+        local info = debug.getinfo(2, "Sl")
+        if not info then return end
+        local key = info.short_src .. ":" .. (info.currentline or 0)
+        prof[key] = (prof[key] or 0) + 1
+        local fn = debug.getinfo(2, "Sn")
+        local fkey = "FN " .. (fn.short_src or "?") .. ":" .. (fn.linedefined or 0) .. " " .. tostring(fn.name)
+        prof[fkey] = (prof[fkey] or 0) + 1
+    end, "", 1000)
+end
+
 function Bench.start(sm)
     Bench.sm = sm
+    if Bench.lprof then startLuaProfiler() end
     sm:switch("game", { mode = "ascension" })
     local g = sm.current
     g.hasSpunStartWheel = true -- saute la roue de départ
@@ -95,6 +112,22 @@ function Bench.update(dt)
             local frames = math.max(1, love.timer.getFPS() * 0 + Bench.frames)
             for i = 1, math.min(30, #rows) do
                 print(string.format("[PROF] %6.1f appels %7.0f sommets  %s", rows[i][2] / frames, rows[i][3] / frames, rows[i][1]))
+            end
+        end
+        if Bench.lprof then
+            debug.sethook()
+            local rows, total = {}, 0
+            for k, v in pairs(Bench.lprof) do
+                rows[#rows + 1] = { k, v }
+                if k:sub(1, 3) ~= "FN " then total = total + v end
+            end
+            table.sort(rows, function(a, b) return a[2] > b[2] end)
+            local shown = 0
+            for _, r in ipairs(rows) do
+                if r[1]:sub(1, 3) == "FN " and shown < 30 then
+                    print(string.format("[LPROF] %5.1f %%  %s", r[2] / total * 100, r[1]))
+                    shown = shown + 1
+                end
             end
         end
         print(string.format("[BENCH] FIN pic=%d/%d rejets cumulés=%d", Bench.peakVertices, Gpu.VERTEX_CAPACITY, Bench.skippedTotal))

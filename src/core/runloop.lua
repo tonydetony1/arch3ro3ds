@@ -1,7 +1,7 @@
 -- src/core/runloop.lua
 -- Boucle principale 3DS (remplace love.run de LÖVE Potion, même logique d'événements).
 --
--- Différence : l'écran tactile n'est redessiné qu'une image sur BOTTOM_EVERY, sauf s'il a été
+-- Différence : l'écran tactile n'est redessiné qu'une image sur BOTTOM_EVERY (3), sauf s'il a été
 -- touché, qu'un bouton a été pressé ou qu'un état l'exige (Screen.bottomDirty). Un écran qui
 -- n'est pas redessiné garde simplement l'image précédente (citro3d ne transfère que les cibles
 -- utilisées), ce qui libère le processeur pour l'écran du haut où se joue l'action.
@@ -9,7 +9,7 @@
 local Screen = require("src.core.screen")
 
 local RunLoop = {
-    BOTTOM_EVERY = 2,
+    BOTTOM_EVERY = 3,
 }
 
 function RunLoop.run()

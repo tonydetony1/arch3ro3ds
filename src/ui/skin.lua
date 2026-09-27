@@ -21,21 +21,28 @@ local function rect(c, x, y, w, h, a)
 end
 Skin.rect = rect
 
--- Rectangle à coins arrondis en escalier (r = 0..3)
+-- Rectangle à coins arrondis (r = 0..3) : un seul octogone convexe. Sans anticrénelage, le
+-- pan coupé à 45° se rastérise en escalier de r pixels : même rendu que l'ancien empilement
+-- de 2r+1 rectangles, pour 1 appel GPU au lieu de 7 (le HUD en dessinait des dizaines).
+local octo = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 function Skin.roundRect(c, x, y, w, h, r, a)
     x, y, w, h = floor(x), floor(y), floor(w), floor(h)
+    if w <= 0 or h <= 0 then return end
     set(c, a)
-    if r <= 0 then
+    if r <= 0 or w <= r * 2 or h <= r * 2 then
         love.graphics.rectangle("fill", x, y, w, h)
         return
     end
-    love.graphics.rectangle("fill", x + r, y, w - r * 2, h)
-    for i = 1, r do
-        local inset = r - i + 1
-        if i == r then inset = 1 end
-        love.graphics.rectangle("fill", x + i - 1, y + inset, 1, h - inset * 2)
-        love.graphics.rectangle("fill", x + w - i, y + inset, 1, h - inset * 2)
-    end
+    local p = octo
+    p[1], p[2] = x + r, y
+    p[3], p[4] = x + w - r, y
+    p[5], p[6] = x + w, y + r
+    p[7], p[8] = x + w, y + h - r
+    p[9], p[10] = x + w - r, y + h
+    p[11], p[12] = x + r, y + h
+    p[13], p[14] = x, y + h - r
+    p[15], p[16] = x, y + r
+    love.graphics.polygon("fill", p)
 end
 
 -- Disque : un seul polygone (l'ancien balayage ligne par ligne coûtait 2r+1 appels GPU,

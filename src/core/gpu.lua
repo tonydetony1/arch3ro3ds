@@ -19,47 +19,55 @@ local Gpu = {}
 Gpu.is3DS = (love._console == "3DS" or love._os == "3DS"
     or (love.graphics ~= nil and love.graphics.setActiveScreen ~= nil))
 
+local guard = Gpu.is3DS -- le garde-fou ne coupe des dessins que sur 3DS (ou 3DS simulée)
+
 -- Banc de test PC : `love . --sim3ds` applique les contraintes 3DS (budget, lots ordonnés)
 function Gpu.simulate3DS()
     Gpu.is3DS = true
+    guard = true
 end
 
 -- Capacité réelle du tampon moins une marge pour le texte d'erreur éventuel
 Gpu.VERTEX_CAPACITY = 6 * 0x1000
 Gpu.VERTEX_LIMIT = Gpu.VERTEX_CAPACITY - 1024
 
-Gpu.frameVertices = 0
-Gpu.frameCalls = 0
 Gpu.frameSkipped = 0
 Gpu.stats = { vertices = 0, calls = 0, skipped = 0, peak = 0, batched = 0 }
 
 local g = love.graphics
 local installed = false
 
--- Réserve `n` sommets ; renvoie false si l'appel doit être abandonné
+-- Réserve `n` sommets ; renvoie false si l'appel doit être abandonné.
+-- Chemin chaud (appelé à chaque dessin) : aucune branche de profilage ici.
+local frameVertices = 0
+local frameCalls = 0
+local limit = Gpu.VERTEX_LIMIT
 local function reserve(n)
-    local total = Gpu.frameVertices + n
-    if Gpu.is3DS and total > Gpu.VERTEX_LIMIT then
+    local total = frameVertices + n
+    if guard and total > limit then
         Gpu.frameSkipped = Gpu.frameSkipped + 1
         return false
     end
-    Gpu.frameVertices = total
-    Gpu.frameCalls = Gpu.frameCalls + 1
-    local prof = Gpu.profile
-    if prof then
-        -- Profilage (banc PC uniquement) : origine de l'appel dans le code du jeu
-        local lvl = 3
-        local info = debug.getinfo(lvl, "Sl")
-        while info and (info.short_src:find("gpu.lua") or info.short_src:find("sprite_atlas") or info.short_src:find("art.lua") or info.short_src:find("pixel_font") or info.short_src:find("skin.lua")) do
-            lvl = lvl + 1
-            info = debug.getinfo(lvl, "Sl")
-        end
-        local key = info and (info.short_src .. ":" .. info.currentline) or "?"
-        local e = prof[key]
-        if not e then e = { 0, 0 }; prof[key] = e end
-        e[1] = e[1] + 1
-        e[2] = e[2] + n
+    frameVertices = total
+    frameCalls = frameCalls + 1
+    return true
+end
+
+-- Variante profilée (banc PC `--profile`) : origine de l'appel dans le code du jeu
+local function reserveProfiled(n)
+    if not reserve(n) then return false end
+    local lvl = 3
+    local info = debug.getinfo(lvl, "Sl")
+    while info and (info.short_src:find("gpu.lua") or info.short_src:find("sprite_atlas") or info.short_src:find("art.lua") or info.short_src:find("pixel_font") or info.short_src:find("skin.lua")) do
+        lvl = lvl + 1
+        info = debug.getinfo(lvl, "Sl")
     end
+    local key = info and (info.short_src .. ":" .. info.currentline) or "?"
+    local prof = Gpu.profile
+    local e = prof[key]
+    if not e then e = { 0, 0 }; prof[key] = e end
+    e[1] = e[1] + 1
+    e[2] = e[2] + n
     return true
 end
 Gpu.reserve = reserve
@@ -73,14 +81,14 @@ end
 -- Début d'image : appelé une fois par image avant le premier écran
 function Gpu.beginFrame()
     local st = Gpu.stats
-    st.vertices = Gpu.frameVertices
-    st.calls = Gpu.frameCalls
+    st.vertices = frameVertices
+    st.calls = frameCalls
     st.skipped = Gpu.frameSkipped
     st.batched = Gpu.batchedSprites or 0
     Gpu.batchedSprites = 0
-    if Gpu.frameVertices > st.peak then st.peak = Gpu.frameVertices end
-    Gpu.frameVertices = 0
-    Gpu.frameCalls = 0
+    if frameVertices > st.peak then st.peak = frameVertices end
+    frameVertices = 0
+    frameCalls = 0
     Gpu.frameSkipped = 0
 end
 
@@ -97,6 +105,8 @@ local autoImage = nil   -- texture de l'atlas (Art.image)
 local autoCount = 0
 local colorIsWhite = true
 local rawDraw = nil
+local rawSetColor = nil
+local cr, cg, cb, ca = 1, 1, 1, 1 -- couleur courante (suivie par l'enveloppe de setColor)
 
 function Gpu.setAutoBatchImage(image)
     autoImage = image
@@ -109,13 +119,13 @@ local function flush()
     local n = autoCount
     autoCount = 0
     local cost = n * 6
-    if Gpu.is3DS and Gpu.frameVertices + cost > Gpu.VERTEX_LIMIT then
+    if guard and frameVertices + cost > limit then
         Gpu.frameSkipped = Gpu.frameSkipped + 1
         auto:clear()
         return
     end
-    Gpu.frameVertices = Gpu.frameVertices + cost
-    Gpu.frameCalls = Gpu.frameCalls + 1
+    frameVertices = frameVertices + cost
+    frameCalls = frameCalls + 1
     Gpu.batchedSprites = (Gpu.batchedSprites or 0) + n
     local prof = Gpu.profile
     if prof then
@@ -130,7 +140,15 @@ local function flush()
         e[1] = e[1] + 1
         e[2] = e[2] + n
     end
-    rawDraw(auto)
+    -- Le lot contient des sprites blancs : la couleur courante (qui a pu changer depuis leur
+    -- ajout, ex. une ombre teintée) ne doit pas les teinter au moment du dessin.
+    if colorIsWhite then
+        rawDraw(auto)
+    else
+        rawSetColor(1, 1, 1, 1)
+        rawDraw(auto)
+        rawSetColor(cr, cg, cb, ca)
+    end
     auto:clear()
 end
 Gpu.flush = flush
@@ -139,15 +157,19 @@ Gpu.flush = flush
 function Gpu.install()
     if installed or not g then return end
     installed = true
+    local reserve = Gpu.profile and reserveProfiled or reserve
 
     rawDraw = g.draw
 
-    local rawSetColor = g.setColor
+    rawSetColor = g.setColor
     g.setColor = function(r, gr, b, a)
         if type(r) == "table" then
             r, gr, b, a = r[1], r[2], r[3], r[4]
         end
         a = a or 1
+        -- Couleur inchangée (cas le plus fréquent : remise au blanc) : aucun appel C
+        if r == cr and gr == cg and b == cb and a == ca then return end
+        cr, cg, cb, ca = r, gr, b, a
         colorIsWhite = (r == 1 and gr == 1 and b == 1 and a == 1)
         return rawSetColor(r, gr, b, a)
     end
