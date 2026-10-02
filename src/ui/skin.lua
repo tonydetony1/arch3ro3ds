@@ -17,11 +17,8 @@ local function set(c, a)
     love.graphics.setColor(c[1], c[2], c[3], a or c[4] or 1)
 end
 
--- Pixel pré-coloré de l'atlas pour (couleur, opacité), ou nil. Utilisé uniquement pendant
--- l'enregistrement des parties fixes de l'interface (Gpu.beginRecord) : en dessin direct, une
--- primitive coûte moins cher en Lua qu'un empilement de sprites sur Old 3DS (mesuré).
-local function pxSprite(c, a)
-    if not Gpu.isRecording() then return nil end
+-- Pixel pré-coloré de l'atlas pour (couleur, opacité), ou nil
+local function pxSpriteAny(c, a)
     local name = PxColors.nameOf(c)
     if not name then return nil end
     local sprite = PxColors.spriteName(name, a or c[4] or 1)
@@ -29,11 +26,21 @@ local function pxSprite(c, a)
     return nil
 end
 
+-- Variante pour les formes composées (coins arrondis) : seulement pendant l'enregistrement
+-- des parties fixes (Gpu.beginRecord). En dessin direct, un seul polygone coûte moins cher
+-- en Lua que les 2r+1 sprites de l'escalier sur Old 3DS (mesuré).
+local function pxSprite(c, a)
+    if not Gpu.isRecording() then return nil end
+    return pxSpriteAny(c, a)
+end
+
 -- Aplat : pixel pré-coloré étiré (regroupé avec les autres sprites par l'auto-batcher),
--- sinon rectangle teinté classique
+-- sinon rectangle teinté classique. Toujours en sprite quand la couleur existe : un
+-- rectangle teinté coûte un appel GPU (~40-80 µs sur Old 3DS) et coupe le lot en cours ;
+-- le menu principal en dessinait plus de 100 par image.
 local function rect(c, x, y, w, h, a)
     if w <= 0 or h <= 0 then return end
-    local sprite = pxSprite(c, a)
+    local sprite = pxSpriteAny(c, a)
     if sprite then
         love.graphics.setColor(1, 1, 1, 1)
         Art.drawEx(sprite, 1, x, y, 0, w, h)

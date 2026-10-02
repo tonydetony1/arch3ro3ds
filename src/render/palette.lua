@@ -37,6 +37,8 @@ Palette.C = {
     yellow     = hex("fee761"),
 
     leaf       = hex("63c74d"),
+    mint       = hex("73ffa6"), -- textes de bonus / validation de l'interface
+    sky        = hex("66d9ff"), -- textes d'agilité / mode Ascension
     moss       = hex("3e8948"),
     pine       = hex("265c42"),
     abyss      = hex("193c3e"),

@@ -113,7 +113,9 @@ function love.load(arg)
         if playFlag then
             -- Contenu du fichier (facultatif) : numéro de la salle à jouer
             Bench.active, Bench.duration = true, 30
-            Bench.room = tonumber((love.filesystem.read("bench_play") or ""):match("%d+")) or Bench.room
+            local spec = love.filesystem.read("bench_play") or ""
+            Bench.room = tonumber(spec:match("%d+")) or Bench.room
+            Bench.menu = spec:find("menu", 1, true) ~= nil
         end
         if love.filesystem.getInfo("bench_lprof") then Bench.lprof = {} end
         if love.filesystem.getInfo("bench_alloc") then Bench.alloc = {} end

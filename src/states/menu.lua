@@ -219,6 +219,31 @@ function MenuState:drawHubBackdrop(t)
     return groundY
 end
 
+-- Attaque et PV totaux (héros + équipement + talents). Le calcul parcourt tout l'équipement :
+-- il n'est refait que si la sauvegarde ou le héros change, et au plus tard chaque seconde
+local POWER_REFRESH = 1.0
+function MenuState:powerTotals(heroId, hData, t)
+    local seq = self.saveData.saveSeq
+    local cache = self.powerCache
+    if cache and cache.seq == seq and cache.hero == heroId and t < cache.expires then
+        return cache.atk, cache.hp
+    end
+    local totalAtk = hData.baseAtkBonus or 0
+    local totalHp = 100 + (hData.baseHpBonus or 0)
+    for _, itemId in pairs(self.saveData.equipped) do
+        local lvl = self.saveData.itemLevels[itemId] or 1
+        local effR = Save.getItemRarity(itemId)
+        local st = Items.getStats(itemId, lvl, effR, Save.getItemStars(itemId))
+        totalAtk = totalAtk + st.atk
+        totalHp = totalHp + st.hp
+    end
+    local talents = Save.getTalents()
+    totalAtk = totalAtk + (talents.strength or 0) * 5
+    totalHp = totalHp + (talents.vitality or 0) * 80
+    self.powerCache = { seq = seq, hero = heroId, expires = t + POWER_REFRESH, atk = totalAtk, hp = totalHp }
+    return totalAtk, totalHp
+end
+
 -- ============================================================================
 -- TOP SCREEN (400x240) : DIORAMA DU HUB, HÉROS PIXEL & FICHE DE PUISSANCE
 -- ============================================================================
@@ -286,18 +311,7 @@ function MenuState:drawTop()
     -- ------------------------------------------------------------------
     -- Power Card (attack / max health)
     -- ------------------------------------------------------------------
-    local totalAtk = hData.baseAtkBonus or 0
-    local totalHp = 100 + (hData.baseHpBonus or 0)
-    for _, itemId in pairs(self.saveData.equipped) do
-        local lvl = self.saveData.itemLevels[itemId] or 1
-        local effR = Save.getItemRarity(itemId)
-        local st = Items.getStats(itemId, lvl, effR, Save.getItemStars(itemId))
-        totalAtk = totalAtk + st.atk
-        totalHp = totalHp + st.hp
-    end
-    local talents = Save.getTalents()
-    totalAtk = totalAtk + (talents.strength or 0) * 5
-    totalHp = totalHp + (talents.vitality or 0) * 80
+    local totalAtk, totalHp = self:powerTotals(curHeroId, hData, t)
 
     UI.drawBentoCard(6, 36, 92, 40, { accentColor = { 0.95, 0.28, 0.30, 0.9 } })
     UI.drawIcon("swords", 18, 52, 11)

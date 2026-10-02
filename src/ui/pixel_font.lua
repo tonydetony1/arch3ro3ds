@@ -19,7 +19,8 @@ local BATCH_AFTER = 30
 -- Couleurs de texte précuites dans l'atlas (lettre colorée + contour encre).
 -- Un texte dans une de ces couleurs se dessine en blanc "neutre" : l'auto-batcher de
 -- src/core/gpu.lua peut alors fusionner toutes ses lettres en un seul appel GPU (3DS).
-local BAKED_COLORS = { "white", "yellow", "silver", "fog", "steel", "cyan", "red", "amber", "leaf", "orange", "ink", "pink" }
+local BAKED_COLORS = { "white", "yellow", "silver", "fog", "steel", "cyan", "red", "amber", "leaf", "orange", "ink", "pink",
+    "mint", "sky" }
 PixelFont.BAKED_COLORS = BAKED_COLORS
 
 -- Table couleur -> clé précuite (identité de table, puis couleur précuite la plus proche).
@@ -36,18 +37,28 @@ for _, key in ipairs(BAKED_COLORS) do
     bakedList[#bakedList + 1] = { key = key, c = c }
 end
 
+-- Second cache par valeur RVB (1/255) : les écrans créent souvent leurs couleurs à chaque
+-- image ({ 0.45, 1, 0.65 }), ce qui rate le cache par identité de table
+local bakedByRgb = {}
+
 local function bakedKey(color)
     if not color then return "white" end
     if (color[4] or 1) < 0.85 then return nil end
     local k = bakedByTable[color]
     if k ~= nil then return k or nil end
     local r, g, b = color[1], color[2], color[3]
-    local best, bestD = false, NEAR
-    for i = 1, #bakedList do
-        local c = bakedList[i].c
-        local dr, dg, db = c[1] - r, c[2] - g, c[3] - b
-        local d = dr * dr + dg * dg + db * db
-        if d < bestD then best, bestD = bakedList[i].key, d end
+    local rgb = floor(r * 255 + 0.5) * 65536 + floor(g * 255 + 0.5) * 256 + floor(b * 255 + 0.5)
+    local best = bakedByRgb[rgb]
+    if best == nil then
+        local bestD = NEAR
+        best = false
+        for i = 1, #bakedList do
+            local c = bakedList[i].c
+            local dr, dg, db = c[1] - r, c[2] - g, c[3] - b
+            local d = dr * dr + dg * dg + db * db
+            if d < bestD then best, bestD = bakedList[i].key, d end
+        end
+        bakedByRgb[rgb] = best
     end
     bakedByTable[color] = best
     return best or nil

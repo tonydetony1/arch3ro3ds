@@ -22,7 +22,11 @@ local Bench = {
 function Bench.parse(args)
     for _, a in ipairs(args or {}) do
         if a == "--bench" then Bench.active = true end
-        if a == "--profile" then Gpu.profile = {} end
+        -- JIT coupé : sur du code compilé, debug.getinfo attribue les appels aux mauvaises lignes
+        if a == "--profile" then
+            Gpu.profile = {}
+            if jit then jit.off() end
+        end
         if a == "--lprof" then Bench.lprof = {} end
         if a == "--menu" then Bench.menu = true end
         if a == "--alloc" then Bench.alloc = {} end
