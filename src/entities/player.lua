@@ -751,23 +751,18 @@ local function drawHealthBar(self)
     local ratio = math.max(0, math.min(1, self.hp / self.maxHp))
     local C = Palette.C
 
-    Palette.set(C.ink)
-    love.graphics.rectangle("fill", x - 1, y - 1, barW + 2, 6)
-    Palette.set(C.night)
-    love.graphics.rectangle("fill", x, y, barW, 4)
+    -- Pixels pré-colorés (Art.px) : barre dans le même lot que les sprites du monde
+    Art.px("ink", x - 1, y - 1, barW + 2, 6)
+    Art.px("night", x, y, barW, 4)
     local fillW = math.floor(barW * ratio + 0.5)
     if fillW > 0 then
         local low = ratio < 0.3
-        Palette.set(low and C.red or C.leaf)
-        love.graphics.rectangle("fill", x, y, fillW, 4)
-        Palette.set(low and C.pink or Palette.hex("a8e890"))
-        love.graphics.rectangle("fill", x, y, fillW, 1)
-        Palette.set(low and C.wine or C.moss)
-        love.graphics.rectangle("fill", x, y + 3, fillW, 1)
+        Art.px(low and "red" or "leaf", x, y, fillW, 4)
+        Art.px(low and "pink" or "greenLight", x, y, fillW, 1)
+        Art.px(low and "wine" or "moss", x, y + 3, fillW, 1)
     end
-    Palette.set(C.ink, 0.6)
     for seg = x + 6, x + barW - 1, 6 do
-        love.graphics.rectangle("fill", seg, y, 1, 4)
+        Art.px("ink", seg, y, 1, 4, 0.6)
     end
 
     local hpText = tostring(math.max(0, math.floor(self.hp)))

@@ -33,14 +33,14 @@ function Inventory.new()
     -- État des boutons pressés
     self.pressedBtn = nil
 
-    -- 6 Emplacements équipés encadrant le héros (Disposition symétrique en pyramide)
+    -- 6 Equipped slots surrounding the hero
     self.slots = {
-        { id = "weapon", name = "Arme",     type = "weapon", x = 32,  y = 7,  w = 46, h = 37 },
-        { id = "ring1",  name = "Anneau 1", type = "ring",   x = 8,   y = 46, w = 46, h = 37 },
-        { id = "pet1",   name = "Fam. 1",   type = "pet",    x = 56,  y = 46, w = 46, h = 37 },
-        { id = "armor",  name = "Armure",   type = "armor",  x = 242, y = 7,  w = 46, h = 37 },
-        { id = "pet2",   name = "Fam. 2",   type = "pet",    x = 218, y = 46, w = 46, h = 37 },
-        { id = "ring2",  name = "Anneau 2", type = "ring",   x = 266, y = 46, w = 46, h = 37 },
+        { id = "weapon", name = "Weapon",  type = "weapon", x = 32,  y = 7,  w = 46, h = 37 },
+        { id = "ring1",  name = "Ring 1",  type = "ring",   x = 8,   y = 46, w = 46, h = 37 },
+        { id = "pet1",   name = "Pet 1",   type = "pet",    x = 56,  y = 46, w = 46, h = 37 },
+        { id = "armor",  name = "Armor",   type = "armor",  x = 242, y = 7,  w = 46, h = 37 },
+        { id = "pet2",   name = "Pet 2",   type = "pet",    x = 218, y = 46, w = 46, h = 37 },
+        { id = "ring2",  name = "Ring 2",  type = "ring",   x = 266, y = 46, w = 46, h = 37 },
     }
 
     return self
@@ -210,7 +210,7 @@ function Inventory:drawBackpackSection()
     local fontSmall = UI.getFont("small")
     local prevFont = love.graphics.getFont()
     love.graphics.setFont(fontSmall)
-    UI.drawText(string.format("SAC À DOS (%d OBJET%s)", count, count > 1 and "S" or ""), sx + 8, sy + 4, {0.80, 0.85, 0.95, 1.0}, {0.08, 0.10, 0.14, 1.0})
+    UI.drawText(string.format("BACKPACK (%d ITEM%s)", count, count > 1 and "S" or ""), sx + 8, sy + 4, {0.80, 0.85, 0.95, 1.0}, {0.08, 0.10, 0.14, 1.0})
     love.graphics.setFont(prevFont)
 
     -- ZONE DE CISEAUX POUR LE KINETIC SCROLLER
@@ -307,7 +307,7 @@ function Inventory:drawItemModal(t)
     UI.drawText(item.name, mx + 44, my + 8, {1, 1, 1, 1}, {0.08, 0.10, 0.14, 1.0})
 
     -- Badge Pillule de rareté, niveau et copies possédées
-    UI.drawPillBadge(mx + 44, my + 23, 76, 15, string.format("%s NIV.%d", rData.name, lvl), {0.12, 0.15, 0.22, 0.9}, rData.color, rData.color)
+    UI.drawPillBadge(mx + 44, my + 23, 76, 15, string.format("%s LV.%d", rData.name, lvl), {0.12, 0.15, 0.22, 0.9}, rData.color, rData.color)
     UI.drawText(string.format("Copies: %d/3", copies), mx + 126, my + 24, {0.60, 0.70, 0.85, 0.9}, {0.05, 0.08, 0.12, 1.0})
 
     -- Statistiques Actuelles et Prochain Niveau dans une sous-carte Bento
@@ -324,16 +324,16 @@ function Inventory:drawItemModal(t)
 
     local statStr = ""
     if curStats.atk > 0 then
-        statStr = statStr .. string.format("ATQ : %d (+%d)  ", curStats.atk, nextStats.atk - curStats.atk)
+        statStr = statStr .. string.format("ATK: %d (+%d)  ", curStats.atk, nextStats.atk - curStats.atk)
     end
     if curStats.hp > 0 then
-        statStr = statStr .. string.format("PV : %d (+%d)  ", curStats.hp, nextStats.hp - curStats.hp)
+        statStr = statStr .. string.format("HP: %d (+%d)  ", curStats.hp, nextStats.hp - curStats.hp)
     end
     if curStats.crit > 0 then
-        statStr = statStr .. string.format("Crit : +%d%%  ", curStats.crit)
+        statStr = statStr .. string.format("Crit: +%d%%  ", curStats.crit)
     end
     if curStats.dodge > 0 then
-        statStr = statStr .. string.format("Esquive : +%d%%  ", curStats.dodge)
+        statStr = statStr .. string.format("Dodge: +%d%%  ", curStats.dodge)
     end
 
     local fontSmall = UI.getFont("small")
@@ -343,13 +343,13 @@ function Inventory:drawItemModal(t)
     UI.drawTextAligned(item.desc, mx + 10, my + 62, mw - 20, "center", {0.80, 0.85, 0.95, 1.0}, {0.04, 0.05, 0.07, 1.0})
     love.graphics.setFont(prevFont)
 
-    -- 3. Liste des Passifs Débloqués / Verrouillés par Rareté dans une sous-carte Bento
+    -- 3. Passives list
     local py = my + 80
     local tiers = {
-        { id = "uncommon", name = "Atypique", minTier = 2 },
-        { id = "rare",     name = "Rare",     minTier = 3 },
-        { id = "epic",     name = "Épique",   minTier = 4 },
-        { id = "legendary",name = "Légende",  minTier = 5 },
+        { id = "uncommon", name = "Great",     minTier = 2 },
+        { id = "rare",     name = "Rare",      minTier = 3 },
+        { id = "epic",     name = "Epic",      minTier = 4 },
+        { id = "legendary",name = "Legendary", minTier = 5 },
     }
 
     UI.drawBentoCard(mx + 8, py, mw - 16, 56, {
@@ -374,22 +374,22 @@ function Inventory:drawItemModal(t)
     end
     love.graphics.setFont(prevFont)
 
-    -- 4. Boutons d'Action : ÉQUIPER, AMÉLIORER et FUSIONNER (Pillules Bento 2026)
+    -- 4. Action buttons: EQUIP, UPGRADE, FUSE
     local btnY = my + 142
     local isCurrentlyEquipped = self:isEquipped(itemId)
-    local equipText = isCurrentlyEquipped and "DÉSÉQUIPER" or "ÉQUIPER"
+    local equipText = isCurrentlyEquipped and "UNEQUIP" or "EQUIP"
     local equipTheme = isCurrentlyEquipped and "red" or "green"
 
     if canFuse then
-        -- 3 Boutons Pillules Bento
+        -- 3 Pill buttons
         UI.drawPillButton(mx + 6, btnY, 78, 36, equipText, equipTheme, self.pressedBtn == "equip")
         local upText = string.format("%d G", upgradeCost)
         UI.drawPillButton(mx + 88, btnY, 88, 36, upText, canUpgrade and "blue" or "gray", self.pressedBtn == "upgrade", "shield")
-        UI.drawPillButton(mx + 180, btnY, 90, 36, "FUSION", "gold", self.pressedBtn == "fuse", "sparkles")
+        UI.drawPillButton(mx + 180, btnY, 90, 36, "FUSE", "gold", self.pressedBtn == "fuse", "sparkles")
     else
-        -- 2 Boutons Pillules Bento
+        -- 2 Pill buttons
         UI.drawPillButton(mx + 8, btnY, 126, 36, equipText, equipTheme, self.pressedBtn == "equip")
-        local upText = string.format("FORGE (%d G)", upgradeCost)
+        local upText = string.format("UPGRADE (%d G)", upgradeCost)
         local upTheme = canUpgrade and "gold" or "gray"
         UI.drawPillButton(mx + 142, btnY, 126, 36, upText, upTheme, self.pressedBtn == "upgrade")
     end

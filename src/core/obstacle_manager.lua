@@ -1,9 +1,11 @@
 -- src/core/obstacle_manager.lua
--- Gestionnaire procédural des obstacles tactiques (Rochers, Eau/Trous, Pièges à pics)
--- Système de couverture contre les projectiles et contraintes de déplacement
+-- Gestionnaire des obstacles tactiques (Rochers, Eau/Trous, Pièges à pics)
+-- Système de couverture contre les projectiles et contraintes de déplacement.
+-- Les dispositions viennent des grilles dessinées de src/data/rooms.lua.
 
 local Audio = require("src.audio.audio")
 local Balance = require("src.data.balance")
+local Rooms = require("src.data.rooms")
 
 local ObstacleManager = {}
 ObstacleManager.__index = ObstacleManager
@@ -21,114 +23,136 @@ function ObstacleManager.new()
     return self
 end
 
--- Génération procédurale d'obstacles selon les dimensions de la salle
-function ObstacleManager:generate(mapW, mapH, roomNumber)
+-- Zones dangereuses du chapitre : sables mouvants, plaques de glace, mares de lave
+local HAZARD_KIND = { sand = "sand", ice = "ice", lava = "lava", wind = "wind", void = "void" }
+local SPIKE_INSET = 3
+local STUMP_SIZE = 40
+local HAZARD_INSET = 2
+
+-- Construction de la salle à partir d'une grille dessinée (src/data/rooms.lua).
+-- `kind` : "combat" (défaut), "arena" ou "sanctuary" ; `layout` force une grille précise.
+function ObstacleManager:generate(mapW, mapH, roomNumber, kind, layout)
     self.roomNumber = roomNumber or 1
+    self.mapW, self.mapH = mapW, mapH
     self.rocks = {}
     self.pots = {}
     self.hazards = {}
     self.waters = {}
     self.spikes = {}
     self.barrels = {}
+    self.spawnPoints = {}
     self.trapCooldown = 0
 
-    local layout = (roomNumber % 4) + 1
-
-    if layout == 1 then
-        -- 1. DISPOSITION EN BUNKERS TACTIQUES (4 Piliers massifs pour se couvrir des snipers)
-        local cx = mapW / 2
-        local cy = mapH / 2
-        table.insert(self.rocks, { x = cx - 90, y = cy - 65, w = 40, h = 40 })
-        table.insert(self.rocks, { x = cx + 50, y = cy - 65, w = 40, h = 40 })
-        table.insert(self.rocks, { x = cx - 90, y = cy + 35, w = 40, h = 40 })
-        table.insert(self.rocks, { x = cx + 50, y = cy + 35, w = 40, h = 40 })
-        -- Barils explosifs
-        table.insert(self.barrels, { x = cx - 120, y = cy, radius = 9, isExploded = false })
-        table.insert(self.barrels, { x = cx + 120, y = cy, radius = 9, isExploded = false })
-        -- Pièges à pics rétractables
-        table.insert(self.spikes, { x = cx - 20, y = cy - 60, w = 40, h = 30, timer = 0 })
-        table.insert(self.spikes, { x = cx - 20, y = cy + 30, w = 40, h = 30, timer = 1.0 })
-
-    elseif layout == 2 then
-        -- 2. DISPOSITION RIVIÈRE & FOSSÉ (L'eau bloque le sol mais les flèches traversent)
-        local cx = mapW / 2
-        local cy = mapH / 2
-        -- Fossé à gauche
-        table.insert(self.waters, { x = 60, y = cy - 40, w = 120, h = 70 })
-        -- Fossé à droite
-        table.insert(self.waters, { x = mapW - 180, y = cy - 40, w = 120, h = 70 })
-        -- Deux rochers centraux
-        table.insert(self.rocks, { x = cx - 20, y = cy - 70, w = 40, h = 35 })
-        table.insert(self.rocks, { x = cx - 20, y = cy + 35, w = 40, h = 35 })
-        -- Baril explosif au goulet d'étranglement
-        table.insert(self.barrels, { x = cx, y = cy - 15, radius = 9, isExploded = false })
-        table.insert(self.barrels, { x = 65, y = 75, radius = 9, isExploded = false })
-        -- Pièges à pics au passage
-        table.insert(self.spikes, { x = cx - 20, y = cy + 5, w = 40, h = 25, timer = 0.5 })
-
-    elseif layout == 3 then
-        -- 3. COULOIR DE PIÈGES À PICS & ROCHERS LATÉRAUX
-        local cx = mapW / 2
-        local cy = mapH / 2
-        table.insert(self.spikes, { x = cx - 45, y = cy - 45, w = 90, h = 30, timer = 0 })
-        table.insert(self.spikes, { x = cx - 45, y = cy + 25, w = 90, h = 30, timer = 1.0 })
-        table.insert(self.rocks, { x = 70, y = cy - 30, w = 45, h = 60 })
-        table.insert(self.rocks, { x = mapW - 115, y = cy - 30, w = 45, h = 60 })
-        table.insert(self.barrels, { x = cx, y = cy - 85, radius = 9, isExploded = false })
-        table.insert(self.barrels, { x = cx, y = cy + 85, radius = 9, isExploded = false })
-
-    else
-        -- 4. ARÈNE DE COUVERTURE CROISÉE (Piliers centraux et trous d'eau)
-        local cx = mapW / 2
-        local cy = mapH / 2
-        table.insert(self.rocks, { x = cx - 25, y = cy - 25, w = 50, h = 50 })
-        table.insert(self.waters, { x = 75, y = 75, w = 60, h = 60 })
-        table.insert(self.waters, { x = mapW - 135, y = mapH - 135, w = 60, h = 60 })
-        table.insert(self.spikes, { x = cx - 80, y = cy - 15, w = 35, h = 35, timer = 0.5 })
-        table.insert(self.spikes, { x = cx + 45, y = cy - 15, w = 35, h = 35, timer = 1.5 })
-        table.insert(self.barrels, { x = cx - 55, y = cy + 50, radius = 9, isExploded = false })
-        table.insert(self.barrels, { x = cx + 55, y = cy - 50, radius = 9, isExploded = false })
+    local mirrored = false
+    if not layout then
+        layout, mirrored = Rooms.pick(kind or "combat", self.roomNumber)
     end
-    self:spawnPots(mapW, mapH, roomNumber)
-    self:spawnHazards(mapW, mapH, roomNumber)
-end
+    self.layoutId = layout.id
+    self.layoutMirrored = mirrored
+    local parsed = Rooms.parse(mirrored and Rooms.mirror(layout.grid) or layout.grid)
 
--- Zones dangereuses du chapitre : sables mouvants, plaques de glace, mares de lave
-local HAZARD_KIND = { sand = "sand", ice = "ice", lava = "lava", wind = "wind", void = "void" }
+    local cell, ox, oy = Rooms.fit(mapW, mapH)
+    local function toRect(r, inset)
+        return { x = ox + (r.col - 1) * cell + inset, y = oy + (r.row - 1) * cell + inset,
+                 w = r.w * cell - inset * 2, h = r.h * cell - inset * 2 }
+    end
+    local function toPoint(p)
+        return ox + (p.col - 0.5) * cell, oy + (p.row - 0.5) * cell
+    end
 
-function ObstacleManager:spawnHazards(mapW, mapH, roomNumber)
-    local kind = HAZARD_KIND[self.hazardKind or ""]
-    if not kind then return end
-    local cx, cy = mapW / 2, mapH / 2
-    local layouts = {
-        { { cx - 150, cy - 40, 70, 54 }, { cx + 80, cy + 20, 70, 54 } },
-        { { cx - 60, cy - 110, 120, 44 }, { cx - 60, cy + 70, 120, 44 } },
-        { { cx - 170, cy + 40, 90, 50 }, { cx + 80, cy - 90, 90, 50 }, { cx - 45, cy - 10, 90, 44 } },
-    }
-    local layout = layouts[((roomNumber or 1) % #layouts) + 1]
-    for _, r in ipairs(layout) do
-        local hazard = { x = math.floor(r[1]), y = math.floor(r[2]), w = r[3], h = r[4], kind = kind }
-        if kind == "wind" then
-            -- Chaque bourrasque souffle dans une direction propre
-            local angle = ((#self.hazards * 2.3) % 6.28)
-            hazard.windX = math.cos(angle)
-            hazard.windY = math.sin(angle) * 0.6
+    for _, r in ipairs(parsed.rocks) do
+        local rock
+        if r.w == 1 and r.h == 1 and #self.rocks % 2 == 0 then
+            -- Souche d'arbre : sprite de 40 px, la collision suit le sprite (pas la case)
+            rock = toRect(r, math.floor((cell - STUMP_SIZE) / 2))
+            rock.stump = true
+        else
+            rock = toRect(r, 0)
         end
-        self.hazards[#self.hazards + 1] = hazard
+        self.rocks[#self.rocks + 1] = rock
+    end
+    for _, r in ipairs(parsed.waters) do
+        -- Case entière : la berge est peinte à l'intérieur, côté terre (voir bakeWater)
+        local wtr = toRect(r, 0)
+        wtr.cells, wtr.shapeKey, wtr.cell = r.cells, r.shapeKey, cell
+        self.waters[#self.waters + 1] = wtr
+    end
+    for i, r in ipairs(parsed.spikes) do
+        local s = toRect(r, SPIKE_INSET)
+        s.timer = (i % 2) * 1.0 -- plaques voisines déphasées : on passe entre deux cycles
+        self.spikes[#self.spikes + 1] = s
+    end
+    local hazardKind = HAZARD_KIND[self.hazardKind or ""]
+    if hazardKind then
+        for _, r in ipairs(parsed.hazards) do
+            local hz = toRect(r, HAZARD_INSET)
+            hz.kind = hazardKind
+            if hazardKind == "wind" then
+                -- Chaque bourrasque souffle dans une direction propre
+                local angle = ((#self.hazards * 2.3) % 6.28)
+                hz.windX = math.cos(angle)
+                hz.windY = math.sin(angle) * 0.6
+            end
+            self.hazards[#self.hazards + 1] = hz
+        end
+    end
+    for _, p in ipairs(parsed.barrels) do
+        local x, y = toPoint(p)
+        self.barrels[#self.barrels + 1] = { x = x, y = y, radius = 9, isExploded = false }
+    end
+    for _, p in ipairs(parsed.pots) do
+        local x, y = toPoint(p)
+        self.pots[#self.pots + 1] = { x = x, y = y, radius = 7, broken = false }
+    end
+    for _, p in ipairs(parsed.spawns) do
+        local x, y = toPoint(p)
+        self.spawnPoints[#self.spawnPoints + 1] = { x = x, y = y }
     end
 end
 
--- Urnes en terre cuite dans les coins de la salle (2 à 4 selon la salle)
-function ObstacleManager:spawnPots(mapW, mapH, roomNumber)
-    local spots = {
-        { 64, 72 }, { mapW - 64, 72 },
-        { 64, mapH - 76 }, { mapW - 64, mapH - 76 },
-    }
-    for i, spot in ipairs(spots) do
-        if ((roomNumber or 1) + i) % 5 ~= 0 then
-            self.pots[#self.pots + 1] = { x = spot[1], y = spot[2], radius = 7, broken = false }
+-- Placement des monstres : les repères "m" de la grille d'abord (en tournant selon la
+-- salle), puis repli sur la place libre la plus proche. Le boss garde sa position.
+local SPAWN_CLEARANCE = 14
+local SEARCH_STEP = 10
+local SEARCH_MAX = 200
+local SEARCH_DIRS = 12
+local EDGE_MARGIN = 30
+
+function ObstacleManager:findFreeSpot(x, y, radius)
+    local mapW, mapH = self.mapW or 640, self.mapH or 480
+    local function fits(px, py)
+        return px >= EDGE_MARGIN and px <= mapW - EDGE_MARGIN
+           and py >= EDGE_MARGIN + 14 and py <= mapH - EDGE_MARGIN
+           and not self:isBlocked(px, py, radius)
+    end
+    if fits(x, y) then return x, y end
+    for dist = SEARCH_STEP, SEARCH_MAX, SEARCH_STEP do
+        for k = 0, SEARCH_DIRS - 1 do
+            local a = k * (math.pi * 2 / SEARCH_DIRS)
+            local nx, ny = x + math.cos(a) * dist, y + math.sin(a) * dist
+            if fits(nx, ny) then return nx, ny end
         end
     end
+    return x, y
+end
+
+function ObstacleManager:placeSpawns(spawns)
+    local points = self.spawnPoints or {}
+    local offset = (self.roomNumber or 1) % math.max(1, #points)
+    local used = 0
+    local placed = {}
+    for i, sp in ipairs(spawns) do
+        local copy = {}
+        for k, v in pairs(sp) do copy[k] = v end
+        if not sp.isBoss and used < #points then
+            local p = points[(offset + used) % #points + 1]
+            copy.x, copy.y = p.x, p.y
+            used = used + 1
+        end
+        copy.x, copy.y = self:findFreeSpot(copy.x, copy.y, SPAWN_CLEARANCE)
+        placed[i] = copy
+    end
+    return placed
 end
 
 -- Test de collision cercle vs boîte AABB
@@ -574,23 +598,60 @@ local function blockGrid(w, h, H, seed)
     return g:toGrid()
 end
 
+-- Eau en autotile : chaque case de la grille reçoit sa berge côté terre et ses coins
+-- rentrants ; rien ne déborde du rectangle, donc deux bassins voisins se raccordent net.
+local BANK = 4
+
+local function bakeWaterCell(px, py, size, c, pal)
+    fill(pal.deep, px, py, size, size)
+    local mt, mr = c.n and 0 or BANK + 1, c.e and 0 or 2
+    local mb, ml = c.s and 0 or 2, c.w and 0 or 2
+    fill(pal.mid, px + ml, py + mt, size - ml - mr, size - mt - mb)
+    if not c.n then
+        fill(pal.bankDark, px, py, size, 1)
+        fill(pal.bank, px, py + 1, size, BANK - 1)
+        fill(pal.sand, px, py + 1, size, 1)
+    end
+    if not c.s then
+        fill(pal.bank, px, py + size - BANK, size, BANK - 1)
+        fill(pal.bankDark, px, py + size - 1, size, 1)
+    end
+    if not c.w then
+        fill(pal.bankDark, px, py, 1, size)
+        fill(pal.bank, px + 1, py, BANK - 1, size)
+    end
+    if not c.e then
+        fill(pal.bank, px + size - BANK, py, BANK - 1, size)
+        fill(pal.bankDark, px + size - 1, py, 1, size)
+    end
+    -- Coins rentrants : les deux côtés continuent en eau mais pas la diagonale
+    local corners = {
+        { c.n and c.w and not c.nw, px, py },
+        { c.n and c.e and not c.ne, px + size - BANK, py },
+        { c.s and c.w and not c.sw, px, py + size - BANK },
+        { c.s and c.e and not c.se, px + size - BANK, py + size - BANK },
+    }
+    for _, k in ipairs(corners) do
+        if k[1] then fill(pal.bank, k[2], k[3], BANK, BANK) end
+    end
+end
+
 local function bakeWater(wtr, rng, theme)
     local x, y, w, h = wtr.x, wtr.y, wtr.w, wtr.h
-    local deep = theme and Palette.hex(theme.deep) or WATER_DEEP
-    local mid = theme and Palette.hex(theme.mid) or WATER_MID
+    local pal = {
+        deep = theme and Palette.hex(theme.deep) or WATER_DEEP,
+        mid = theme and Palette.hex(theme.mid) or WATER_MID,
+        bank = theme and Palette.hex(theme.bank) or C.dirt,
+        bankDark = theme and Palette.hex(theme.bankDark) or C.dirtDark,
+        sand = theme and Palette.hex(theme.sand) or C.tan,
+    }
     local light = theme and Palette.hex(theme.light) or WATER_LIGHT
-    local bank = theme and Palette.hex(theme.bank) or C.dirt
-    local bankDark = theme and Palette.hex(theme.bankDark) or C.dirtDark
-    local sand = theme and Palette.hex(theme.sand) or C.tan
-
-    roundRect(bankDark, x - 4, y - 4, w + 8, h + 8, 4)
-    roundRect(bank, x - 3, y - 3, w + 6, h + 6, 3)
-    fill(sand, x + 2, y - 3, w - 4, 1)
-    roundRect(deep, x, y, w, h, 3)
-    roundRect(mid, x + 2, y + 5, w - 4, h - 7, 3)
-    fill(deep, x + 1, y + 1, w - 2, 3)
-    for ly = y + 10, y + h - 6, 9 do
-        local lx = x + 5 + math.floor(rng() * math.max(1, w - 30))
+    local size = wtr.cell or 40
+    for _, c in ipairs(wtr.cells or {}) do
+        bakeWaterCell(x + c.dc * size, y + c.dr * size, size, c, pal)
+    end
+    for ly = y + 10, y + h - 8, 9 do
+        local lx = x + 6 + math.floor(rng() * math.max(1, w - 30))
         fill(light, lx, ly, 8 + math.floor(rng() * 10), 1)
     end
     if theme then return end
@@ -602,8 +663,8 @@ local function bakeWater(wtr, rng, theme)
     else
         out[#out + 1] = { "lily", 2, x + w / 2, y + h / 2 }
     end
-    out[#out + 1] = { "reeds", 1, x - 1, y + h + 2 }
-    out[#out + 1] = { "reeds", 1, x + w + 1, y + 6 }
+    out[#out + 1] = { "reeds", 1, x + 2, y + h - 2 }
+    out[#out + 1] = { "reeds", 1, x + w - 2, y + 8 }
 end
 
 local function bakeSpikePlate(s)
@@ -630,8 +691,8 @@ local function bakeSpikePlate(s)
     fill(C.amber, s.x + s.w - 4, s.y + s.h - 2, 3, 1); fill(C.amber, s.x + s.w - 2, s.y + s.h - 4, 1, 3)
 end
 
-local function isStump(i, r)
-    return i % 2 == 1 and math.abs(r.w - r.h) <= 4 and r.w <= 44
+local function isStump(_, r)
+    return r.stump == true
 end
 
 -- Sol : eau, dalles de pièges et ombres portées des obstacles (cuits dans le Canvas de salle)
@@ -707,7 +768,7 @@ function ObstacleManager:bakeStatic()
         add(e, hz.x, hz.y)
     end
     for i, wtr in ipairs(self.waters) do
-        local key = "wt:" .. tostring(theme) .. ":" .. wtr.w .. "x" .. wtr.h .. ":" .. i
+        local key = "wt:" .. tostring(theme) .. ":" .. wtr.w .. "x" .. wtr.h .. ":" .. (wtr.shapeKey or "") .. ":" .. i
         local e = bakeRegion(key, wtr.x, wtr.y, wtr.w, wtr.h, function() bakeWater(wtr, rng, theme) end)
         e.bx, e.by = e.bx or wtr.x, e.by or wtr.y
         add(e, wtr.x, wtr.y)
@@ -776,7 +837,7 @@ function ObstacleManager:buildProps()
             prop.x = r.x + r.w / 2
             prop.y = r.y + r.h / 2 - STUMP_LIFT
         elseif love.graphics.newCanvas then
-            prop.canvas = self:blockImage(r.w, r.h, i * 97 + r.w)
+            prop.canvas = self:blockImage(r.w, r.h, r.w * 7 + r.h * 13 + (i % 2) * 101)
             prop.x = r.x - 1
             prop.y = r.y - BLOCK_HEIGHT - 1
         end

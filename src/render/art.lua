@@ -19,6 +19,7 @@ local SPRITE_MODULES = {
     "src.render.sprites.icons",
     "src.render.sprites.items",
     "src.render.sprites.fx",
+    "src.render.sprites.overlays",
 }
 
 function Art.init()
@@ -81,6 +82,30 @@ end
 function Art.has(name)
     if not Art.ready then Art.init() end
     return Art.atlas:has(name)
+end
+
+-- Aplat pré-coloré (pixel "px_<couleur>_<opacité>" de l'atlas, src/render/px_colors.lua)
+-- étiré sur (x, y, w, h). Dessiné en blanc, il reste dans le lot des sprites voisins :
+-- barres de vie, jauges et voiles ne cassent plus le regroupement des appels GPU sur 3DS.
+local PxColors = nil
+local Gpu = nil
+function Art.px(colorName, x, y, w, h, alpha)
+    if w <= 0 or h <= 0 then return end
+    PxColors = PxColors or require("src.render.px_colors")
+    local name = PxColors.spriteName(colorName, alpha or 1)
+    local s = name and Art.atlas and Art.atlas.sprites[name]
+    if not s then
+        local c = PxColors.list()[colorName]
+        if c then
+            love.graphics.setColor(c[1], c[2], c[3], alpha or 1)
+            love.graphics.rectangle("fill", x, y, w, h)
+        end
+        love.graphics.setColor(1, 1, 1, 1)
+        return
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+    Gpu = Gpu or require("src.core.gpu")
+    Gpu.addSprite(Art.image, s.frames[1].quad, x, y, 0, w, h)
 end
 
 -- Index de frame animée à partir d'un temps, d'une cadence (images/s) et d'un décalage

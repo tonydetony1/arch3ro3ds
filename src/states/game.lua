@@ -7,6 +7,7 @@ local Items = require("src.data.items")
 local Skills = require("src.data.skills")
 local Save = require("src.data.save")
 local WorldManager = require("src.core.world_manager")
+local Rooms = require("src.data.rooms")
 local Pool = require("src.core.pool")
 local Camera = require("src.core.camera")
 local ObstacleManager = require("src.core.obstacle_manager")
@@ -24,6 +25,7 @@ local Depth = require("src.render.depth")
 local Audio = require("src.audio.audio")
 local Banner = require("src.ui.banner")
 local Bestiary = require("src.data.bestiary")
+local Perf = require("src.core.perf")
 local Bestiary = require("src.data.bestiary")
 local Balance = require("src.data.balance")
 
@@ -218,22 +220,22 @@ function GameState:setupRoom(roomNum)
     self.devilEncountered = false
     self.bossWheelDone = false
 
-    -- Dimensions de salle variables (ex: 600x460, 640x480, 680x500, 620x540)
-    local sizeVariations = {
-        { w = 600, h = 460 },
-        { w = 640, h = 480 },
-        { w = 680, h = 500 },
-        { w = 620, h = 540 },
-    }
-    local sVar = sizeVariations[((roomNum - 1) % #sizeVariations) + 1]
-    self.mapW = sVar.w
-    self.mapH = sVar.h
+    -- Dimensions taillées sur la grille de la salle (629x463 à 694x508)
+    self.mapW, self.mapH = Rooms.roomSize(roomNum)
 
     self.camera:setBounds(self.mapW, self.mapH)
     self.player:setBounds(self.mapW, self.mapH)
     local theme = WorldManager.getTheme(self.chapterIndex)
     self.obstacleManager:setTheme(theme.variant, theme.hazard)
-    self.obstacleManager:generate(self.mapW, self.mapH, roomNum)
+    -- Grille de la salle : centre dégagé pour boss / roue / survie, vide pour l'ange
+    local layoutKind = "combat"
+    if self.roomType == "boss" or self.gameMode == "survival"
+        or (roomNum == 1 and not self.hasSpunStartWheel) then
+        layoutKind = "arena"
+    elseif self.roomType == "angel" then
+        layoutKind = "sanctuary"
+    end
+    self.obstacleManager:generate(self.mapW, self.mapH, roomNum, layoutKind)
 
     local spawns, chap
     if self.gameMode == "boss_rush" then
@@ -245,16 +247,17 @@ function GameState:setupRoom(roomNum)
     else
         spawns, chap = WorldManager.generateWave(self.chapterIndex, roomNum, self.mapW, self.mapH)
     end
+    spawns = self.obstacleManager:placeSpawns(spawns)
     self.currentChapter = chap
     self.roomGoldStart = self.goldEarnedRun or 0
 
     -- Bannière d'entrée : nouveau chapitre (salles 1, 11, 21…) ou simple rappel de salle
     if self.gameMode == "ascension" and (roomNum - 1) % 10 == 0 then
-        Banner.show("chapter", "CHAPITRE " .. self.chapterIndex, chap and chap.name or "")
+        Banner.show("chapter", "CHAPTER " .. self.chapterIndex, chap and chap.name or "")
     elseif self.gameMode == "boss_rush" then
         Banner.show("room", "BOSS " .. roomNum)
     elseif self.gameMode ~= "survival" then
-        Banner.show("room", "SALLE " .. roomNum .. " / 50")
+        Banner.show("room", "STAGE " .. roomNum .. " / 50")
     end
 
     -- Décor du chapitre (prairie, désert, cristal, enfer) puis pré-rendu sur Canvas
@@ -427,7 +430,7 @@ function GameState:handleMonsterDeath(target)
     if self.player.hasSynergyToxicFlame and (target.status and target.status.poison and target.status.poison > 0) then
         VFX.shakeMedium()
         VFX.addSparks(target.x, target.y, 16, { 1.0, 0.35, 0.1, 1.0 })
-        VFX.addFCT(target.x, target.y - 14, "FLAMMES TOXIQUES!", true)
+        VFX.addFCT(target.x, target.y - 14, "TOXIC FLAMES!", true)
         for nb = 1, self.dummyPool.activeCount do
             local other = self.dummyPool.items[self.dummyPool.activeList[nb]]
             if other and other.alive and other.id ~= target.id then
@@ -561,7 +564,7 @@ function GameState:update(dt)
         self.player.starActive = math.max(self.player.starActive or 0, 2.0)
         VFX.shakeHeavy()
         VFX.addSparks(self.player.x, self.player.y, 22, { 1.0, 0.9, 0.4, 1.0 })
-        VFX.addFCT(self.player.x, self.player.y - 24, "RESURRECTION !", true)
+        VFX.addFCT(self.player.x, self.player.y - 24, "RESURRECTION!", true)
         Audio.play("level_up", 0, 1.0)
     end
 
@@ -640,18 +643,22 @@ function GameState:update(dt)
     end
 
     -- 3. Mise à jour du joueur (mouvement avec glissade sur obstacles, squash, tir, orbitaux)
+    Perf.sec("u:debut")
     self.player:update(dt, self.projectilePool, self.dummyPool, self.fctPool, self.obstacleManager, self.isGateOpen)
+    Perf.sec("u:joueur")
 
     -- 4. Caméra fluide qui suit le joueur et reste clampée aux parois de l'arène étendue
     self.camera:update(dt, self.player.x, self.player.y)
 
     -- 5. Mise à jour des projectiles (couverture tactique rocheuse), monstres (IA) et textes
     self.projectilePool:update(dt, self.mapW, self.mapH, self.obstacleManager, self.dummyPool, self.player)
+    Perf.sec("u:tirs")
     if self.bossIntroTimer > 0 then
         self.bossIntroTimer = self.bossIntroTimer - dt -- monstres figés pendant l'intro du boss
     else
         self.dummyPool:update(dt, self.player, self.projectilePool, self.obstacleManager, self.dummyPool, self.fctPool, self.mapW, self.mapH)
     end
+    Perf.sec("u:monstres")
     self.fctPool:update(dt)
 
     -- 6. Mise à jour et ramassage du butin physique au sol
@@ -731,7 +738,7 @@ function GameState:update(dt)
                                     blockedByShield = true
                                     VFX.triggerHitFlash(self.player, 2)
                                     VFX.shakeLight()
-                                    VFX.addFCT(ox, oy - 10, "BLOC", false)
+                                    VFX.addFCT(ox, oy - 10, "BLOCK", false)
                                     VFX.addSparks(ox, oy, 5, {1.0, 0.9, 0.3, 1.0})
                                     self.projectilePool:free(proj)
                                     break
@@ -749,7 +756,7 @@ function GameState:update(dt)
                             if (pdx * pdx + pdy * pdy) <= (hitRad * hitRad) then
                                 blockedByShield = true
                                 VFX.shakeLight()
-                                VFX.addFCT(pet.x, pet.y - 12, "BLOC", false)
+                                VFX.addFCT(pet.x, pet.y - 12, "BLOCK", false)
                                 VFX.addSparks(pet.x, pet.y, 5, { 0.45, 0.85, 1.0, 1.0 })
                                 self.projectilePool:free(proj)
                                 break
@@ -766,7 +773,7 @@ function GameState:update(dt)
                         if (pdx * pdx + pdy * pdy) < (pRad * pRad) then
                             -- Test d'esquive (Dash I-Frames ou passif d'armure)
                             if self.player.isDashing or self.player.isInvulnerable or (math.random() < (self.player.dodgeChance or 0)) then
-                                VFX.addFCT(self.player.x, self.player.y - 12, "ESQUIVE", false)
+                                VFX.addFCT(self.player.x, self.player.y - 12, "DODGE", false)
                                 VFX.addSparks(self.player.x, self.player.y, 5, {0.35, 0.85, 1.0, 1.0})
                             else
                                 local dmg = proj.damage or 15
@@ -816,7 +823,7 @@ function GameState:update(dt)
                             local isDead = target:takeDamage(dmgOut, proj.dirX, proj.dirY, proj.elements, proj.knockbackMult)
 
                             if isExecute then
-                                VFX.addFCT(target.x, target.y - 16, "EXECUTION!", true)
+                                VFX.addFCT(target.x, target.y - 16, "EXECUTE!", true)
                                 VFX.shakeHeavy()
                             end
 
@@ -847,7 +854,7 @@ function GameState:update(dt)
                                             -- Synergie Tempête Magnétique : zone électrique au sol
                                             if self.player.hasSynergyMagneticStorm then
                                                 VFX.addSparks(other.x, other.y, 6, {0.4, 0.8, 1.0, 1.0})
-                                                VFX.addFCT(other.x, other.y - 14, "TEMPÊTE", true)
+                                                VFX.addFCT(other.x, other.y - 14, "STORM", true)
                                             end
                                         end
                                     end
@@ -937,13 +944,15 @@ function GameState:update(dt)
         if self.waveTimer <= 0 or cleared then
             self.waveCount = (self.waveCount or 1) + 1
             self.waveTimer = 15.0
-            self.pendingSpawns = WorldManager.generateSurvivalWave(self.chapterIndex, self.waveCount, self.mapW, self.mapH)
+            self.pendingSpawns = self.obstacleManager:placeSpawns(
+                WorldManager.generateSurvivalWave(self.chapterIndex, self.waveCount, self.mapW, self.mapH))
             self.spawnWarningTimer = 0.55
             VFX.shakeLight()
-            VFX.addFCT(self.player.x, self.player.y - 30, "VAGUE " .. self.waveCount, true)
+            VFX.addFCT(self.player.x, self.player.y - 30, "WAVE " .. self.waveCount, true)
         end
     end
 
+    Perf.sec("u:collisions")
     -- 8. PHASE DE CLEAR & MAGNÉTISME DU BUTIN (OU APPARITION DU DÉMON APRÈS BOSS)
     if self.gameMode ~= "survival" and self.dummyPool.activeCount == 0 and self.spawnWarningTimer <= 0 and not self.isGateOpen and not (self.specialRoomManager and self.specialRoomManager.isActive) then
         if self.roomType == "boss" and not self.devilEncountered then
@@ -963,7 +972,7 @@ function GameState:update(dt)
             self.phase = "clear"
             Audio.play("gate_open", 0, 0.7)
             self:triggerShake(0.18, 2.5)
-            Banner.show("clear", "SALLE TERMINÉE !", "+" .. math.max(0, (self.goldEarnedRun or 0) - (self.roomGoldStart or 0)) .. " OR")
+            Banner.show("clear", "ROOM CLEARED!", "+" .. math.max(0, (self.goldEarnedRun or 0) - (self.roomGoldStart or 0)) .. " GOLD")
 
             -- TOUT LE BUTIN AU SOL VOLE VERS LE JOUEUR (Effet aimant ultra-satisfaisant !)
             for i = 1, self.lootPool.activeCount do
@@ -1051,16 +1060,23 @@ function GameState:drawSortedWorld()
     end
 
     local px, py = p.x, p.y
+    local timed = Perf.enabled
+    local now = love.timer.getTime
     for i = 1, n do
         local it = q[i]
+        local t0 = timed and now()
         if it.kind == SORT_PROP then
             self.obstacleManager:drawProp(it.ref)
+            if timed then Perf.add("m:objets", now() - t0) end
         elseif it.kind == SORT_MONSTER then
             it.ref:draw(px, py)
+            if timed then Perf.add("m:monstres", now() - t0) end
         elseif it.kind == SORT_PLAYER then
             it.ref:drawBody()
+            if timed then Perf.add("m:heros", now() - t0) end
         else
             it.ref:draw()
+            if timed then Perf.add("m:familiers", now() - t0) end
         end
         it.ref = nil
     end
@@ -1077,14 +1093,18 @@ function GameState:drawTop(eye)
     love.graphics.translate(shakeX, shakeY)
 
     -- 0. Ciel en couches (îles lointaines, nuages)
+    Perf.sec("h:debut")
     self.arena:drawSky(self.camera.x, self.camera.y)
+    Perf.sec("h:ciel")
 
     self.camera:attach()
 
     -- 1. Sol cuit (herbe, falaise, eau, dalles de pièges, ombres portées)
     local pal = self.currentChapter and self.currentChapter.palette or nil
     self.arena:draw(self.isGateOpen, pal, self.pendingSpawns, self.mapW, self.mapH)
+    Perf.sec("h:sol")
     self.obstacleManager:draw()
+    Perf.sec("h:obstacles")
 
     -- 2. Entités de salles spéciales
     if self.specialRoomManager and self.specialRoomManager.isActive then
@@ -1108,32 +1128,38 @@ function GameState:drawTop(eye)
     end
 
     -- 4. Murs, arbres et porte (en relief)
+    Perf.sec("h:ombres")
     Depth.push(Depth.WALLS)
     self.arena:drawWalls(self.isGateOpen, self.mapW)
     Depth.pop()
+    Perf.sec("h:murs")
 
     -- 5. Monde trié en profondeur : obstacles, butin, monstres, héros, familiers
     Depth.push(Depth.ACTORS)
     VFX.drawLootBatch(self.lootPool)
     self:drawSortedWorld()
     Depth.pop()
+    Perf.sec("h:monde")
 
     -- 6. Projectiles et particules
     Depth.push(Depth.FX)
     VFX.drawProjectileBatch(self.projectilePool)
     VFX.drawParticles()
     Depth.pop()
+    Perf.sec("h:tirs")
 
     -- 7. Jauge du héros et dégâts flottants (au premier plan)
     Depth.push(Depth.TEXT)
     self.player:drawOverlay()
     VFX.drawFCT()
     Depth.pop()
+    Perf.sec("h:textes")
 
     self.camera:detach()
 
     -- 8. Atmosphère écran (vignettage, lumière)
     self.arena:drawAtmosphere()
+    Perf.sec("h:atmo")
 
     -- 9. Barre de vie du boss, bannières, flash de mort du boss
     local boss = self.hud:findBoss(self)
@@ -1235,7 +1261,7 @@ function GameState:pickDraft(idx)
     local newSynergies = Skills.checkSynergies(self.player, self.acquiredSkills)
     if newSynergies and #newSynergies > 0 then
         for _, syn in ipairs(newSynergies) do
-            VFX.addFCT(self.player.x, self.player.y - 20, "FUSION : " .. syn.name, true)
+            VFX.addFCT(self.player.x, self.player.y - 20, "FUSION: " .. syn.name, true)
             VFX.shakeHeavy()
         end
     end
@@ -1294,7 +1320,7 @@ function GameState:triggerUltimate()
 
     if heroId == "atreus" then
         -- 1. ATREUS : BARRAGE CÉLESTE (Pluie de 16 flèches dorées ciblées)
-        VFX.addFCT(self.player.x, self.player.y - 25, "BARRAGE CÉLESTE !", true)
+        VFX.addFCT(self.player.x, self.player.y - 25, "CELESTIAL BARRAGE!", true)
         local count = 16
         for i = 1, count do
             local angle = (i - 1) * ((math.pi * 2) / count)
@@ -1316,7 +1342,7 @@ function GameState:triggerUltimate()
 
     elseif heroId == "urasil" then
         -- 2. URASIL : MIASME MORTEL (Nuage d'acide asphyxiant toute la salle)
-        VFX.addFCT(self.player.x, self.player.y - 25, "MIASME MORTEL !", true)
+        VFX.addFCT(self.player.x, self.player.y - 25, "DEADLY MIASMA!", true)
         VFX.shakeHeavy()
         VFX.addSparks(self.player.x, self.player.y, 25, {0.2, 0.95, 0.3, 1.0})
         if self.dummyPool and self.dummyPool.activeCount > 0 then
@@ -1329,14 +1355,14 @@ function GameState:triggerUltimate()
                         monster.status.poison = 999.0
                     end
                     VFX.triggerHitFlash(monster, 4)
-                    VFX.addFCT(monster.x, monster.y - 12, "ACIDE 45", true)
+                    VFX.addFCT(monster.x, monster.y - 12, "ACID 45", true)
                 end
             end
         end
 
     elseif heroId == "phoren" then
         -- 3. PHOREN : MÉTÉORE VOLCANIQUE (Impact cataclysmique brûlant le sol)
-        VFX.addFCT(self.player.x, self.player.y - 25, "MÉTÉORE VOLCANIQUE !", true)
+        VFX.addFCT(self.player.x, self.player.y - 25, "VOLCANIC METEOR!", true)
         VFX.shakeHeavy()
         local targetX = self.player.x + (self.player.aimDirX or 1) * 75
         local targetY = self.player.y + (self.player.aimDirY or 0) * 75
@@ -1365,7 +1391,7 @@ function GameState:triggerUltimate()
 
     elseif heroId == "helix" then
         -- 4. HELIX : FUREUR BERSERKER (Invulnérabilité 3s + Vitesse d'attaque x2)
-        VFX.addFCT(self.player.x, self.player.y - 25, "FUREUR BERSERKER !", true)
+        VFX.addFCT(self.player.x, self.player.y - 25, "BERSERKER FURY!", true)
         VFX.shakeHeavy()
         VFX.addSparks(self.player.x, self.player.y, 20, {1.0, 0.2, 0.1, 1.0})
         self.player.isBerserk = true
@@ -1375,7 +1401,7 @@ function GameState:triggerUltimate()
 
     elseif heroId == "rolla" then
         -- 5. ROLLA : ZÉRO ABSOLU (Gèle instantanément toute la salle pendant 3 secondes)
-        VFX.addFCT(self.player.x, self.player.y - 25, "ZÉRO ABSOLU !", true)
+        VFX.addFCT(self.player.x, self.player.y - 25, "ABSOLUTE ZERO!", true)
         VFX.shakeHeavy()
         VFX.addSparks(self.player.x, self.player.y, 25, {0.35, 0.85, 1.0, 1.0})
         if self.dummyPool and self.dummyPool.activeCount > 0 then
@@ -1392,7 +1418,7 @@ function GameState:triggerUltimate()
                     monster.dashVx = 0
                     monster.dashVy = 0
                     VFX.triggerHitFlash(monster, 4)
-                    VFX.addFCT(monster.x, monster.y - 12, "GEL 3.0s", true)
+                    VFX.addFCT(monster.x, monster.y - 12, "FREEZE 3.0s", true)
                 end
             end
         end

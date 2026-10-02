@@ -18,8 +18,8 @@ end
 -- ============================================================================
 Skills.register({
     id = "front_arrow",
-    name = "Flèche Frontale +1",
-    desc = "Tire une flèche supplémentaire vers l'avant",
+    name = "Front Arrow +1",
+    desc = "Fires +1 additional arrow forward",
     rarity = "epic",
     category = "shots",
     icon = "multishot",
@@ -32,8 +32,8 @@ Skills.register({
 
 Skills.register({
     id = "diag_arrows",
-    name = "Flèches Diagonales",
-    desc = "Tire 2 flèches supplémentaires à 45°",
+    name = "Diagonal Arrows",
+    desc = "Fires 2 additional arrows at 45 degrees",
     rarity = "rare",
     category = "shots",
     icon = "multishot",
@@ -46,8 +46,8 @@ Skills.register({
 
 Skills.register({
     id = "rear_arrow",
-    name = "Flèche Arrière",
-    desc = "Tire 1 flèche directement vers l'arrière",
+    name = "Rear Arrow",
+    desc = "Fires 1 arrow directly backward",
     rarity = "common",
     category = "shots",
     icon = "multishot",
@@ -60,8 +60,8 @@ Skills.register({
 
 Skills.register({
     id = "side_arrows",
-    name = "Flèches Latérales",
-    desc = "Tire 2 flèches sur les côtés à 90°",
+    name = "Side Arrows",
+    desc = "Fires 2 arrows to the sides at 90 degrees",
     rarity = "common",
     category = "shots",
     icon = "multishot",
@@ -78,7 +78,7 @@ Skills.register({
 Skills.register({
     id = "ricochet",
     name = "Ricochet",
-    desc = "Les flèches bondissent vers un monstre proche",
+    desc = "Arrows bounce between nearby monsters",
     rarity = "epic",
     category = "projectile",
     icon = "ricochet",
@@ -91,8 +91,8 @@ Skills.register({
 
 Skills.register({
     id = "piercing",
-    name = "Tir Transperçant",
-    desc = "Les flèches traversent tous les ennemis",
+    name = "Piercing Shot",
+    desc = "Arrows penetrate through all enemies",
     rarity = "rare",
     category = "projectile",
     icon = "damage",
@@ -105,8 +105,8 @@ Skills.register({
 
 Skills.register({
     id = "bouncy_wall",
-    name = "Rebond Mural",
-    desc = "Les flèches ricochent sur les murs de l'arène",
+    name = "Bouncy Wall",
+    desc = "Arrows bounce off arena boundaries",
     rarity = "epic",
     category = "projectile",
     icon = "ricochet",
@@ -119,8 +119,8 @@ Skills.register({
 
 Skills.register({
     id = "giant_arrow",
-    name = "Flèche Géante",
-    desc = "Rayon +60% et Dégâts +35%",
+    name = "Giant Arrow",
+    desc = "Arrow radius +60% and Damage +35%",
     rarity = "rare",
     category = "projectile",
     icon = "damage",
@@ -137,8 +137,8 @@ Skills.register({
 -- ============================================================================
 Skills.register({
     id = "fire_element",
-    name = "Brasier Ardent",
-    desc = "Enflamme les ennemis (Dégâts continus 3s)",
+    name = "Blaze",
+    desc = "Ignites enemies with continuous fire damage for 3s",
     rarity = "rare",
     category = "elements",
     icon = "damage",
@@ -155,8 +155,8 @@ Skills.register({
 
 Skills.register({
     id = "ice_element",
-    name = "Morsure de Givre",
-    desc = "Ralentit les monstres touchés de 40%",
+    name = "Frostbite",
+    desc = "Slows struck monsters down by 40%",
     rarity = "rare",
     category = "elements",
     icon = "crit",
@@ -170,8 +170,8 @@ Skills.register({
 
 Skills.register({
     id = "lightning_element",
-    name = "Foudre Céleste",
-    desc = "Déclenche un arc électrique de zone au contact",
+    name = "Bolt",
+    desc = "Triggers area chain lightning upon hit",
     rarity = "epic",
     category = "elements",
     icon = "speed",
@@ -182,8 +182,8 @@ Skills.register({
 
 Skills.register({
     id = "poison_element",
-    name = "Venin Mortel",
-    desc = "Empoisonne la cible jusqu'à son élimination",
+    name = "Poison Touch",
+    desc = "Poisons targets with continuous acid damage",
     rarity = "common",
     category = "elements",
     icon = "damage",
@@ -197,8 +197,8 @@ Skills.register({
 -- ============================================================================
 Skills.register({
     id = "rotating_sword_fire",
-    name = "Épée Flamboyante",
-    desc = "Une épée de feu tourne autour de vous",
+    name = "Blazing Sword",
+    desc = "A flaming sword orbits around you",
     rarity = "epic",
     category = "orbitals",
     icon = "damage",
@@ -212,8 +212,8 @@ Skills.register({
 
 Skills.register({
     id = "rotating_sword_ice",
-    name = "Épée de Givre",
-    desc = "Une épée glacée tourne et blesse au contact",
+    name = "Frost Sword",
+    desc = "A frost sword orbits and damages on contact",
     rarity = "rare",
     category = "orbitals",
     icon = "crit",
@@ -227,8 +227,8 @@ Skills.register({
 
 Skills.register({
     id = "rotating_sword_poison",
-    name = "Épée Toxique",
-    desc = "Une lame verte empoisonnée en rotation",
+    name = "Toxic Sword",
+    desc = "A venomous sword orbits around you",
     rarity = "rare",
     category = "orbitals",
     icon = "damage",
@@ -242,8 +242,8 @@ Skills.register({
 
 Skills.register({
     id = "shield_orb",
-    name = "Orbe Protecteur",
-    desc = "Un bouclier flottant bloque les tirs adverses",
+    name = "Shield Guard",
+    desc = "A floating shield blocks incoming enemy missiles",
     rarity = "rare",
     category = "orbitals",
     icon = "crit",
@@ -257,8 +257,8 @@ Skills.register({
 
 Skills.register({
     id = "shield_guard",
-    name = "Garde Sacrée",
-    desc = "Deux boucliers dorés orbitaux bloquent tous les projectiles ennemis",
+    name = "Divine Aegis",
+    desc = "Two golden shields orbit, blocking all enemy projectiles",
     rarity = "epic",
     category = "orbitals",
     icon = "damage",
@@ -276,8 +276,8 @@ Skills.register({
 -- ============================================================================
 Skills.register({
     id = "attack_boost",
-    name = "Force Héroïque",
-    desc = "+30% de Dégâts d'attaque",
+    name = "Attack Boost",
+    desc = "+30% Attack damage",
     rarity = "common",
     category = "stats",
     icon = "damage",
@@ -288,8 +288,8 @@ Skills.register({
 
 Skills.register({
     id = "attack_speed_boost",
-    name = "Frénésie Martiale",
-    desc = "+35% Vitesse d'attaque",
+    name = "Attack Speed Boost",
+    desc = "+35% Attack speed",
     rarity = "common",
     category = "stats",
     icon = "speed",
@@ -300,8 +300,8 @@ Skills.register({
 
 Skills.register({
     id = "max_hp_boost",
-    name = "Vitalité de Titan",
-    desc = "+25% PV Maximum et soigne 40 PV",
+    name = "Max HP Boost",
+    desc = "+25% Max HP and restores 40 HP",
     rarity = "common",
     category = "stats",
     icon = "heal",
@@ -315,8 +315,8 @@ Skills.register({
 
 Skills.register({
     id = "dodge_boost",
-    name = "Grâce Céleste",
-    desc = "+15% de Chances d'Esquiver les coups",
+    name = "Grace of Hermes",
+    desc = "+15% Chance to Dodge incoming attacks",
     rarity = "rare",
     category = "stats",
     icon = "boots",
@@ -327,8 +327,8 @@ Skills.register({
 
 Skills.register({
     id = "crit_master",
-    name = "Maître Critique",
-    desc = "+25% Critique et Dégâts Critiques doublés",
+    name = "Crit Master",
+    desc = "+25% Crit chance and doubled Crit damage",
     rarity = "epic",
     category = "stats",
     icon = "crit",
@@ -342,8 +342,8 @@ Skills.register({
 
 Skills.register({
     id = "swift_stride",
-    name = "Ailes d'Hermès",
-    desc = "+25% Vitesse de marche",
+    name = "Hermes Boots",
+    desc = "+25% Movement speed",
     rarity = "common",
     category = "stats",
     icon = "boots",
@@ -354,8 +354,8 @@ Skills.register({
 
 Skills.register({
     id = "first_aid",
-    name = "Potion d'Urgence",
-    desc = "Restaure 45% des PV immédiatement",
+    name = "Emergency Potion",
+    desc = "Instantly restores 45% of max HP",
     rarity = "common",
     category = "stats",
     icon = "heal",
@@ -368,8 +368,8 @@ Skills.register({
 
 Skills.register({
     id = "greed_gold",
-    name = "Pacte de Midas",
-    desc = "+50% de pièces d'or récoltées",
+    name = "Greed",
+    desc = "+50% Gold coins collected",
     rarity = "rare",
     category = "stats",
     icon = "multishot",
@@ -380,8 +380,8 @@ Skills.register({
 
 Skills.register({
     id = "giant_form",
-    name = "Forme de Colosse",
-    desc = "Taille +15%, Dégâts +40%, PV Max +30%",
+    name = "Giant",
+    desc = "Character size +15%, Damage +40%, Max HP +30%",
     rarity = "epic",
     category = "stats",
     icon = "damage",
@@ -400,8 +400,8 @@ Skills.register({
 -- ============================================================================
 Skills.register({
     id = "death_explosion",
-    name = "Explosion Macabre",
-    desc = "Les ennemis explosent en mourant (Dégâts de zone)",
+    name = "Death Bomb",
+    desc = "Enemies explode upon defeat dealing AoE damage",
     rarity = "epic",
     category = "death",
     icon = "damage",
@@ -431,8 +431,8 @@ Skills.register({
 
 Skills.register({
     id = "death_starburst",
-    name = "Étoile Funeste",
-    desc = "Décoche 8 aiguilles radiales à la mort d'un monstre",
+    name = "Death Starburst",
+    desc = "Fires 8 radial needles upon monster death",
     rarity = "rare",
     category = "death",
     icon = "multishot",
@@ -459,8 +459,8 @@ Skills.register({
 
 Skills.register({
     id = "bloodthirst",
-    name = "Soif de Sang",
-    desc = "Récupère 25 PV à chaque élimination",
+    name = "Bloodthirst",
+    desc = "Restores 25 HP upon defeating an enemy",
     rarity = "rare",
     category = "death",
     icon = "heal",
@@ -473,8 +473,8 @@ Skills.register({
 
 Skills.register({
     id = "headshot",
-    name = "Tir Fatal",
-    desc = "3% de chance de tuer instantanément un ennemi",
+    name = "Headshot",
+    desc = "3% chance to instantly kill non-boss monsters",
     rarity = "epic",
     category = "death",
     icon = "crit",
@@ -493,8 +493,8 @@ Skills.register({
 
 Skills.register({
     id = "fury",
-    name = "Rage Berserker",
-    desc = "Plus vos PV baissent, plus l'ATQ augmente (jusqu'à +75%)",
+    name = "Fury",
+    desc = "Lower HP grants higher Attack (up to +75%)",
     rarity = "epic",
     category = "stats",
     icon = "damage",
@@ -511,8 +511,8 @@ Skills.register({
 -- ============================================================================
 Skills.register({
     id = "devil_multishot",
-    name = "Tir Obscur +1",
-    desc = "Tire une flèche frontale supplémentaire",
+    name = "Dark Multishot",
+    desc = "Fires an additional front arrow",
     rarity = "forbidden",
     category = "devil",
     icon = "multishot",
@@ -525,8 +525,8 @@ Skills.register({
 
 Skills.register({
     id = "devil_rage",
-    name = "Fureur Démoniaque",
-    desc = "+35% de Dégâts bruts permanents",
+    name = "Demonic Rage",
+    desc = "+35% Permanent raw damage",
     rarity = "forbidden",
     category = "devil",
     icon = "damage",
@@ -539,8 +539,8 @@ Skills.register({
 
 Skills.register({
     id = "devil_haste",
-    name = "Célérité Infernale",
-    desc = "+30% de Vitesse de déplacement et d'attaque",
+    name = "Infernal Haste",
+    desc = "+30% Movement and attack speed",
     rarity = "forbidden",
     category = "devil",
     icon = "speed",
@@ -553,8 +553,8 @@ Skills.register({
 
 Skills.register({
     id = "devil_ghost",
-    name = "Forme Spectrale",
-    desc = "Permet de traverser les obstacles et fossés",
+    name = "Ghost Walk",
+    desc = "Enables walking through walls and obstacles",
     rarity = "forbidden",
     category = "devil",
     icon = "shield",
@@ -572,9 +572,9 @@ Skills.register({
 -- 8. POUVOIRS CÉLESTES (MÉTÉORES, ÉPÉES VOLANTES, WINGMAN, ÉTOILE)
 -- ============================================================================
 local METEOR_ELEMENTS = {
-    meteor_fire    = { key = "fire",      color = { 1.00, 0.45, 0.12, 1.0 }, name = "Météore Ardent",  desc = "Un météore enflammé s'écrase toutes les 4 s" },
-    meteor_ice     = { key = "ice",       color = { 0.45, 0.85, 1.00, 1.0 }, name = "Météore Glacial", desc = "Un météore de glace s'écrase et gèle la zone" },
-    meteor_thunder = { key = "lightning", color = { 1.00, 0.90, 0.30, 1.0 }, name = "Météore Foudre",  desc = "Un météore électrique s'écrase et électrocute" },
+    meteor_fire    = { key = "fire",      color = { 1.00, 0.45, 0.12, 1.0 }, name = "Blazing Meteor",  desc = "A flaming meteor crashes down every 4s" },
+    meteor_ice     = { key = "ice",       color = { 0.45, 0.85, 1.00, 1.0 }, name = "Frost Meteor",    desc = "An ice meteor crashes down and freezes the area" },
+    meteor_thunder = { key = "lightning", color = { 1.00, 0.90, 0.30, 1.0 }, name = "Thunder Meteor",  desc = "A lightning meteor strikes and electrocutes" },
 }
 
 -- Fait tomber un météore sur un monstre au hasard (ou devant le héros si l'arène est vide)
@@ -632,8 +632,8 @@ end
 
 Skills.register({
     id = "flying_swords",
-    name = "Épées Volantes",
-    desc = "2 dagues plongent sur l'ennemi le plus proche",
+    name = "Flying Swords",
+    desc = "2 daggers dive toward the nearest enemy",
     rarity = "epic",
     category = "sky",
     icon = "swords",
@@ -653,7 +653,7 @@ Skills.register({
 Skills.register({
     id = "wingman",
     name = "Wingman",
-    desc = "Les familiers interceptent les tirs ennemis",
+    desc = "Pets intercept and block enemy projectiles",
     rarity = "rare",
     category = "defense",
     icon = "shield",
@@ -664,8 +664,8 @@ Skills.register({
 
 Skills.register({
     id = "invincible_star",
-    name = "Étoile d'Invincibilité",
-    desc = "Bouclier doré de 2 s toutes les 10 s",
+    name = "Invincible Star",
+    desc = "Golden shield grants invulnerability for 2s every 10s",
     rarity = "epic",
     category = "defense",
     icon = "star",
@@ -682,8 +682,8 @@ Skills.register({
 -- ============================================================================
 Skills.register({
     id = "dark_touch",
-    name = "Toucher Obscur",
-    desc = "Les ennemis touchés subissent +25% de dégâts",
+    name = "Dark Touch",
+    desc = "Struck enemies take +25% increased damage",
     rarity = "rare",
     category = "debuff",
     icon = "damage",
@@ -694,8 +694,8 @@ Skills.register({
 
 Skills.register({
     id = "shadow_clone",
-    name = "Clone d'Ombre",
-    desc = "Un double vous suit et tire à 45% des dégâts",
+    name = "Shadow Clone",
+    desc = "A clone follows you and fires at 45% damage",
     rarity = "epic",
     category = "summon",
     icon = "multishot",
@@ -709,8 +709,8 @@ Skills.register({
 
 Skills.register({
     id = "extra_life",
-    name = "Vie Supplémentaire",
-    desc = "Ressuscite une fois avec la moitié des PV",
+    name = "Extra Life",
+    desc = "Resurrects once with half max HP",
     rarity = "epic",
     category = "defense",
     icon = "heal",
@@ -721,8 +721,8 @@ Skills.register({
 
 Skills.register({
     id = "death_nova",
-    name = "Nova de Mort",
-    desc = "Les monstres explosent en mourant (zone)",
+    name = "Death Nova",
+    desc = "Enemies explode upon defeat in a deadly nova",
     rarity = "epic",
     category = "damage",
     icon = "damage",
@@ -757,8 +757,8 @@ Skills.register({
 
 Skills.register({
     id = "holy_touch",
-    name = "Toucher Sacré",
-    desc = "Chaque tir qui touche rend 1% des PV max",
+    name = "Holy Touch",
+    desc = "Each arrow hit restores 1% max HP",
     rarity = "rare",
     category = "defense",
     icon = "heal",
@@ -775,171 +775,171 @@ Skills.register({
 
 -- ---------------------------------------------------------------- COMMUNES --
 Skills.register({
-    id = "sharp_arrows", name = "Pointes Affûtées", desc = "+8% de dégâts",
+    id = "sharp_arrows", name = "Sharp Arrows", desc = "+8% Damage",
     rarity = "common", category = "stats", icon = "damage", maxStacks = 6,
     hooks = { onApply = function(p) p.damageMult = (p.damageMult or 1) * 1.08 end }
 })
 
 Skills.register({
-    id = "quick_draw", name = "Tir Rapide", desc = "+8% de vitesse d'attaque",
+    id = "quick_draw", name = "Quick Draw", desc = "+8% Attack speed",
     rarity = "common", category = "stats", icon = "speed", maxStacks = 6,
     hooks = { onApply = function(p) p.attackSpeedMult = (p.attackSpeedMult or 1) * 1.08 end }
 })
 
 Skills.register({
-    id = "light_step", name = "Pas Léger", desc = "+6% de vitesse de déplacement",
+    id = "light_step", name = "Light Step", desc = "+6% Movement speed",
     rarity = "common", category = "stats", icon = "boots", maxStacks = 6,
     hooks = { onApply = function(p) p.speed = p.speed * 1.06 end }
 })
 
 Skills.register({
-    id = "vitality_training", name = "Entraînement", desc = "+25 PV maximum",
+    id = "vitality_training", name = "Vitality Training", desc = "+25 Max HP",
     rarity = "common", category = "stats", icon = "heal", maxStacks = 6,
     hooks = { onApply = function(p) p.maxHp = p.maxHp + 25; p.hp = p.hp + 25 end }
 })
 
 Skills.register({
-    id = "keen_eye", name = "Œil Aiguisé", desc = "+4% de chance critique",
+    id = "keen_eye", name = "Keen Eye", desc = "+4% Critical chance",
     rarity = "common", category = "stats", icon = "crit", maxStacks = 6,
     hooks = { onApply = function(p) p.critChance = (p.critChance or 0) + 0.04 end }
 })
 
 Skills.register({
-    id = "heavy_tip", name = "Pointe Lourde", desc = "+15% de dégâts critiques",
+    id = "heavy_tip", name = "Heavy Tip", desc = "+15% Critical damage",
     rarity = "common", category = "stats", icon = "crit", maxStacks = 6,
     hooks = { onApply = function(p) p.critMultiplier = (p.critMultiplier or 1.5) + 0.15 end }
 })
 
 Skills.register({
-    id = "agile_dodge", name = "Esquive Agile", desc = "+3% d'esquive",
+    id = "agile_dodge", name = "Agile Dodge", desc = "+3% Dodge chance",
     rarity = "common", category = "stats", icon = "boots", maxStacks = 6,
     hooks = { onApply = function(p) p.dodgeChance = (p.dodgeChance or 0) + 0.03 end }
 })
 
 Skills.register({
-    id = "broad_head", name = "Fer Large", desc = "Flèches plus grosses (+1 rayon)",
+    id = "broad_head", name = "Broad Head", desc = "Larger arrow heads (+1 radius)",
     rarity = "common", category = "shots", icon = "multishot", maxStacks = 5,
     hooks = { onApply = function(p) p.arrowRadiusBonus = (p.arrowRadiusBonus or 0) + 1 end }
 })
 
 Skills.register({
-    id = "coin_charm", name = "Porte-Bonheur", desc = "+10% d'or ramassé",
+    id = "coin_charm", name = "Lucky Charm", desc = "+10% Gold collected",
     rarity = "common", category = "utility", icon = "star", maxStacks = 6,
     hooks = { onApply = function(p) p.goldMultiplier = (p.goldMultiplier or 1) + 0.10 end }
 })
 
 Skills.register({
-    id = "scholar", name = "Studieux", desc = "+12% d'expérience",
+    id = "scholar", name = "Scholar", desc = "+12% Experience gained",
     rarity = "common", category = "utility", icon = "star", maxStacks = 6,
     hooks = { onApply = function(p) p.xpMultiplier = (p.xpMultiplier or 1) + 0.12 end }
 })
 
 Skills.register({
-    id = "field_bandage", name = "Bandage", desc = "Régénère 0.4 PV par seconde",
+    id = "field_bandage", name = "Field Bandage", desc = "Regenerates 0.4 HP per second",
     rarity = "common", category = "survival", icon = "heal", maxStacks = 6,
     hooks = { onApply = function(p) p.hpRegen = (p.hpRegen or 0) + 0.4 end }
 })
 
 Skills.register({
-    id = "iron_skin", name = "Peau de Fer", desc = "+18 PV maximum et soin immédiat",
+    id = "iron_skin", name = "Iron Skin", desc = "+18 Max HP and instant heal",
     rarity = "common", category = "survival", icon = "shield", maxStacks = 6,
     hooks = { onApply = function(p) p.maxHp = p.maxHp + 18; p.hp = math.min(p.maxHp, p.hp + 18) end }
 })
 
 -- -------------------------------------------------------------------- RARES --
 Skills.register({
-    id = "vampiric_edge", name = "Lame Vampirique", desc = "Vol de vie : 2% des dégâts infligés",
+    id = "vampiric_edge", name = "Vampiric Edge", desc = "Life steal: 2% of damage dealt",
     rarity = "rare", category = "survival", icon = "heal", maxStacks = 4,
     hooks = { onApply = function(p) p.lifeSteal = (p.lifeSteal or 0) + 0.02 end }
 })
 
 Skills.register({
-    id = "titan_slayer", name = "Tueur de Titans", desc = "+18% de dégâts contre les boss",
+    id = "titan_slayer", name = "Titan Slayer", desc = "+18% Damage against bosses",
     rarity = "rare", category = "stats", icon = "swords", maxStacks = 4,
     hooks = { onApply = function(p) p.bossDamageMult = (p.bossDamageMult or 1) + 0.18 end }
 })
 
 Skills.register({
-    id = "crit_surge", name = "Montée Critique", desc = "+8% de chance critique",
+    id = "crit_surge", name = "Crit Surge", desc = "+8% Critical chance",
     rarity = "rare", category = "stats", icon = "crit", maxStacks = 4,
     hooks = { onApply = function(p) p.critChance = (p.critChance or 0) + 0.08 end }
 })
 
 Skills.register({
-    id = "deep_wound", name = "Plaie Profonde", desc = "+30% de dégâts critiques",
+    id = "deep_wound", name = "Deep Wound", desc = "+30% Critical damage",
     rarity = "rare", category = "stats", icon = "crit", maxStacks = 4,
     hooks = { onApply = function(p) p.critMultiplier = (p.critMultiplier or 1.5) + 0.30 end }
 })
 
 Skills.register({
-    id = "swift_recovery", name = "Convalescence", desc = "Régénère 1 PV par seconde",
+    id = "swift_recovery", name = "Swift Recovery", desc = "Regenerates 1 HP per second",
     rarity = "rare", category = "survival", icon = "heal", maxStacks = 4,
     hooks = { onApply = function(p) p.hpRegen = (p.hpRegen or 0) + 1.0 end }
 })
 
 Skills.register({
-    id = "gold_rush", name = "Ruée vers l'Or", desc = "+22% d'or ramassé",
+    id = "gold_rush", name = "Gold Rush", desc = "+22% Gold collected",
     rarity = "rare", category = "utility", icon = "star", maxStacks = 4,
     hooks = { onApply = function(p) p.goldMultiplier = (p.goldMultiplier or 1) + 0.22 end }
 })
 
 Skills.register({
-    id = "arcane_study", name = "Étude Arcanique", desc = "+25% d'expérience",
+    id = "arcane_study", name = "Arcane Study", desc = "+25% Experience gained",
     rarity = "rare", category = "utility", icon = "star", maxStacks = 4,
     hooks = { onApply = function(p) p.xpMultiplier = (p.xpMultiplier or 1) + 0.25 end }
 })
 
 Skills.register({
-    id = "thick_hide", name = "Cuir Épais", desc = "+7% d'esquive",
+    id = "thick_hide", name = "Thick Hide", desc = "+7% Dodge chance",
     rarity = "rare", category = "survival", icon = "shield", maxStacks = 4,
     hooks = { onApply = function(p) p.dodgeChance = (p.dodgeChance or 0) + 0.07 end }
 })
 
 Skills.register({
-    id = "war_drums", name = "Tambours de Guerre", desc = "+15% de vitesse d'attaque",
+    id = "war_drums", name = "War Drums", desc = "+15% Attack speed",
     rarity = "rare", category = "stats", icon = "speed", maxStacks = 4,
     hooks = { onApply = function(p) p.attackSpeedMult = (p.attackSpeedMult or 1) * 1.15 end }
 })
 
 Skills.register({
-    id = "brutal_force", name = "Force Brutale", desc = "+16% de dégâts",
+    id = "brutal_force", name = "Brutal Force", desc = "+16% Damage",
     rarity = "rare", category = "stats", icon = "damage", maxStacks = 4,
     hooks = { onApply = function(p) p.damageMult = (p.damageMult or 1) * 1.16 end }
 })
 
 Skills.register({
-    id = "marathon", name = "Marathonien", desc = "+12% de vitesse de déplacement",
+    id = "marathon", name = "Marathon", desc = "+12% Movement speed",
     rarity = "rare", category = "stats", icon = "boots", maxStacks = 4,
     hooks = { onApply = function(p) p.speed = p.speed * 1.12 end }
 })
 
 Skills.register({
-    id = "giant_growth", name = "Croissance", desc = "+60 PV maximum et soin immédiat",
+    id = "giant_growth", name = "Giant Growth", desc = "+60 Max HP and instant heal",
     rarity = "rare", category = "survival", icon = "heal", maxStacks = 4,
     hooks = { onApply = function(p) p.maxHp = p.maxHp + 60; p.hp = math.min(p.maxHp, p.hp + 60) end }
 })
 
 Skills.register({
-    id = "hunters_mark", name = "Marque du Chasseur", desc = "+22% de dégâts",
+    id = "hunters_mark", name = "Hunter's Mark", desc = "+22% Damage",
     rarity = "rare", category = "stats", icon = "damage", maxStacks = 3,
     hooks = { onApply = function(p) p.damageMult = (p.damageMult or 1) * 1.22 end }
 })
 
 -- ------------------------------------------------------------------ ÉPIQUES --
 Skills.register({
-    id = "blood_pact", name = "Pacte de Sang", desc = "Vol de vie : 5% des dégâts infligés",
+    id = "blood_pact", name = "Blood Pact", desc = "Life steal: 5% of damage dealt",
     rarity = "epic", category = "survival", icon = "heal", maxStacks = 3,
     hooks = { onApply = function(p) p.lifeSteal = (p.lifeSteal or 0) + 0.05 end }
 })
 
 Skills.register({
-    id = "titan_bane", name = "Fléau des Titans", desc = "+35% de dégâts contre les boss",
+    id = "titan_bane", name = "Titan's Bane", desc = "+35% Damage against bosses",
     rarity = "epic", category = "stats", icon = "swords", maxStacks = 3,
     hooks = { onApply = function(p) p.bossDamageMult = (p.bossDamageMult or 1) + 0.35 end }
 })
 
 Skills.register({
-    id = "precision_strike", name = "Frappe de Précision", desc = "+12% critique et +25% dégâts critiques",
+    id = "precision_strike", name = "Precision Strike", desc = "+12% Critical chance and +25% Crit damage",
     rarity = "epic", category = "stats", icon = "crit", maxStacks = 3,
     hooks = { onApply = function(p)
         p.critChance = (p.critChance or 0) + 0.12
@@ -948,7 +948,7 @@ Skills.register({
 })
 
 Skills.register({
-    id = "phantom_step", name = "Pas Fantôme", desc = "+12% d'esquive et +6% de vitesse",
+    id = "phantom_step", name = "Phantom Step", desc = "+12% Dodge chance and +6% Speed",
     rarity = "epic", category = "survival", icon = "boots", maxStacks = 3,
     hooks = { onApply = function(p)
         p.dodgeChance = (p.dodgeChance or 0) + 0.12
@@ -957,19 +957,19 @@ Skills.register({
 })
 
 Skills.register({
-    id = "arrow_rain", name = "Pluie de Flèches", desc = "+1 flèche frontale supplémentaire",
+    id = "arrow_rain", name = "Arrow Rain", desc = "+1 Additional front arrow",
     rarity = "epic", category = "shots", icon = "multishot", maxStacks = 3,
     hooks = { onApply = function(p) p.frontArrows = (p.frontArrows or 1) + 1 end }
 })
 
 Skills.register({
-    id = "wind_blades", name = "Lames de Vent", desc = "+1 flèche latérale de chaque côté",
+    id = "wind_blades", name = "Wind Blades", desc = "+1 Side arrow on each flank",
     rarity = "epic", category = "shots", icon = "multishot", maxStacks = 3,
     hooks = { onApply = function(p) p.sideArrows = (p.sideArrows or 0) + 1 end }
 })
 
 Skills.register({
-    id = "war_machine", name = "Machine de Guerre", desc = "+20% dégâts et +10% vitesse d'attaque",
+    id = "war_machine", name = "War Machine", desc = "+20% Damage and +10% Attack speed",
     rarity = "epic", category = "stats", icon = "damage", maxStacks = 3,
     hooks = { onApply = function(p)
         p.damageMult = (p.damageMult or 1) * 1.20
@@ -979,7 +979,7 @@ Skills.register({
 
 -- -------------------------------------------------------------- LÉGENDAIRES --
 Skills.register({
-    id = "dragon_heart", name = "Cœur de Dragon", desc = "+40% PV max et régénère 2 PV/s",
+    id = "dragon_heart", name = "Dragon Heart", desc = "+40% Max HP and regenerates 2 HP/s",
     rarity = "legendary", category = "survival", icon = "heal", maxStacks = 1,
     hooks = { onApply = function(p)
         local bonus = math.floor(p.maxHp * 0.40)
@@ -990,7 +990,7 @@ Skills.register({
 })
 
 Skills.register({
-    id = "time_dilation", name = "Dilatation Temporelle", desc = "+20% vitesse d'attaque et de déplacement",
+    id = "time_dilation", name = "Time Dilation", desc = "+20% Attack and movement speed",
     rarity = "legendary", category = "stats", icon = "speed", maxStacks = 1,
     hooks = { onApply = function(p)
         p.attackSpeedMult = (p.attackSpeedMult or 1) * 1.20
@@ -999,7 +999,7 @@ Skills.register({
 })
 
 Skills.register({
-    id = "midas_touch", name = "Toucher de Midas", desc = "+50% d'or et +25% d'expérience",
+    id = "midas_touch", name = "Midas Touch", desc = "+50% Gold and +25% Experience",
     rarity = "legendary", category = "utility", icon = "star", maxStacks = 1,
     hooks = { onApply = function(p)
         p.goldMultiplier = (p.goldMultiplier or 1) + 0.50
@@ -1008,7 +1008,7 @@ Skills.register({
 })
 
 Skills.register({
-    id = "soul_harvest", name = "Moisson d'Âmes", desc = "Vol de vie : 8% des dégâts infligés",
+    id = "soul_harvest", name = "Soul Harvest", desc = "Life steal: 8% of damage dealt",
     rarity = "legendary", category = "survival", icon = "heal", maxStacks = 1,
     hooks = { onApply = function(p) p.lifeSteal = (p.lifeSteal or 0) + 0.08 end }
 })
@@ -1081,8 +1081,8 @@ end
 Skills.SYNERGIES = {
     toxic_flame = {
         id = "toxic_flame",
-        name = "Flammes Toxiques",
-        desc = "Les monstres empoisonnés explosent en flammes à leur mort !",
+        name = "Toxic Flame",
+        desc = "Poisoned monsters explode into flames upon death!",
         icon = "damage",
         req1 = "fire_element",
         req2 = "poison_element",
@@ -1092,8 +1092,8 @@ Skills.SYNERGIES = {
     },
     magnetic_storm = {
         id = "magnetic_storm",
-        name = "Tempête Magnétique",
-        desc = "Les arcs électriques laissent des zones de foudre au sol !",
+        name = "Magnetic Storm",
+        desc = "Chain lightning arcs leave electric zones on the ground!",
         icon = "speed",
         req1 = "lightning_element",
         req2 = "ricochet",
@@ -1103,8 +1103,8 @@ Skills.SYNERGIES = {
     },
     blade_vortex = {
         id = "blade_vortex",
-        name = "Vortex de Lames",
-        desc = "Les boucliers et lames fusionnent : détruit les tirs et déchiquette au corps-à-corps !",
+        name = "Blade Vortex",
+        desc = "Shields and blades fuse: destroying missiles and shredding in melee!",
         icon = "shield",
         reqOrbital = true,
         reqShield = true,

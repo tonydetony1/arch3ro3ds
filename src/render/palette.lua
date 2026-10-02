@@ -63,12 +63,12 @@ Palette.C = {
 
 -- Couleurs de rareté partagées (compétences, objets, cadres)
 Palette.RARITY = {
-    common    = { main = Palette.C.silver, dark = Palette.C.steel,  light = Palette.C.white,  name = "COMMUN" },
-    uncommon  = { main = Palette.C.leaf,   dark = Palette.C.moss,   light = hex("a8e890"),   name = "ATYPIQUE" },
+    common    = { main = Palette.C.silver, dark = Palette.C.steel,  light = Palette.C.white,  name = "COMMON" },
+    uncommon  = { main = Palette.C.leaf,   dark = Palette.C.moss,   light = hex("a8e890"),   name = "UNCOMMON" },
     rare      = { main = Palette.C.blue,   dark = Palette.C.navy,   light = Palette.C.cyan,   name = "RARE" },
-    epic      = { main = Palette.C.magenta, dark = Palette.C.plum,  light = Palette.C.pink,   name = "ÉPIQUE" },
-    legendary = { main = Palette.C.amber,  dark = Palette.C.ember,  light = Palette.C.yellow, name = "LÉGENDAIRE" },
-    forbidden = { main = Palette.C.red,    dark = Palette.C.wine,   light = Palette.C.pink,   name = "INTERDIT" },
+    epic      = { main = Palette.C.magenta, dark = Palette.C.plum,  light = Palette.C.pink,   name = "EPIC" },
+    legendary = { main = Palette.C.amber,  dark = Palette.C.ember,  light = Palette.C.yellow, name = "LEGENDARY" },
+    forbidden = { main = Palette.C.red,    dark = Palette.C.wine,   light = Palette.C.pink,   name = "FORBIDDEN" },
 }
 
 function Palette.rarity(id)

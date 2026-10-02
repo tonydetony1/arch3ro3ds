@@ -55,18 +55,18 @@ local function heroesUnlocked(d)
 end
 
 Achievements.LIST = {
-    { id = "hunter",    name = "Chasseur",         desc = "Éliminer 500 monstres",            goal = 500, icon = "skull",  reward = { gold = 500 },  value = totalKills },
-    { id = "explorer",  name = "Explorateur",      desc = "Atteindre la salle 20",            goal = 20,  icon = "door",   reward = { gems = 10 },   value = function(d) return (d.records or {}).ascensionMax or 1 end },
-    { id = "slayer",    name = "Briseur de Boss",  desc = "Vaincre 10 boss",                  goal = 10,  icon = "swords", reward = { gems = 15 },   value = bossKills },
-    { id = "collector", name = "Collectionneur",   desc = "Posséder 12 équipements",          goal = 12,  icon = "chest",  reward = { gold = 700 },  value = ownedItems },
-    { id = "smith",     name = "Forgeron",         desc = "Monter un objet au niveau 20",     goal = 20,  icon = "upgrade", reward = { gold = 900 }, value = bestItemLevel },
-    { id = "legend",    name = "Légende Vivante",  desc = "Obtenir 1 objet légendaire",       goal = 1,   icon = "star",   reward = { gems = 25 },   value = legendaryCount },
-    { id = "survivor",  name = "Survivant",        desc = "Tenir 15 vagues en Arène",         goal = 15,  icon = "heart",  reward = { gems = 20 },   value = function(d) return (d.events or {}).survivalBest or 0 end },
-    { id = "gladiator", name = "Gladiateur",       desc = "Enchaîner 5 boss en Boss Rush",    goal = 5,   icon = "swords", reward = { gold = 1200 }, value = function(d) return (d.events or {}).bossRushBest or 0 end },
-    { id = "rich",      name = "Fortune",          desc = "Accumuler 5000 pièces d'or",       goal = 5000, icon = "gold",  reward = { gems = 15 },   value = function(d) return d.gold or 0 end },
-    { id = "talented",  name = "Talentueux",       desc = "Investir 20 points de talent",     goal = 20,  icon = "rune",   reward = { gold = 800 },  value = talentPoints },
-    { id = "roster",    name = "Compagnons",       desc = "Débloquer 3 héros",                goal = 3,   icon = "hero",   reward = { gems = 20 },   value = heroesUnlocked },
-    { id = "master",    name = "Maître du Bestiaire", desc = "Atteindre 50 éliminations sur 5 monstres", goal = 5, icon = "check", reward = { gems = 30 },
+    { id = "hunter",    name = "Hunter",           desc = "Defeat 500 monsters",              goal = 500, icon = "skull",  reward = { gold = 500 },  value = totalKills },
+    { id = "explorer",  name = "Explorer",         desc = "Reach room 20",                    goal = 20,  icon = "door",   reward = { gems = 10 },   value = function(d) return (d.records or {}).ascensionMax or 1 end },
+    { id = "slayer",    name = "Boss Slayer",      desc = "Defeat 10 bosses",                 goal = 10,  icon = "swords", reward = { gems = 15 },   value = bossKills },
+    { id = "collector", name = "Collector",        desc = "Own 12 pieces of equipment",       goal = 12,  icon = "chest",  reward = { gold = 700 },  value = ownedItems },
+    { id = "smith",     name = "Blacksmith",       desc = "Upgrade an item to level 20",      goal = 20,  icon = "upgrade", reward = { gold = 900 }, value = bestItemLevel },
+    { id = "legend",    name = "Living Legend",    desc = "Obtain 1 legendary item",          goal = 1,   icon = "star",   reward = { gems = 25 },   value = legendaryCount },
+    { id = "survivor",  name = "Survivor",         desc = "Endure 15 waves in Arena",         goal = 15,  icon = "heart",  reward = { gems = 20 },   value = function(d) return (d.events or {}).survivalBest or 0 end },
+    { id = "gladiator", name = "Gladiator",        desc = "Defeat 5 bosses in Boss Rush",     goal = 5,   icon = "swords", reward = { gold = 1200 }, value = function(d) return (d.events or {}).bossRushBest or 0 end },
+    { id = "rich",      name = "Fortune",          desc = "Accumulate 5,000 gold coins",      goal = 5000, icon = "gold",  reward = { gems = 15 },   value = function(d) return d.gold or 0 end },
+    { id = "talented",  name = "Talented",         desc = "Invest 20 talent points",          goal = 20,  icon = "rune",   reward = { gold = 800 },  value = talentPoints },
+    { id = "roster",    name = "Companions",       desc = "Unlock 3 heroes",                  goal = 3,   icon = "hero",   reward = { gems = 20 },   value = heroesUnlocked },
+    { id = "master",    name = "Bestiary Master",  desc = "Reach 50 kills on 5 monsters",     goal = 5, icon = "check", reward = { gems = 30 },
       value = function(d)
           local n = 0
           for _, entry in ipairs(Bestiary.ENTRIES) do

@@ -5,7 +5,7 @@ local WorldManager = {
     CHAPTERS = {
         [1] = {
             id = "forest",
-            name = "Forêt Verdoyante",
+            name = "Verdant Forest",
             roomCount = 50,
             baseHp = 50,
             hpScaling = 14,
@@ -35,7 +35,7 @@ local WorldManager = {
         },
         [2] = {
             id = "desert",
-            name = "Désert Aride",
+            name = "Arid Desert",
             roomCount = 50,
             baseHp = 90,
             hpScaling = 22,
@@ -55,7 +55,7 @@ local WorldManager = {
         },
         [3] = {
             id = "crystal",
-            name = "Cavernes de Cristal",
+            name = "Crystal Caverns",
             roomCount = 50,
             baseHp = 140,
             hpScaling = 32,
@@ -75,7 +75,7 @@ local WorldManager = {
         },
         [4] = {
             id = "inferno",
-            name = "Enfer Volcanique",
+            name = "Volcanic Inferno",
             roomCount = 50,
             baseHp = 220,
             hpScaling = 45,
@@ -95,7 +95,7 @@ local WorldManager = {
         },
         [5] = {
             id = "skyward",
-            name = "Îles Célestes",
+            name = "Skyward Isles",
             roomCount = 50,
             baseHp = 320,
             hpScaling = 62,
@@ -125,7 +125,7 @@ local WorldManager = {
         },
         [6] = {
             id = "void",
-            name = "Cité du Vide",
+            name = "Void City",
             roomCount = 50,
             baseHp = 460,
             hpScaling = 88,

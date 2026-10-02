@@ -1,7 +1,7 @@
 -- tools/bake/main.lua
 -- Script autonome de précompilation de l'atlas graphique Arch3ro
 -- Exécuté par love.appimage lors du build pour générer :
---   1. assets/atlas.png (1024x512 PNG optimisé)
+--   1. assets/atlas.png (1024x1024 PNG optimisé : sprites + tuiles de sol)
 --   2. src/render/atlas_data.lua (mapping coordonnées + quads + fonts)
 
 local ROOT = love.filesystem.getSource()
@@ -56,6 +56,7 @@ function love.load()
         "src.render.sprites.icons",
         "src.render.sprites.items",
         "src.render.sprites.fx",
+        "src.render.sprites.overlays",
     }
     for _, modName in ipairs(SPRITE_MODULES) do
         require(modName).define(atlas)
@@ -65,6 +66,17 @@ function love.load()
     PixelFont.finalize(atlas)
 
     print(string.format(" -> Atlas généré en %.3fs (#items: %d)", os.clock() - t0, #atlas.items))
+
+    -- 1b. Jeu de tuiles du sol (src/render/ground_tiles.lua) sous les sprites : atlas 1024x1024
+    local GroundTiles = require("src.render.ground_tiles")
+    local tall = love.image.newImageData(atlas.w, 1024)
+    tall:paste(atlas.imageData, 0, 0, 0, 0, atlas.w, atlas.h)
+    local groundSprites, usedTo = GroundTiles.bake(atlas, tall, atlas.h)
+    for name, sprite in pairs(groundSprites) do atlas.sprites[name] = sprite end
+    atlas.imageData = tall
+    atlas.h = 1024
+    print(string.format(" -> Tuiles de sol : %d thèmes x %d variantes (jusqu'à y=%d)",
+        GroundTiles.THEMES, GroundTiles.VARIANTS, usedTo))
 
     -- 2. Export de l'image PNG (assets/atlas.png)
     local imgData = atlas.imageData

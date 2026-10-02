@@ -13,6 +13,8 @@ local PixelFont = {
 }
 
 local floor = math.floor
+local GpuMod = nil -- src.core.gpu (chargé à la demande : évite un cycle de require)
+local BATCH_AFTER = 30
 
 -- Couleurs de texte précuites dans l'atlas (lettre colorée + contour encre).
 -- Un texte dans une de ces couleurs se dessine en blanc "neutre" : l'auto-batcher de
@@ -340,7 +342,12 @@ function PixelFont.print(text, x, y, color, id, scale, style)
 
     -- Couleur précuite : la chaîne entière est un SpriteBatch construit une fois,
     -- dessiné en 1 appel GPU sans boucle Lua par lettre
-    if key and layout.n > 0 then
+    -- Une chaîne ne reçoit son SpriteBatch qu'après BATCH_AFTER affichages : les chaînes
+    -- éphémères (dégâts, compteurs qui défilent) passent lettre par lettre dans le lot
+    -- automatique au lieu de créer un SpriteBatch à chaque nouvelle valeur.
+    GpuMod = GpuMod or require("src.core.gpu")
+    layout.uses = (layout.uses or 0) + 1
+    if key and layout.n > 0 and layout.uses > BATCH_AFTER and not GpuMod.isRecording() then
         local bkey = plain and "p" or key
         local batches = layout.batches
         if not batches then
@@ -368,14 +375,14 @@ function PixelFont.print(text, x, y, color, id, scale, style)
     end
 
     local img = PixelFont.image
-    local draw = love.graphics.draw
+    local add = GpuMod.addSprite
     local pen = x
     for k = 1, layout.n do
         local e = layout[k]
         local g = e.g
         local fr = plain and g.p or (key and g.c and g.c[key]) or g.o
         pen = x + e.dx * s
-        draw(img, fr.quad, pen - off, y + e.dy * s + g.yoff * s - off, 0, s, s)
+        add(img, fr.quad, pen - off, y + e.dy * s + g.yoff * s - off, 0, s, s)
     end
     pen = x + layout.width * s
     return pen - x

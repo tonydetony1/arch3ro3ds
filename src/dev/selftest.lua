@@ -115,7 +115,7 @@ function SelfTest.update(gameStateMachine, testFrames)
             assert(g.arena.clouds[1].x > preCloudX, "Clouds must drift slowly to the right (parallax)")
             print(string.format("[TEST] Arena size: %dx%d. Camera bounded at (%.1f, %.1f) with %dpx Sky Margin.",
                 g.mapW, g.mapH, g.camera.mapW, g.camera.mapH, g.camera.margin))
-            print(string.format("[TEST] Environment 'Prairie Verdoyante' VALIDATED: Cached Canvas (%dx%d), Sky Gradient & %d Clouds active.",
+            print(string.format("[TEST] Environment 'Verdant Forest' VALIDATED: Cached Canvas (%dx%d), Sky Gradient & %d Clouds active.",
                 g.arena.canvasW, g.arena.canvasH, #g.arena.clouds))
         elseif testFrames == 40 then
             local g = gameStateMachine.current
@@ -401,7 +401,7 @@ function SelfTest.update(gameStateMachine, testFrames)
                 room = 14,
                 goldEarned = 320,
                 kills = 48,
-                skills = { { name = "Tir Double" }, { name = "Ricochet" }, { name = "Flèches de Feu" } },
+                skills = { { name = "Double Shot" }, { name = "Ricochet" }, { name = "Fire Arrows" } },
                 mode = "ascension",
                 isNewRecord = true,
                 bestRoom = 14,
@@ -732,7 +732,7 @@ function SelfTest.update(gameStateMachine, testFrames)
             assert(Save.getItemRarity("starter_bow") == "uncommon", "Item rarity override must persist in save")
             local postFusionAtk = Items.getStats("starter_bow", 5, Save.getItemRarity("starter_bow")).atk
             assert(postFusionAtk > preFusionAtk, "Upgraded rarity must increase item stats (+25%)")
-            print(string.format("[TEST] Forge Fusion (3 -> 1) VALIDATED: Arc de Brave [COMMON] -> [UNCOMMON] (ATK: %d -> %d).", preFusionAtk, postFusionAtk))
+            print(string.format("[TEST] Forge Fusion (3 -> 1) VALIDATED: Brave's Bow [COMMON] -> [UNCOMMON] (ATK: %d -> %d).", preFusionAtk, postFusionAtk))
 
         elseif testFrames == 112 then
             local g = gameStateMachine.current
@@ -817,6 +817,9 @@ function SelfTest.update(gameStateMachine, testFrames)
             -- ================================================================
             -- 3. VALIDATION DES ÉLÉMENTS INTERACTIFS (BARILS & PICS)
             -- ================================================================
+            -- Salle forcée : la grille tirée pour la salle courante n'a pas forcément de baril
+            g.obstacleManager:generate(g.mapW, g.mapH, g.roomNumber, "combat",
+                require("src.data.rooms").byId("spike_corridor"))
             assert(#g.obstacleManager.barrels > 0, "ObstacleManager must generate explosive barrels in arena")
             local barrel = g.obstacleManager.barrels[1]
             barrel.isExploded = false
@@ -867,7 +870,7 @@ function SelfTest.update(gameStateMachine, testFrames)
             local syn3 = Skills.checkSynergies(g.player, { { id = "shield_guard" }, { id = "rotating_sword_fire" } })
             assert(#syn3 == 1 and syn3[1].id == "blade_vortex", "Shield + Rotating Sword must unlock 'blade_vortex' synergy")
             assert(g.player.hasSynergyBladeVortex == true, "Player must have hasSynergyBladeVortex active")
-            print("[TEST] Skill Synergies & Fusions VALIDATED: Flammes Toxiques, Tempête Magnétique, Vortex de Lames.")
+            print("[TEST] Skill Synergies & Fusions VALIDATED: Toxic Flames, Magnetic Storm, Blade Vortex.")
 
             -- ================================================================
             -- 5. VALIDATION DES ULTIMES DÉDIÉS POUR CHAQUE HÉROS
@@ -936,6 +939,37 @@ function SelfTest.update(gameStateMachine, testFrames)
             end
             assert(waveBoss, "Every 5th survival wave must include a boss")
             print("[TEST] Event Modes VALIDATED: Boss Rush rooms & Survival Arena waves generate correctly.")
+
+            -- Salles dessinées : toutes les grilles (et leur miroir) sont jouables
+            local Rooms = require("src.data.rooms")
+            local roomErrors = Rooms.validateAll()
+            assert(#roomErrors == 0, "Invalid room layout: " .. tostring(roomErrors[1]))
+            -- Aucune grille répétée dans un chapitre de 8 salles de combat
+            for block = 0, 4 do
+                local seen = {}
+                for room = block * 10 + 1, block * 10 + 10 do
+                    if WorldManager.getRoomType(room) == "combat" then
+                        local layout = Rooms.pick("combat", room)
+                        assert(not seen[layout.id], "Layout '" .. layout.id .. "' repeated in rooms " .. (block * 10 + 1) .. "-" .. (block * 10 + 10))
+                        seen[layout.id] = true
+                    end
+                end
+            end
+            -- Les monstres n'apparaissent jamais dans un rocher ni dans l'eau
+            local om = g.obstacleManager
+            local layoutCount = 0
+            for _, kind in ipairs({ "combat", "arena" }) do
+                for _, layout in ipairs(Rooms.pool(kind)) do
+                    om:generate(620, 540, 12, kind, layout)
+                    local placed = om:placeSpawns(WorldManager.generateWave(3, 12, 620, 540))
+                    for _, sp in ipairs(placed) do
+                        assert(not om:isBlocked(sp.x, sp.y, 12), "Spawn blocked in layout '" .. layout.id .. "'")
+                    end
+                    layoutCount = layoutCount + 1
+                end
+            end
+            om:generate(g.mapW, g.mapH, g.roomNumber, "combat") -- restaure une salle normale
+            print(string.format("[TEST] Room Layouts VALIDATED: %d hand-drawn grids, reachable gates, no sealed pockets, spawns clear of rocks.", layoutCount))
 
             -- Catalogue de compétences : au moins 75 améliorations, cumulables
             local Skills = require("src.data.skills")

@@ -379,7 +379,7 @@ function Save.addItem(itemId)
             d.itemCopies[itemId] = (d.itemCopies[itemId] or 1) + 1
             Save.addGold(75)
             Save.save()
-            return false, string.format("COPIE OBTENUE (%d/3)", d.itemCopies[itemId])
+            return false, string.format("COPY OBTAINED (%d/3)", d.itemCopies[itemId])
         end
     end
     table.insert(d.inventory, itemId)
@@ -829,7 +829,7 @@ function Save.fuseItem(itemId)
 
     local copies = Save.getItemCopies(itemId)
     if copies < 3 then
-        return false, "COPIES INSUFFISANTES (3 REQUIS)"
+        return false, "NOT ENOUGH COPIES (3 NEEDED)"
     end
 
     local curRarity = Save.getItemRarity(itemId)
@@ -841,9 +841,9 @@ function Save.fuseItem(itemId)
     }
     local nextRarity = nextTiers[curRarity]
     if not nextRarity then
-        -- Rareté maximale : la fusion ajoute une étoile (+6 % de statistiques)
+        -- Maximum rarity: fusion adds a star (+6% stats)
         if Save.getItemStars(itemId) >= 5 then
-            return false, "ÉTOILES AU MAXIMUM"
+            return false, "MAXIMUM STARS"
         end
         d.itemCopies[itemId] = copies - 2
         Save.addItemStar(itemId)

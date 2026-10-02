@@ -61,21 +61,21 @@ function PauseState:drawTop()
     Skin.rect(C.ink, 0, 0, w, h, 0.93)
     Skin.panel(10, 8, w - 20, h - 16, "dark")
 
-    -- Titre
+    -- Title
     Skin.ribbon(w / 2, 4, 120, 20, "gold")
     PixelFont.printf("PAUSE", 0, 7, w, "center", C.white, "main", 1, "shadow")
 
-    -- Résumé de la run
+    -- Run summary
     local modeLabels = {
-        infinite = "LE GOUFFRE (INFINI)", boss_rush = "BOSS RUSH", survival = "ARÈNE DE SURVIE",
+        infinite = "THE ABYSS (ENDLESS)", boss_rush = "BOSS RUSH", survival = "SURVIVAL ARENA",
     }
-    local modeName = modeLabels[self.runData.mode] or "ASCENSION (50 SALLES)"
+    local modeName = modeLabels[self.runData.mode] or "ASCENSION (50 ROOMS)"
     PixelFont.printf(modeName, 18, 30, w - 36, "center", C.cyan, "main")
 
     local stats = {
-        { icon = "icon_door", label = "SALLE", value = tostring(self.runData.room or 1) },
-        { icon = "icon_coin", label = "OR", value = "+" .. (self.runData.goldEarned or 0) },
-        { icon = "icon_skull", label = "VAINCUS", value = tostring(self.runData.kills or 0) },
+        { icon = "icon_door", label = "ROOM", value = tostring(self.runData.room or 1) },
+        { icon = "icon_coin", label = "GOLD", value = "+" .. (self.runData.goldEarned or 0) },
+        { icon = "icon_skull", label = "KILLS", value = tostring(self.runData.kills or 0) },
     }
     for i, st in ipairs(stats) do
         local sx = 20 + (i - 1) * 122
@@ -86,11 +86,11 @@ function PauseState:drawTop()
         PixelFont.print(st.value, sx + 28, 59, C.white, "main")
     end
 
-    -- Compétences acquises
-    PixelFont.print("COMPÉTENCES ACTIVES", 20, 86, C.yellow, "main")
+    -- Active skills
+    PixelFont.print("ACTIVE SKILLS", 20, 86, C.yellow, "main")
     local skills = self.runData.skills or {}
     if #skills == 0 then
-        PixelFont.print("Aucune compétence acquise pour l'instant.", 20, 104, C.steel, "main")
+        PixelFont.print("No skills acquired yet.", 20, 104, C.steel, "main")
     else
         for i, sk in ipairs(skills) do
             local col = (i - 1) % 2
@@ -106,7 +106,7 @@ function PauseState:drawTop()
             end
         end
         if #skills > 8 then
-            PixelFont.printf("+" .. (#skills - 8) .. " autres", 18, h - 22, w - 36, "right", C.silver, "tiny")
+            PixelFont.printf("+" .. (#skills - 8) .. " more", 18, h - 22, w - 36, "right", C.silver, "tiny")
         end
     end
 end
@@ -122,36 +122,36 @@ function PauseState:drawBottom()
 
     if not self.confirmQuit then
         local bRes = self.buttons.resume
-        UI.drawGummyButton(bRes.x, bRes.y, bRes.w, bRes.h, "REPRENDRE LA PARTIE", "emerald", self.pressed == "resume", "check")
+        UI.drawGummyButton(bRes.x, bRes.y, bRes.w, bRes.h, "RESUME GAME", "emerald", self.pressed == "resume", "check")
 
         local bMus = self.buttons.music
         UI.drawGummyButton(bMus.x, bMus.y, bMus.w, bMus.h,
-            string.format("MUSIQUE %d%%", math.floor(Audio.musicVolume * 100 + 0.5)), "sapphire", self.pressed == "music", "rune")
+            string.format("MUSIC %d%%", math.floor(Audio.musicVolume * 100 + 0.5)), "sapphire", self.pressed == "music", "rune")
         local bSfx = self.buttons.sfx
         UI.drawGummyButton(bSfx.x, bSfx.y, bSfx.w, bSfx.h,
-            string.format("SONS %d%%", math.floor(Audio.sfxVolume * 100 + 0.5)), "violet", self.pressed == "sfx", "sparkles")
+            string.format("SFX %d%%", math.floor(Audio.sfxVolume * 100 + 0.5)), "violet", self.pressed == "sfx", "sparkles")
 
         local bSet = self.buttons.settings
         local debugText = Config.DEBUG_MODE and "HITBOXES : ON" or "HITBOXES : OFF"
         UI.drawGummyButton(bSet.x, bSet.y, bSet.w, bSet.h, debugText, "gray", self.pressed == "settings")
 
         local bAb = self.buttons.abandon
-        UI.drawGummyButton(bAb.x, bAb.y, bAb.w, bAb.h, "ABANDONNER LA RUN", "ruby", self.pressed == "abandon", "skull")
+        UI.drawGummyButton(bAb.x, bAb.y, bAb.w, bAb.h, "ABANDON RUN", "ruby", self.pressed == "abandon", "skull")
 
-        PixelFont.printf("[START] pour reprendre", 0, 208, botW, "center", C.steel, "tiny")
+        PixelFont.printf("[START] to resume", 0, 208, botW, "center", C.steel, "tiny")
     else
         local m = self.modal.box
         Skin.rect(C.ink, 0, 0, botW, botH, 0.75)
         Skin.panel(m.x, m.y, m.w, m.h, "dark")
         Skin.ribbon(botW / 2, m.y - 8, 200, 20, "red")
-        PixelFont.printf("ABANDONNER LA RUN ?", 0, m.y - 5, botW, "center", C.white, "main", 1, "shadow")
-        PixelFont.printf("L'or récolté dans cette run sera conservé dans votre coffre.",
+        PixelFont.printf("ABANDON RUN?", 0, m.y - 5, botW, "center", C.white, "main", 1, "shadow")
+        PixelFont.printf("Gold collected during this run will be safely kept in your chest.",
             m.x + 14, m.y + 34, m.w - 28, "center", C.silver, "main")
 
         local bConf = self.modal.confirm
-        UI.drawGummyButton(bConf.x, bConf.y, bConf.w, bConf.h, "CONFIRMER", "ruby", self.pressed == "confirm")
+        UI.drawGummyButton(bConf.x, bConf.y, bConf.w, bConf.h, "CONFIRM", "ruby", self.pressed == "confirm")
         local bCanc = self.modal.cancel
-        UI.drawGummyButton(bCanc.x, bCanc.y, bCanc.w, bCanc.h, "ANNULER", "emerald", self.pressed == "cancel")
+        UI.drawGummyButton(bCanc.x, bCanc.y, bCanc.w, bCanc.h, "CANCEL", "emerald", self.pressed == "cancel")
     end
 end
 

@@ -402,22 +402,56 @@ function VFX.drawDynamicShadow(x, y, radiusX, radiusY, altitude, baseAlpha)
     local sx = (radiusX * scale * 2) / 10
     local sy = (radiusY * scale * 2) / 6
 
-    love.graphics.setColor(0.04, 0.05, 0.08, alpha)
-    Art.drawEx("fx_shadow", 1, x + 1, y, 0, sx, sy, false)
+    -- Ombre pré-colorée (3 intensités) dessinée en blanc : fusionnée avec les sprites voisins
+    -- par l'auto-batcher au lieu d'un appel GPU par ombre sur 3DS
+    local name = (alpha >= 0.33) and "fx_shadow_d1" or ((alpha >= 0.2) and "fx_shadow_d2" or "fx_shadow_d3")
     love.graphics.setColor(1, 1, 1, 1)
+    Art.drawEx(name, 1, x + 1, y, 0, sx, sy, false)
 end
 
 -- ============================================================================
 -- 9. SPRITEBATCHING POUR PROJECTILES, LOOT & PARTICULES (OPTIMISATION 3DS)
 -- ============================================================================
--- Rendu groupé de tous les projectiles actifs en un SEUL draw call
+-- Rendu de tous les projectiles actifs : sprites pré-teintés (src/render/sprites/overlays.lua)
+-- dessinés en blanc directement dans le lot automatique (src/core/gpu.lua)
+local Overlays = require("src.render.sprites.overlays")
+local tintByColor = setmetatable({}, { __mode = "k" })
+local tintFrames = { arrow = {}, orb = {}, spark = {}, ring = {} }
+
+local function tintName(c)
+    if not c then return "white" end
+    local hit = tintByColor[c]
+    if hit then return hit end
+    local Palette = require("src.render.palette")
+    local best, bestD = "white", math.huge
+    for _, name in ipairs(Overlays.TINTS) do
+        local p = Palette.C[name]
+        local dr, dg, db = p[1] - (c[1] or 1), p[2] - (c[2] or 1), p[3] - (c[3] or 1)
+        local d = dr * dr + dg * dg + db * db
+        if d < bestD then best, bestD = name, d end
+    end
+    tintByColor[c] = best
+    return best
+end
+
+local function tintFrame(kind, c)
+    local name = tintName(c)
+    local f = tintFrames[kind][name]
+    if f == nil then
+        f = Art.has("fx_" .. kind .. "_" .. name) and Art.frame("fx_" .. kind .. "_" .. name, 1) or false
+        tintFrames[kind][name] = f
+    end
+    return f or nil
+end
+
 function VFX.drawProjectileBatch(projectilePool)
     if not VFX.isBatchReady or not projectilePool or projectilePool.activeCount == 0 then return end
 
-    local batch = VFX.projectileBatch
-    batch:clear()
+    local Gpu = require("src.core.gpu")
+    local img = VFX.atlasImage
     local F = VFX.frames
     local floor = math.floor
+    love.graphics.setColor(1, 1, 1, 1)
 
     for i = 1, projectilePool.activeCount do
         local p = projectilePool.items[projectilePool.activeList[i]]
@@ -426,25 +460,19 @@ function VFX.drawProjectileBatch(projectilePool)
             if p.isLobbed then
                 local f = p.lobKind and F.meteor or F.bomb
                 local s = p.lobKind and 2 or 1
-                batch:setColor(1, 1, 1, 1)
-                batch:add(f.quad, floor(p.x + 0.5), floor(p.y - (p.arcZ or 0) + 0.5), 0, s, s, f.ox, f.oy)
+                Gpu.addSprite(img, f.quad, floor(p.x + 0.5), floor(p.y - (p.arcZ or 0) + 0.5), 0, s, s, f.ox, f.oy)
             elseif p.isEnemy then
-                local f, core = F.fireball, F.orbCore
+                local f, core = tintFrame("orb", c) or F.fireball, F.orbCore
                 local s = ((p.radius or 3) >= 4) and 2 or 1
-                batch:setColor(c[1] or 1, c[2] or 0.3, c[3] or 0.3, 1)
-                batch:add(f.quad, floor(p.x + 0.5), floor(p.y + 0.5), 0, s, s, f.ox, f.oy)
-                batch:setColor(1, 1, 1, 1)
-                batch:add(core.quad, floor(p.x + 0.5), floor(p.y + 0.5), 0, s, s, core.ox, core.oy)
+                Gpu.addSprite(img, f.quad, floor(p.x + 0.5), floor(p.y + 0.5), 0, s, s, f.ox, f.oy)
+                Gpu.addSprite(img, core.quad, floor(p.x + 0.5), floor(p.y + 0.5), 0, s, s, core.ox, core.oy)
             else
-                local f = F.arrow
+                local f = tintFrame("arrow", c) or F.arrow
                 local s = ((p.radius or 3) >= 4) and 2 or 1
-                batch:setColor(c[1] or 1, c[2] or 1, c[3] or 1, 1)
-                batch:add(f.quad, p.x, p.y, math.atan2(p.dirY or 0, p.dirX or 1), s, s, f.ox, f.oy)
+                Gpu.addSprite(img, f.quad, p.x, p.y, math.atan2(p.dirY or 0, p.dirX or 1), s, s, f.ox, f.oy)
             end
         end
     end
-
-    batch:draw()
 end
 
 -- Rendu groupé de tout le butin au sol en un SEUL draw call
@@ -476,40 +504,41 @@ end
 function VFX.drawParticles()
     if not VFX.isBatchReady or VFX.activeParticles == 0 then return end
 
-    local batch = VFX.particleBatch
-    batch:clear()
+    -- Étincelles pré-teintées dessinées en blanc (lot automatique) ; plus de fondu translucide,
+    -- qui coûtait 1 appel GPU par particule sur 3DS : elles rétrécissent puis disparaissent
+    local Gpu = require("src.core.gpu")
+    local img = VFX.atlasImage
+    love.graphics.setColor(1, 1, 1, 1)
     for i = 1, VFX.PARTICLE_MAX do
         local pt = VFX.particles[i]
         if pt.alive then
-            local f = VFX.frames[pt.quadName or "spark"] or VFX.frames.spark
-            local alpha = math.max(0, pt.life / pt.maxLife)
-            local scale = (alpha > 0.5) and 1 or 0.5
-            batch:setColor(pt.color[1], pt.color[2], pt.color[3], alpha)
-            batch:add(f.quad, math.floor(pt.x + 0.5), math.floor(pt.y + 0.5), 0, scale, scale, f.ox, f.oy)
+            local kind = (pt.quadName == "shockwave") and "ring" or "spark"
+            local f = tintFrame(kind, pt.color) or VFX.frames[pt.quadName or "spark"] or VFX.frames.spark
+            local life = math.max(0, pt.life / pt.maxLife)
+            local scale = (life > 0.5) and 1 or 0.5
+            Gpu.addSprite(img, f.quad, math.floor(pt.x + 0.5), math.floor(pt.y + 0.5), 0, scale, scale, f.ox, f.oy)
         end
     end
-
-    batch:draw()
 end
 
 -- ============================================================================
 -- 10. RENDU DU FLOATING COMBAT TEXT (TEXTE ROUGE CRITIQUE / JAUNE NORMAL)
 -- ============================================================================
+-- Au plus FCT_VISIBLE textes affichés (les plus récents) : chaque lettre est un sprite
+local FCT_VISIBLE = 10
 function VFX.drawFCT()
     if VFX.fctActiveCount == 0 then return end
     local PixelFont = require("src.ui.pixel_font")
     local Palette = require("src.render.palette")
 
-    for i = 1, VFX.fctActiveCount do
+    for i = math.max(1, VFX.fctActiveCount - FCT_VISIBLE + 1), VFX.fctActiveCount do
         local f = VFX.fctItems[VFX.fctActive[i]]
-        local alpha = math.max(0, math.min(1.0, f.life / (f.maxLife * 0.45)))
         local scale = f.isCrit and 2 or 1
         local w = PixelFont.getWidth(f.text, "main", scale)
+        -- Couleur de palette opaque (précuite) : lettres regroupées dans le lot. Un fondu
+        -- translucide imposait 1 appel GPU par lettre sur 3DS ; le texte disparaît en fin de vie.
         local color = f.isCrit and Palette.C.amber or Palette.C.white
-        VFX.fctColor = VFX.fctColor or { 1, 1, 1, 1 }
-        local col = VFX.fctColor
-        col[1], col[2], col[3], col[4] = color[1], color[2], color[3], alpha
-        PixelFont.print(f.text, math.floor(f.x - w / 2), math.floor(f.y - 6 * scale), col, "main", scale, f.isCrit and "shadow" or nil)
+        PixelFont.print(f.text, math.floor(f.x - w / 2), math.floor(f.y - 6 * scale), color, "main", scale, nil)
     end
 end
 

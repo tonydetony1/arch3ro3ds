@@ -403,11 +403,13 @@ local function pick(s, frame, flash, variant)
 end
 
 -- Dessin pixel-perfect (position arrondie, miroir horizontal optionnel)
+local Gpu = nil -- src.core.gpu, chargé à la demande
 function SpriteAtlas:draw(name, frame, x, y, flipX, flash, variant)
     local s = self.sprites[name]
     if not s then return end
     local f = pick(s, frame or 1, flash, variant)
-    love.graphics.draw(self.image, f.quad, math.floor(x + 0.5), math.floor(y + 0.5), 0, flipX and -1 or 1, 1, f.ox, f.oy)
+    Gpu = Gpu or require("src.core.gpu")
+    Gpu.addSprite(self.image, f.quad, math.floor(x + 0.5), math.floor(y + 0.5), 0, flipX and -1 or 1, 1, f.ox, f.oy)
 end
 
 -- Dessin avec rotation / échelle (armes orientées, projectiles, icônes agrandies)
@@ -415,7 +417,8 @@ function SpriteAtlas:drawEx(name, frame, x, y, r, sx, sy, flash, variant)
     local s = self.sprites[name]
     if not s then return end
     local f = pick(s, frame or 1, flash, variant)
-    love.graphics.draw(self.image, f.quad, x, y, r or 0, sx or 1, sy or sx or 1, f.ox, f.oy)
+    Gpu = Gpu or require("src.core.gpu")
+    Gpu.addSprite(self.image, f.quad, x, y, r or 0, sx or 1, sy or sx or 1, f.ox, f.oy)
 end
 
 function SpriteAtlas:getFrame(name, frame, flash, variant)

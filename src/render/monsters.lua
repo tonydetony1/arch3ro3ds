@@ -300,16 +300,11 @@ local function drawHealthBar(m, mType)
     local y = floor(m.y - (TOP_OFFSET[mType] or 10) - 7)
     local ratio = math.max(0, math.min(1, m.hp / m.maxHp))
 
-    Palette.set(C.ink)
-    love.graphics.rectangle("fill", x - 1, y - 1, barW + 2, 5)
-    Palette.set(C.umber)
-    love.graphics.rectangle("fill", x, y, barW, 3)
+    -- Pixels pré-colorés : la barre reste dans le lot des sprites (pas d'appel GPU en plus)
+    Art.px("ink", x - 1, y - 1, barW + 2, 5)
     local fillW = floor(barW * ratio + 0.5)
     if fillW > 0 then
-        Palette.set(m.isBoss and C.orange or C.red)
-        love.graphics.rectangle("fill", x, y, fillW, 3)
-        Palette.set(m.isBoss and C.yellow or C.pink)
-        love.graphics.rectangle("fill", x, y, fillW, 1)
+        Art.px(m.isBoss and "orange" or "red", x, y, fillW, 3)
     end
 end
 

@@ -10,9 +10,9 @@ local Items = {
     RARITIES = {
         common = {
             id = "common",
-            name = "COMMUN",
+            name = "COMMON",
             tier = 1,
-            color = {0.75, 0.78, 0.85},     -- Gris argenté
+            color = {0.75, 0.78, 0.85},     -- Silver grey
             bg = {0.14, 0.16, 0.20},
             border = {0.55, 0.60, 0.70},
             highlight = {0.85, 0.88, 0.95},
@@ -21,9 +21,9 @@ local Items = {
         },
         uncommon = {
             id = "uncommon",
-            name = "ATYPIQUE",
+            name = "GREAT",
             tier = 2,
-            color = {0.25, 0.85, 0.45},     -- Vert émeraude
+            color = {0.25, 0.85, 0.45},     -- Emerald green
             bg = {0.08, 0.22, 0.14},
             border = {0.18, 0.75, 0.38},
             highlight = {0.55, 1.00, 0.70},
@@ -34,18 +34,18 @@ local Items = {
             id = "rare",
             name = "RARE",
             tier = 3,
-            color = {0.25, 0.68, 1.00},     -- Bleu saphir
+            color = {0.25, 0.68, 1.00},     -- Sapphire blue
             bg = {0.08, 0.18, 0.32},
             border = {0.20, 0.55, 0.90},
             highlight = {0.60, 0.88, 1.00},
             statMult = 1.55,
-            tag = "PASSIF 1",
+            tag = "PASSIVE 1",
         },
         epic = {
             id = "epic",
-            name = "ÉPIQUE",
+            name = "EPIC",
             tier = 4,
-            color = {0.80, 0.30, 0.98},     -- Violet améthyste
+            color = {0.80, 0.30, 0.98},     -- Amethyst violet
             bg = {0.24, 0.10, 0.30},
             border = {0.70, 0.22, 0.88},
             highlight = {0.95, 0.60, 1.00},
@@ -54,14 +54,14 @@ local Items = {
         },
         legendary = {
             id = "legendary",
-            name = "LÉGENDAIRE",
+            name = "LEGENDARY",
             tier = 5,
-            color = {1.00, 0.82, 0.18},     -- Or solaire scintillant
+            color = {1.00, 0.82, 0.18},     -- Gleaming solar gold
             bg = {0.30, 0.24, 0.08},
             border = {0.95, 0.72, 0.10},
             highlight = {1.00, 0.96, 0.65},
             statMult = 2.45,
-            tag = "ULTIME",
+            tag = "ULTIMATE",
         },
     },
 
@@ -71,307 +71,307 @@ local Items = {
         -- ====================================================================
         starter_bow = {
             id = "starter_bow",
-            name = "Arc de Brave",
+            name = "Brave's Bow",
             slot = "weapon",
             icon = "bow",
             rarity = "common",
             baseAtk = 18,
             fireRate = 0.34,
             speed = 280,
-            desc = "Arme équilibrée offrant une cadence constante et des tirs stables.",
+            desc = "Balanced weapon offering steady rate of fire and stable trajectories.",
             passives = {
-                uncommon  = { name = "Puissance Brute", desc = "Attaque de base augmentée de +25%." },
-                rare      = { name = "Œil de Faucon", desc = "+10% Chances de Coup Critique." },
-                epic      = { name = "Flèches Fractales", desc = "Tire +1 Flèche Diagonale sans perte de dégâts." },
-                legendary = { name = "Jugement Solaire", desc = "Les flèches percent 1 obstacle et infligent +50% Crit." },
+                uncommon  = { name = "Raw Power", desc = "Base Attack increased by +25%." },
+                rare      = { name = "Eagle Eye", desc = "+10% Critical Hit Chance." },
+                epic      = { name = "Fractal Arrows", desc = "Fires +1 Diagonal Arrow without damage penalty." },
+                legendary = { name = "Solar Judgment", desc = "Arrows pierce 1 obstacle and deal +50% Crit." },
             },
         },
         rapid_daggers = {
             id = "rapid_daggers",
-            name = "Dagues de Vent",
+            name = "Wind Daggers",
             slot = "weapon",
             icon = "daggers",
             rarity = "uncommon",
             baseAtk = 11,
             fireRate = 0.16,
             speed = 340,
-            desc = "Cadence supersonique idéale pour le kiting et le harcèlement continu.",
+            desc = "Supersonic fire rate ideal for kiting and continuous harassment.",
             passives = {
-                uncommon  = { name = "Affûtage", desc = "Attaque de base augmentée de +25%." },
-                rare      = { name = "Frénésie Céleste", desc = "+12% Vitesse d'Attaque globale." },
-                epic      = { name = "Danse des Lames", desc = "Génère 1 salve de dagues en cône arrière." },
-                legendary = { name = "Bourrasque Meurtrière", desc = "Chaque coup critique augmente la vitesse de 5%." },
+                uncommon  = { name = "Sharpened", desc = "Base Attack increased by +25%." },
+                rare      = { name = "Celestial Frenzy", desc = "+12% Global Attack Speed." },
+                epic      = { name = "Blade Dance", desc = "Unleashes a rear cone volley of daggers." },
+                legendary = { name = "Lethal Gale", desc = "Each critical hit increases speed by 5%." },
             },
         },
         heavy_ballista = {
             id = "heavy_ballista",
-            name = "Arbalète Lourde",
+            name = "Heavy Ballista",
             slot = "weapon",
             icon = "ballista",
             rarity = "rare",
             baseAtk = 54,
             fireRate = 0.74,
             speed = 220,
-            desc = "Décoche de lourds carreaux perforants écrasant les ennemis.",
+            desc = "Launches massive piercing bolts crushing through enemies.",
             passives = {
-                uncommon  = { name = "Tension d'Acier", desc = "Attaque de base augmentée de +25%." },
-                rare      = { name = "Choc Sismique", desc = "Knockback doublé sur tous les monstres." },
-                epic      = { name = "Perforation Pure", desc = "Les carreaux traversent tous les monstres alignés." },
-                legendary = { name = "Titanicide", desc = "+35% de dégâts bruts contre les Boss." },
+                uncommon  = { name = "Steel Tension", desc = "Base Attack increased by +25%." },
+                rare      = { name = "Seismic Shock", desc = "Doubled knockback against all monsters." },
+                epic      = { name = "Pure Piercing", desc = "Bolts penetrate all lined-up monsters." },
+                legendary = { name = "Titan's Bane", desc = "+35% raw damage against Bosses." },
             },
         },
         saw_blade = {
             id = "saw_blade",
-            name = "Lame Circulaire",
+            name = "Saw Blade",
             slot = "weapon",
             icon = "saw",
             rarity = "epic",
             baseAtk = 24,
             fireRate = 0.22,
             speed = 320,
-            desc = "Disque dentelé acéré fendant les airs avec une vélocité féroce.",
+            desc = "Serrated blade cleaving through the air with ferocious velocity.",
             passives = {
-                uncommon  = { name = "Dentelure", desc = "Attaque de base augmentée de +25%." },
-                rare      = { name = "Vitesse d'Entrée", desc = "+20% Vitesse d'Attaque les 5 premières secondes." },
-                epic      = { name = "Effet Scie", desc = "Applique un saignement infligeant 10 dégâts/sec." },
-                legendary = { name = "Disque Tranchant", desc = "Rebondit automatiquement sur 1 monstre adjacent." },
+                uncommon  = { name = "Serration", desc = "Base Attack increased by +25%." },
+                rare      = { name = "Entry Rush", desc = "+20% Attack Speed for the first 5 seconds of a room." },
+                epic      = { name = "Saw Tooth", desc = "Applies bleed dealing 10 damage/sec." },
+                legendary = { name = "Razor Disc", desc = "Automatically bounces toward 1 adjacent monster." },
             },
         },
         death_scythe = {
             id = "death_scythe",
-            name = "Faux de la Mort",
+            name = "Death Scythe",
             slot = "weapon",
             icon = "scythe",
             rarity = "rare",
             baseAtk = 42,
             fireRate = 0.55,
             speed = 200,
-            desc = "Lame faucheuse écrasante repoussant les monstres et exécutant les affaiblis (<30% PV).",
+            desc = "Crushing reaping blade knocking monsters back and executing weakened foes (<30% HP).",
             passives = {
-                uncommon  = { name = "Tranchant Sinistre", desc = "Attaque de base augmentée de +25%." },
-                rare      = { name = "Impact Massif", desc = "Knockback décuplé repoussant même les créatures géantes." },
-                epic      = { name = "Coup de Grâce", desc = "Exécute instantanément tout monstre sous 30% PV." },
-                legendary = { name = "Faucheuse d'Âmes", desc = "Chaque élimination régénère +1.5% des PV Max." },
+                uncommon  = { name = "Sinister Edge", desc = "Base Attack increased by +25%." },
+                rare      = { name = "Massive Impact", desc = "Decupled knockback pushing back even giant beasts." },
+                epic      = { name = "Coup de Grace", desc = "Instantly executes any monster below 30% HP." },
+                legendary = { name = "Soul Reaper", desc = "Each kill restores +1.5% Max HP." },
             },
         },
         stalker_staff = {
             id = "stalker_staff",
-            name = "Bâton de Rôdeur",
+            name = "Stalker Staff",
             slot = "weapon",
             icon = "staff",
             rarity = "epic",
             baseAtk = 28,
             fireRate = 0.38,
             speed = 220,
-            desc = "Sphères d'énergie téléguidées qui s'incurvent pour traquer les cibles isolées.",
+            desc = "Homing energy orbs curving through the air to track isolated targets.",
             passives = {
-                uncommon  = { name = "Concentration Magique", desc = "Attaque de base augmentée de +25%." },
-                rare      = { name = "Guidage Arcanique", desc = "+30% de vélocité angulaire de suivi de cible." },
-                epic      = { name = "Orbes Multiples", desc = "Les orbes traqueuses traversent 1 mur de décor." },
-                legendary = { name = "Comète Céleste", desc = "Les orbes explosent à l'impact en infligeant des dégâts de zone." },
+                uncommon  = { name = "Magic Focus", desc = "Base Attack increased by +25%." },
+                rare      = { name = "Arcane Guidance", desc = "+30% target-tracking angular velocity." },
+                epic      = { name = "Multiple Orbs", desc = "Tracking orbs pass through 1 arena obstacle." },
+                legendary = { name = "Celestial Comet", desc = "Orbs detonate upon impact, dealing area damage." },
             },
         },
         tornado_boomerang = {
             id = "tornado_boomerang",
-            name = "Tornade Boomerang",
+            name = "Tornado Boomerang",
             slot = "weapon",
             icon = "boomerang",
             rarity = "uncommon",
             baseAtk = 22,
             fireRate = 0.40,
             speed = 280,
-            desc = "Lame tournoyante perforante qui revient vers le joueur avec un double impact.",
+            desc = "Piercing spinning blade that returns to player dealing double damage.",
             passives = {
-                uncommon  = { name = "Aérodynamisme", desc = "Attaque de base augmentée de +25%." },
-                rare      = { name = "Double Impact", desc = "Inflige 65% de ses dégâts totaux lors de son retour." },
-                epic      = { name = "Perforation Totale", desc = "Traverse tous les monstres alignés sans faiblir." },
-                legendary = { name = "Typhon Tourbillonnant", desc = "Attire légèrement les ennemis vers son centre." },
+                uncommon  = { name = "Aerodynamic", desc = "Base Attack increased by +25%." },
+                rare      = { name = "Double Impact", desc = "Deals 65% of total damage on return flight." },
+                epic      = { name = "Total Pierce", desc = "Pierces through all lined-up monsters without slowing down." },
+                legendary = { name = "Swirling Typhoon", desc = "Lightly pulls enemies toward its center." },
             },
         },
         brightspear = {
             id = "brightspear",
-            name = "Lance Brillante",
+            name = "Brightspear",
             slot = "weapon",
             icon = "spear",
             rarity = "epic",
             baseAtk = 36,
             fireRate = 0.48,
             speed = 1800,
-            desc = "Rayon lumineux hitscan quasi-instantané frappant immédiatement dès l'arrêt.",
+            desc = "Near-instantaneous hitscan beam striking immediately upon standing still.",
             passives = {
-                uncommon  = { name = "Faisceau Focalisé", desc = "Attaque de base augmentée de +25%." },
-                rare      = { name = "Éclair Instantané", desc = "Dégâts infligés sans aucun temps de trajet." },
-                epic      = { name = "Rayon Transperçant", desc = "Le rayon traverse la première cible touchée." },
-                legendary = { name = "Prisme Stellaire", desc = "Génère 2 rayons réfractés à 45° sur la première cible." },
+                uncommon  = { name = "Focused Beam", desc = "Base Attack increased by +25%." },
+                rare      = { name = "Instant Bolt", desc = "Deals damage with zero travel time." },
+                epic      = { name = "Piercing Ray", desc = "Beam pierces through the first target struck." },
+                legendary = { name = "Starlight Prism", desc = "Refracts 2 additional beams at 45 degrees upon hit." },
             },
         },
 
         -- ====================================================================
-        -- 2. ARMURES (Armors)
+        -- 2. ARMORS
         -- ====================================================================
         vest_dexterity = {
             id = "vest_dexterity",
-            name = "Gilet d'Agilité",
+            name = "Vest of Dexterity",
             slot = "armor",
             icon = "vest",
             rarity = "common",
             baseHp = 130,
             bonusDodge = 7,
-            desc = "Gilet souple en cuir renforçant l'endurance et l'esquive naturelle.",
+            desc = "Supple leather vest boosting endurance and natural evasion.",
             passives = {
-                uncommon  = { name = "Cuir Épais", desc = "Points de vie de base augmentés de +25%." },
-                rare      = { name = "Pas Glissant", desc = "+7% Chances d'Esquive supplémentaires." },
-                epic      = { name = "Éclair d'Agilité", desc = "Esquiver déclenche une décharge de foudre défensive." },
-                legendary = { name = "Fantomatique", desc = "Quand les PV tombent sous 20%, gagne 30% d'esquive." },
+                uncommon  = { name = "Thick Leather", desc = "Base HP increased by +25%." },
+                rare      = { name = "Slippery Step", desc = "+7% Additional Dodge Chance." },
+                epic      = { name = "Lightning Agility", desc = "Dodging an attack triggers defensive chain lightning." },
+                legendary = { name = "Phantom Drift", desc = "When HP falls below 20%, gain 30% dodge." },
             },
         },
         phantom_cloak = {
             id = "phantom_cloak",
-            name = "Manteau Spectral",
+            name = "Phantom Cloak",
             slot = "armor",
             icon = "cloak",
             rarity = "rare",
             baseHp = 210,
             bonusRes = 10,
-            desc = "Tissu enchanté absorbant l'énergie des impacts cinétiques.",
+            desc = "Enchanted fabric absorbing kinetic impact energy.",
             passives = {
-                uncommon  = { name = "Maille Éthérée", desc = "Points de vie de base augmentés de +25%." },
-                rare      = { name = "Résistance Magique", desc = "Réduit de 12% tous les dégâts de projectiles subis." },
-                epic      = { name = "Gelée Vindicative", desc = "Touché au corps-à-corps gèle l'assaillant 1.5s." },
-                legendary = { name = "Immatériel", desc = "Immunité aux dégâts pendant 1 seconde après un coup." },
+                uncommon  = { name = "Ethereal Mesh", desc = "Base HP increased by +25%." },
+                rare      = { name = "Magic Resistance", desc = "Reduces all incoming projectile damage by 12%." },
+                epic      = { name = "Vindictive Frost", desc = "Taking melee hits freezes the attacker for 1.5s." },
+                legendary = { name = "Incorporeal", desc = "Damage immunity for 1 second after taking damage." },
             },
         },
         golden_chestplate = {
             id = "golden_chestplate",
-            name = "Cuirasse Dorée",
+            name = "Golden Chestplate",
             slot = "armor",
             icon = "golden_armor",
             rarity = "epic",
             baseHp = 290,
             bonusGold = 18,
-            desc = "Harnois royal poli qui attire l'or et la fortune lors des expéditions.",
+            desc = "Polished royal harness attracting wealth and fortune during expeditions.",
             passives = {
-                uncommon  = { name = "Placage Royal", desc = "Points de vie de base augmentés de +25%." },
-                rare      = { name = "Soif de Richesse", desc = "+20% d'Or ramassé en combat." },
-                epic      = { name = "Aura Dorée", desc = "Chaque pièce d'or collectée soigne 2 PV." },
-                legendary = { name = "Monarque Éternel", desc = "Augmente les dégâts de 1% par tranche de 100 or." },
+                uncommon  = { name = "Royal Plating", desc = "Base HP increased by +25%." },
+                rare      = { name = "Thirst for Gold", desc = "+20% Gold collected in combat." },
+                epic      = { name = "Golden Aura", desc = "Each gold coin collected restores 2 HP." },
+                legendary = { name = "Eternal Monarch", desc = "Increases damage by 1% per 100 gold held." },
             },
         },
 
         -- ====================================================================
-        -- 3. ANNEAUX (Rings)
+        -- 3. RINGS
         -- ====================================================================
         wolf_ring = {
             id = "wolf_ring",
-            name = "Anneau du Loup",
+            name = "Wolf Ring",
             slot = "ring",
             icon = "wolf_ring",
             rarity = "common",
             baseAtk = 8,
             bonusCrit = 6,
-            desc = "Gravé d'une tête de loup hurlant, décuplant l'agressivité au tir.",
+            desc = "Engraved with a howling wolf, increasing aggressive ranged attacks.",
             passives = {
-                uncommon  = { name = "Morsure", desc = "Attaque de base augmentée de +25%." },
-                rare      = { name = "Sens Affûtés", desc = "+7% Chances de Coup Critique." },
-                epic      = { name = "Férocité", desc = "+20% Dégâts contre les monstres terrestres (Slimes)." },
-                legendary = { name = "Chef de Meute", desc = "Les coups critiques augmentent la vitesse d'attaque." },
+                uncommon  = { name = "Bite", desc = "Base Attack increased by +25%." },
+                rare      = { name = "Keen Senses", desc = "+7% Critical Hit Chance." },
+                epic      = { name = "Ferocity", desc = "+20% Damage against ground monsters (Slimes)." },
+                legendary = { name = "Pack Leader", desc = "Critical hits boost attack speed." },
             },
         },
         bear_ring = {
             id = "bear_ring",
-            name = "Anneau de l'Ours",
+            name = "Bear Ring",
             slot = "ring",
             icon = "bear_ring",
             rarity = "uncommon",
             baseHp = 110,
             bonusBoss = 12,
-            desc = "Taillé dans de l'os robuste conférant la résilience d'un grizzli.",
+            desc = "Carved from sturdy bone granting the resilience of a grizzly.",
             passives = {
-                uncommon  = { name = "Vigueur Ursine", desc = "Points de vie augmentés de +25%." },
-                rare      = { name = "Tueur de Monstres", desc = "+14% Dégâts contre les Boss et Mini-Boss." },
-                epic      = { name = "Carapace", desc = "Réduit de 10% les dégâts de collision des monstres." },
-                legendary = { name = "Rage Primale", desc = "+1% Dégâts par tranche de 5% de PV manquants." },
+                uncommon  = { name = "Ursine Vigor", desc = "Base HP increased by +25%." },
+                rare      = { name = "Monster Slayer", desc = "+14% Damage against Bosses and Mini-Bosses." },
+                epic      = { name = "Carapace", desc = "Reduces monster collision damage by 10%." },
+                legendary = { name = "Primal Rage", desc = "+1% Damage per 5% missing HP." },
             },
         },
         serpent_ring = {
             id = "serpent_ring",
-            name = "Anneau du Serpent",
+            name = "Serpent Ring",
             slot = "ring",
             icon = "serpent_ring",
             rarity = "rare",
             baseHp = 90,
             bonusDodge = 8,
-            desc = "Bague ornée d'écailles émeraude pour se faufiler entre les projectiles.",
+            desc = "Adorned with emerald scales to weave through projectiles.",
             passives = {
-                uncommon  = { name = "Mue", desc = "Points de vie augmentés de +25%." },
-                rare      = { name = "Esquive Ondoyante", desc = "+8% Chances d'Esquive." },
-                epic      = { name = "Venin Paralysant", desc = "Toutes les flèches appliquent un poison léger." },
-                legendary = { name = "Ouroboros", desc = "Esquiver une flèche restaure 5 PV instantanément." },
+                uncommon  = { name = "Shedding", desc = "Base HP increased by +25%." },
+                rare      = { name = "Undulating Evasion", desc = "+8% Dodge Chance." },
+                epic      = { name = "Paralyzing Venom", desc = "All arrows apply minor poison." },
+                legendary = { name = "Ouroboros", desc = "Dodging an attack instantly restores 5 HP." },
             },
         },
         falcon_ring = {
             id = "falcon_ring",
-            name = "Anneau du Faucon",
+            name = "Falcon Ring",
             slot = "ring",
             icon = "falcon_ring",
             rarity = "epic",
             baseAtk = 14,
             baseHp = 60,
-            desc = "Plume gravée dans le platine conférant une vue perçante sur le ciel.",
+            desc = "Feather etched into platinum granting keen vision over the battlefield.",
             passives = {
-                uncommon  = { name = "Piqué", desc = "Attaque de base augmentée de +25%." },
-                rare      = { name = "Chasse Aérienne", desc = "+20% Dégâts contre les volants (Chauves-souris)." },
-                epic      = { name = "Vitesse d'Attaque", desc = "+10% Vitesse d'Attaque permanente." },
-                legendary = { name = "Faucon Pèlerin", desc = "Les projectiles voyagent 25% plus vite." },
+                uncommon  = { name = "Dive", desc = "Base Attack increased by +25%." },
+                rare      = { name = "Aerial Hunt", desc = "+20% Damage against flying monsters (Bats)." },
+                epic      = { name = "Attack Speed", desc = "+10% Permanent Attack Speed." },
+                legendary = { name = "Peregrine Falcon", desc = "Projectiles travel 25% faster." },
             },
         },
 
         -- ====================================================================
-        -- 4. FAMILIERS (Pets)
+        -- 4. PETS
         -- ====================================================================
         bat_companion = {
             id = "bat_companion",
-            name = "Chauve-Souris",
+            name = "Laser Bat",
             slot = "pet",
             icon = "bat_pet",
             rarity = "common",
             baseAtk = 14,
-            desc = "Flotte à vos côtés et tire des lasers fins transperçant les murs.",
+            desc = "Hovers by your side and fires thin lasers piercing through walls.",
             passives = {
-                uncommon  = { name = "Rayon Focale", desc = "Attaque de base augmentée de +25%." },
-                rare      = { name = "Écholocalisation", desc = "Cadence de tir du familier augmentée de 15%." },
-                epic      = { name = "Laser Spectral", desc = "Le tir du familier ignore totalement les rochers." },
-                legendary = { name = "Symbiose Sombre", desc = "Confère +10 ATQ au héros en permanence." },
+                uncommon  = { name = "Focal Beam", desc = "Base Attack increased by +25%." },
+                rare      = { name = "Echolocation", desc = "Pet attack speed increased by 15%." },
+                epic      = { name = "Spectral Laser", desc = "Pet shots completely ignore walls." },
+                legendary = { name = "Dark Symbiosis", desc = "Permanently grants +10 ATK to the hero." },
             },
         },
         ghost_familiar = {
             id = "ghost_familiar",
-            name = "Spectre Éthéré",
+            name = "Spectral Mage",
             slot = "pet",
             icon = "ghost_pet",
             rarity = "uncommon",
             baseAtk = 20,
-            desc = "Petite ombre projetant des orbes spectraux rebondissants.",
+            desc = "Small shade casting bouncing spectral orbs.",
             passives = {
-                uncommon  = { name = "Éctoplasme", desc = "Attaque de base augmentée de +25%." },
-                rare      = { name = "Orbe Hanté", desc = "Les tirs du familier ont 15% de chances de geler." },
-                epic      = { name = "Ricochet Spectral", desc = "L'orbe spectral rebondit sur 2 ennemis." },
-                legendary = { name = "Lien Éthéré", desc = "+10% Chances de Critique pour le héros." },
+                uncommon  = { name = "Ectoplasm", desc = "Base Attack increased by +25%." },
+                rare      = { name = "Haunted Orb", desc = "Pet shots have a 15% chance to freeze." },
+                epic      = { name = "Spectral Ricochet", desc = "Spectral orb bounces off 2 enemies." },
+                legendary = { name = "Ethereal Bond", desc = "+10% Critical Chance for the hero." },
             },
         },
         dragon_pet = {
             id = "dragon_pet",
-            name = "Dragonnet Magma",
+            name = "Magma Dragon",
             slot = "pet",
             icon = "dragon_pet",
             rarity = "rare",
             baseAtk = 28,
-            desc = "Crache des boules de feu causant des explosions de zone.",
+            desc = "Spits fireballs causing area-of-effect explosions.",
             passives = {
-                uncommon  = { name = "Souffle Incandescent", desc = "Attaque de base augmentée de +25%." },
-                rare      = { name = "Brasier", desc = "Explosion de zone plus large et brûlure 2s." },
-                epic      = { name = "Double Flamme", desc = "Tire 2 boules de feu explosives simultanément." },
-                legendary = { name = "Cœur du Volcan", desc = "Augmente de 15% tous les dégâts de feu du héros." },
+                uncommon  = { name = "Incandescent Breath", desc = "Base Attack increased by +25%." },
+                rare      = { name = "Blaze", desc = "Larger explosion radius and 2s burn." },
+                epic      = { name = "Twin Flame", desc = "Fires 2 explosive fireballs simultaneously." },
+                legendary = { name = "Heart of the Volcano", desc = "Increases all fire damage by +15%." },
             },
         },
     }
@@ -462,36 +462,37 @@ end
 
 -- Calcule les statistiques complètes selon l'id, le niveau et la rareté
 -- ============================================================================
--- ENSEMBLES D'ÉQUIPEMENT (bonus à 2 et 4 pièces)
+-- ============================================================================
+-- GEAR SETS (2 and 4 piece bonuses)
 -- ============================================================================
 Items.SETS = {
     ranger = {
-        name = "Tenue du Rôdeur",
+        name = "Ranger Attire",
         pieces = { "starter_bow", "vest_dexterity", "wolf_ring", "bat_companion" },
-        bonus2 = { desc = "+8% vitesse de tir", apply = function(p) p.attackSpeedMult = (p.attackSpeedMult or 1) * 1.08 end },
-        bonus4 = { desc = "+12% dégâts et +5% esquive", apply = function(p)
+        bonus2 = { desc = "+8% attack speed", apply = function(p) p.attackSpeedMult = (p.attackSpeedMult or 1) * 1.08 end },
+        bonus4 = { desc = "+12% damage and +5% dodge", apply = function(p)
             p.damageMult = (p.damageMult or 1) * 1.12
             p.dodgeChance = (p.dodgeChance or 0) + 0.05
         end },
     },
     shadow = {
-        name = "Parure d'Ombre",
+        name = "Shadow Garb",
         pieces = { "rapid_daggers", "phantom_cloak", "serpent_ring", "ghost_familiar" },
-        bonus2 = { desc = "+6% esquive", apply = function(p) p.dodgeChance = (p.dodgeChance or 0) + 0.06 end },
-        bonus4 = { desc = "+15% critique et poison sur les tirs", apply = function(p)
+        bonus2 = { desc = "+6% dodge", apply = function(p) p.dodgeChance = (p.dodgeChance or 0) + 0.06 end },
+        bonus4 = { desc = "+15% crit chance and poison shots", apply = function(p)
             p.critChance = (p.critChance or 0) + 0.15
             p.elements = p.elements or {}
             p.elements.poison = true
         end },
     },
     titan = {
-        name = "Armure du Titan",
+        name = "Titan Plate",
         pieces = { "heavy_ballista", "golden_chestplate", "bear_ring", "dragon_pet" },
-        bonus2 = { desc = "+150 PV max", apply = function(p)
+        bonus2 = { desc = "+150 max HP", apply = function(p)
             p.maxHp = p.maxHp + 150
             p.hp = p.maxHp
         end },
-        bonus4 = { desc = "+20% dégâts aux boss et recul renforcé", apply = function(p)
+        bonus4 = { desc = "+20% damage to bosses and bonus knockback", apply = function(p)
             p.bossDamageMult = (p.bossDamageMult or 1) * 1.20
             p.knockbackMult = (p.knockbackMult or 1) * 1.5
         end },
@@ -543,13 +544,16 @@ function Items.getStats(id, level, rarityOverride, stars)
     local starScale = 1.0 + (stars or 0) * 0.06
     local totalScale = levelScale * rData.statMult * starScale
 
+    local isRareDodge = rData.tier >= 3 and item.passives and item.passives.rare and (string.find(item.passives.rare.desc, "Esquive") or string.find(item.passives.rare.desc, "Dodge"))
+    local isRareCrit = rData.tier >= 3 and item.passives and item.passives.rare and (string.find(item.passives.rare.desc, "Critique") or string.find(item.passives.rare.desc, "Crit"))
+
     local stats = {
         level = level,
         rarity = curRarity,
         atk = item.baseAtk and math.floor(item.baseAtk * totalScale) or 0,
         hp = item.baseHp and math.floor(item.baseHp * totalScale) or 0,
-        dodge = (item.bonusDodge or 0) + ((rData.tier >= 3 and item.passives and item.passives.rare and string.find(item.passives.rare.desc, "Esquive")) and 7 or 0),
-        crit = (item.bonusCrit or 0) + ((rData.tier >= 3 and item.passives and item.passives.rare and string.find(item.passives.rare.desc, "Critique")) and 8 or 0),
+        dodge = (item.bonusDodge or 0) + (isRareDodge and 7 or 0),
+        crit = (item.bonusCrit or 0) + (isRareCrit and 8 or 0),
         bossDmg = item.bonusBoss or 0,
         goldBonus = item.bonusGold or 0,
         fireRate = item.fireRate or 0.3,

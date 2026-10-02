@@ -193,18 +193,18 @@ function GameOverState:drawTop()
     love.graphics.polygon("fill", mx - 136, bannerY + 21, mx - 124, bannerY + 8, mx - 124, bannerY + 34)
     love.graphics.polygon("fill", mx + 136, bannerY + 21, mx + 124, bannerY + 8, mx + 124, bannerY + 34)
 
-    -- Texte principal avec Drop Shadow sanglant
+    -- Main title with bloody drop shadow
     love.graphics.setFont(UI.getFont("title"))
-    UI.drawTextAligned("VOUS AVEZ PÉRI", mx - 130, bannerY + 6, 260, "center", {1.0, 0.90, 0.88, 1.0}, {0.45, 0.05, 0.08, 1.0}, 2, 2)
+    UI.drawTextAligned("YOU HAVE FALLEN", mx - 130, bannerY + 6, 260, "center", {1.0, 0.90, 0.88, 1.0}, {0.45, 0.05, 0.08, 1.0}, 2, 2)
 
-    -- Sous-titre mélancolique
+    -- Melancholy subtitle
     love.graphics.setFont(UI.getFont("small"))
     local subText = (self.data.mode == "infinite")
-        and string.format("Englouti au tréfonds du Gouffre - Étage %d", self.data.room or 1)
-        or string.format("Tombé dans la Forêt des Slimes - Salle %d", self.data.room or 1)
+        and string.format("Swallowed into the Abyss - Floor %d", self.data.room or 1)
+        or string.format("Fallen in Emerald Plains - Room %d", self.data.room or 1)
     UI.drawTextAligned(subText, mx - 130, bannerY + 26, 260, "center", {0.80, 0.65, 0.70, 1.0}, {0.05, 0.02, 0.03, 1.0}, 1, 1)
 
-    -- 6. Badge de Nouveau Record Flamboyant
+    -- 6. New Record Badge
     if self.data.isNewRecord then
         local recPulse = 1.0 + math.sin(t * 5.0) * 0.06
         love.graphics.push()
@@ -215,7 +215,7 @@ function GameOverState:drawTop()
         love.graphics.setColor(1.0, 0.95, 0.40, 1.0)
         love.graphics.rectangle("line", -95, -9, 190, 18, 4, 4)
         love.graphics.setFont(UI.getFont("tiny"))
-        UI.drawTextAligned("NOUVEAU RECORD DE PROGRESSION !", -95, -7, 190, "center", {0.12, 0.08, 0.02, 1.0}, {1.0, 0.9, 0.4, 0.6}, 0, 0)
+        UI.drawTextAligned("NEW PROGRESS RECORD!", -95, -7, 190, "center", {0.12, 0.08, 0.02, 1.0}, {1.0, 0.9, 0.4, 0.6}, 0, 0)
         love.graphics.pop()
     end
 
@@ -247,33 +247,33 @@ function GameOverState:drawBottom()
     love.graphics.rectangle("line", cx, cy, cw, ch, 10, 10)
     love.graphics.setLineWidth(1)
 
-    -- En-tête de la Carte
+    -- Card Header
     love.graphics.setColor(0.18, 0.20, 0.28, 0.9)
     love.graphics.rectangle("fill", cx + 6, cy + 6, cw - 12, 24, 6, 6)
     love.graphics.setFont(UI.getFont("small"))
-    UI.drawTextAligned("BILAN DU COMBAT", cx + 6, cy + 10, cw - 12, "center", {1.0, 0.88, 0.35, 1.0}, {0.05, 0.05, 0.08, 1.0}, 1, 1)
+    UI.drawTextAligned("BATTLE REPORT", cx + 6, cy + 10, cw - 12, "center", {1.0, 0.88, 0.35, 1.0}, {0.05, 0.05, 0.08, 1.0}, 1, 1)
 
-    -- 3. Les 3 Capsules de Statistiques Majeures (Étage, Kills, Or)
+    -- 3. The 3 Stat Capsules (Room, Kills, Gold)
     local colW = 86
     local colGap = 8
     local startX = cx + 13
     local rowY = cy + 36
 
-    -- A. Capsule Étage / Salle
+    -- A. Room Capsule
     love.graphics.setColor(0.15, 0.18, 0.24, 0.95)
     love.graphics.rectangle("fill", startX, rowY, colW, 46, 6, 6)
     love.graphics.setColor(0.28, 0.45, 0.70, 0.9)
     love.graphics.rectangle("line", startX, rowY, colW, 46, 6, 6)
 
     love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawTextAligned("SALLE", startX, rowY + 5, colW, "center", {0.65, 0.75, 0.90, 1.0})
+    UI.drawTextAligned("ROOM", startX, rowY + 5, colW, "center", {0.65, 0.75, 0.90, 1.0})
     love.graphics.setFont(UI.getFont("title"))
     local roomStr = string.format("%d", self.data.room or 1)
     UI.drawTextAligned(roomStr, startX, rowY + 16, colW, "center", {1.0, 1.0, 1.0, 1.0}, {0.05, 0.1, 0.2, 1.0}, 1, 1)
     love.graphics.setFont(UI.getFont("tiny"))
     UI.drawTextAligned("/ 50", startX, rowY + 34, colW, "center", {0.5, 0.6, 0.75, 0.9})
 
-    -- B. Capsule Monstres Éliminés
+    -- B. Enemies Defeated Capsule
     local startX2 = startX + colW + colGap
     love.graphics.setColor(0.15, 0.18, 0.24, 0.95)
     love.graphics.rectangle("fill", startX2, rowY, colW, 46, 6, 6)
@@ -281,14 +281,14 @@ function GameOverState:drawBottom()
     love.graphics.rectangle("line", startX2, rowY, colW, 46, 6, 6)
 
     love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawTextAligned("ENNEMIS", startX2, rowY + 5, colW, "center", {0.90, 0.65, 0.70, 1.0})
+    UI.drawTextAligned("ENEMIES", startX2, rowY + 5, colW, "center", {0.90, 0.65, 0.70, 1.0})
     love.graphics.setFont(UI.getFont("title"))
     local killStr = string.format("%d", self.data.kills or 0)
     UI.drawTextAligned(killStr, startX2, rowY + 16, colW, "center", {1.0, 0.45, 0.45, 1.0}, {0.2, 0.05, 0.05, 1.0}, 1, 1)
     love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawTextAligned("vaincus", startX2, rowY + 34, colW, "center", {0.75, 0.55, 0.60, 0.9})
+    UI.drawTextAligned("defeated", startX2, rowY + 34, colW, "center", {0.75, 0.55, 0.60, 0.9})
 
-    -- C. Capsule Pièces d'Or amassées (avec pulsation dorée)
+    -- C. Gold Loot Capsule
     local startX3 = startX2 + colW + colGap
     love.graphics.setColor(0.15, 0.18, 0.24, 0.95)
     love.graphics.rectangle("fill", startX3, rowY, colW, 46, 6, 6)
@@ -296,9 +296,9 @@ function GameOverState:drawBottom()
     love.graphics.rectangle("line", startX3, rowY, colW, 46, 6, 6)
 
     love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawTextAligned("BUTIN OR", startX3, rowY + 5, colW, "center", {1.0, 0.88, 0.45, 1.0})
+    UI.drawTextAligned("GOLD LOOT", startX3, rowY + 5, colW, "center", {1.0, 0.88, 0.45, 1.0})
 
-    -- Pièce d'or animée au centre
+    -- Animated coin
     local coinPulse = 1.0 + math.sin(t * 4.0) * 0.08
     love.graphics.push()
     love.graphics.translate(startX3 + colW / 2, rowY + 22)
@@ -313,7 +313,7 @@ function GameOverState:drawBottom()
     local goldStr = string.format("+%d G", self.data.goldEarned or 0)
     UI.drawTextAligned(goldStr, startX3, rowY + 31, colW, "center", {1.0, 0.92, 0.35, 1.0}, {0.15, 0.10, 0.02, 1.0}, 1, 1)
 
-    -- 4. Bandeau Récapitulatif des Compétences Débloquées durant la Run
+    -- 4. Skills summary box
     local skillBoxY = cy + 88
     love.graphics.setColor(0.08, 0.10, 0.14, 0.9)
     love.graphics.rectangle("fill", cx + 8, skillBoxY, cw - 16, 76, 6, 6)
@@ -321,14 +321,13 @@ function GameOverState:drawBottom()
     love.graphics.rectangle("line", cx + 8, skillBoxY, cw - 16, 76, 6, 6)
 
     love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawText("COMPÉTENCES ACQUISES LORS DE LA RUN :", cx + 14, skillBoxY + 5, {0.75, 0.80, 0.90, 1.0})
+    UI.drawText("SKILLS ACQUIRED THIS RUN:", cx + 14, skillBoxY + 5, {0.75, 0.80, 0.90, 1.0})
 
     local skills = self.data.skills or {}
     if #skills == 0 then
         love.graphics.setFont(UI.getFont("small"))
-        UI.drawTextAligned("Aucune compétence débloquée lors de cette descente.", cx + 8, skillBoxY + 32, cw - 16, "center", {0.45, 0.50, 0.60, 1.0})
+        UI.drawTextAligned("No skills unlocked during this run.", cx + 8, skillBoxY + 32, cw - 16, "center", {0.45, 0.50, 0.60, 1.0})
     else
-        -- Affichage de badges compacts et colorés pour chaque skill
         local pillW = 86
         local pillH = 18
         local pGapX = 6
@@ -338,7 +337,7 @@ function GameOverState:drawBottom()
         local pStartY = skillBoxY + 22
 
         for i, sk in ipairs(skills) do
-            if i <= 6 then -- Affiche jusqu'à 6 skills dans l'espace disponible
+            if i <= 6 then
                 local col = (i - 1) % pCols
                 local row = math.floor((i - 1) / pCols)
                 local px = pStartX + col * (pillW + pGapX)
@@ -349,24 +348,24 @@ function GameOverState:drawBottom()
                 love.graphics.setColor(0.30, 0.65, 0.95, 0.9)
                 love.graphics.rectangle("line", px, py, pillW, pillH, 4, 4)
 
-                -- Puce de couleur
+                -- Color bullet
                 love.graphics.setColor(0.35, 0.85, 0.45, 1.0)
                 love.graphics.circle("fill", px + 7, py + pillH / 2, 3)
 
                 love.graphics.setFont(UI.getFont("tiny"))
-                local sName = sk.name or "Compétence"
+                local sName = sk.name or "Skill"
                 if #sName > 12 then sName = string.sub(sName, 1, 10) .. ".." end
                 UI.drawText(sName, px + 14, py + 3, {0.92, 0.95, 1.0, 1.0})
             end
         end
     end
 
-    -- 5. Deux Gros Boutons Gummy Tactiles d'Action (3D Relief & Toucher Moelleux)
+    -- 5. Action Gummy Buttons
     local b1 = self.buttons.retry
     local b2 = self.buttons.hub
 
-    UI.drawGummyButton(b1.x, b1.y, b1.w, b1.h, "REESSAYER  (A)", "green", self.pressedBtn == "retry", "swords")
-    UI.drawGummyButton(b2.x, b2.y, b2.w, b2.h, "HUB / FORGE  (B)", "blue", self.pressedBtn == "hub", "shield")
+    UI.drawGummyButton(b1.x, b1.y, b1.w, b1.h, "RETRY  (A)", "green", self.pressedBtn == "retry", "swords")
+    UI.drawGummyButton(b2.x, b2.y, b2.w, b2.h, "MAIN MENU  (B)", "blue", self.pressedBtn == "hub", "shield")
 
     love.graphics.setFont(UI.getFont("normal"))
 end

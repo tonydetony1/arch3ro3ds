@@ -11,6 +11,7 @@ local Palette = require("src.render.palette")
 local Depth = require("src.render.depth")
 local WorldManager = require("src.core.world_manager")
 local Gpu = require("src.core.gpu")
+local GroundTiles = require("src.render.ground_tiles")
 
 
 local Arena = {}
@@ -122,15 +123,24 @@ function Arena:drawSky(camX, camY)
     end
 
     Depth.push(Depth.SKY)
-    local bandH = math.ceil(h / SKY_BANDS)
-    for i, c in ipairs(self.skyBands) do
-        love.graphics.setColor(c[1], c[2], c[3], 1)
-        love.graphics.rectangle("fill", -16, (i - 1) * bandH, w + 32, bandH)
+    local skyName = "ov_sky_" .. (self.themeId or 1)
+    local f = Art.has(skyName) and Art.frame(skyName, 1)
+    if f then
+        -- Dégradé précuit dessiné en blanc : même lot que les îles et nuages (1 appel GPU)
+        love.graphics.setColor(1, 1, 1, 1)
+        Art.drawEx(skyName, 1, -16, 0, 0, (w + 32) / f.w, h / f.h)
+    else
+        local bandH = math.ceil(h / SKY_BANDS)
+        for i, c in ipairs(self.skyBands) do
+            love.graphics.setColor(c[1], c[2], c[3], 1)
+            love.graphics.rectangle("fill", -16, (i - 1) * bandH, w + 32, bandH)
+        end
     end
     Depth.pop()
 
+    -- Îles lointaines et nuages opaques (dessinés en blanc : fusionnés dans le même lot)
     Depth.push(Depth.FAR)
-    love.graphics.setColor(1, 1, 1, 0.85)
+    love.graphics.setColor(1, 1, 1, 1)
     for _, isl in ipairs(self.farIslands) do
         local px = ((isl.x - (camX or 0) * isl.parallax) % (w + 80)) - 40
         local py = isl.y - (camY or 0) * isl.parallax + math.floor(math.sin(t * 0.6 + isl.bob) * 2 + 0.5)
@@ -139,7 +149,7 @@ function Arena:drawSky(camX, camY)
     Depth.pop()
 
     Depth.push(Depth.CLOUDS)
-    love.graphics.setColor(1, 1, 1, 0.92)
+    love.graphics.setColor(1, 1, 1, 1)
     for _, c in ipairs(self.clouds) do
         local px = c.x - (camX or 0) * c.parallax
         local wrapped = ((px + 90) % (w + 180)) - 90
@@ -178,6 +188,15 @@ local function drawRectList(list, x0, y0, x1, y1)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
+-- Voile ou ombre pré-coloré (src/render/sprites/overlays.lua) étiré sur un rectangle :
+-- dessiné en blanc, il reste dans le lot du décor (1 appel GPU pour tout le sol)
+local function addOverlay(b, name, x, y, w, h)
+    local f = Art.frame(name, 1)
+    if not f or w <= 0 or h <= 0 then return end
+    b:setColor(1, 1, 1, 1)
+    b:add(f.quad, math.floor(x), math.floor(y), 0, w / f.w, h / f.h, 0, 0)
+end
+
 -- Couches du sol découpé : une seule couche suffit (dans une tuile, l'ordre d'insertion
 -- falaise -> motifs -> dalles -> détails est conservé) et divise le nombre d'appels GPU par 4
 local function layer(_, _) end
@@ -204,9 +223,7 @@ local function fillCliff(b, w, h, rng, theme)
     end
     addSpriteV(b, "cliff", 1 + math.floor(rng() * 4), w - 28, top, theme.variant)
     addSpriteV(b, "cliff", 1 + math.floor(rng() * 4), w - 28, top + 20, theme.variant)
-    for i = 0, 5 do
-        addRect(b, 12, top + 22 + i * 5, w - 24, 5, C.night, 0.12 + i * 0.07)
-    end
+    addOverlay(b, "ov_cliff", 12, top + 22, w - 24, 30)
     for _ = 1, math.floor(w / 30) do
         addSprite(b, "root", 1, 16 + rng() * (w - 40), top + 44 + math.floor(rng() * 6))
     end
@@ -214,33 +231,66 @@ local function fillCliff(b, w, h, rng, theme)
     addRect(b, 16, top - 2, w - 32, 1, Palette.hex(theme.groundDark))
 end
 
-local function fillGround(b, w, h, theme, rng)
+-- Quads recadrés des tuiles de bord (largeur/hauteur partielles), mis en cache
+local partialQuads = {}
+local function tileQuad(f, pw, ph)
+    if pw == f.w and ph == f.h then return f.quad end
+    local key = f.ax .. ":" .. f.ay .. ":" .. pw .. "x" .. ph
+    local q = partialQuads[key]
+    if not q then
+        local aw, ah = Art.image:getDimensions()
+        q = love.graphics.newQuad(f.ax, f.ay, pw, ph, aw, ah)
+        partialQuads[key] = q
+    end
+    return q
+end
+
+-- Sol en tuiles précalculées (src/render/ground_tiles.lua) : couleur, taches et détails
+-- déjà composés ; le choix de la variante dépend de la position (stable d'une image à l'autre)
+local function fillGroundTiles(b, x0, y0, gw, gh, themeIndex)
+    local size = GroundTiles.SIZE
+    b:setColor(1, 1, 1, 1)
+    for ty = y0, y0 + gh - 1, size do
+        for tx = x0, x0 + gw - 1, size do
+            local cx, cy = math.floor(tx / size), math.floor(ty / size)
+            local v = (cx * 7 + cy * 13 + cx * cy) % GroundTiles.VARIANTS + 1
+            local f = Art.frame(GroundTiles.name(themeIndex, v), 1)
+            if f then
+                local pw = math.min(size, x0 + gw - tx)
+                local ph = math.min(size, y0 + gh - ty)
+                b:add(tileQuad(f, pw, ph), tx, ty, 0, 1, 1, 0, 0)
+            end
+        end
+    end
+end
+
+local function fillGround(b, w, h, theme, rng, themeIndex)
     rectSink = "under"
     addRect(b, 16, GROUND_TOP, w - 32, h - GROUND_TOP - 14, Palette.hex(theme.ground))
     rectSink = "over"
     layer(b, 3)
+    local useTiles = themeIndex and Art.has(GroundTiles.name(themeIndex, 1))
+    if useTiles then
+        fillGroundTiles(b, 16, GROUND_TOP, w - 32, h - GROUND_TOP - 14, themeIndex)
+    end
     local area = w * h
-    for _ = 1, math.floor(area / 7000) do
+    for _ = 1, useTiles and 0 or math.floor(area / 7000) do
         local name = (rng() < 0.55) and theme.patchLight or theme.patchDark
         addSpriteV(b, name, 1, 30 + rng() * (w - 60), 40 + rng() * (h - 70), theme.variant)
     end
-    for _ = 1, math.floor(area / 60000) do
+    for _ = 1, useTiles and 0 or math.floor(area / 60000) do
         addSpriteV(b, theme.patchExtra, 1, 40 + rng() * (w - 80), 60 + rng() * (h - 120), theme.variant)
     end
     layer(b, 4)
-    local bands = 4
-    local hazeH = math.floor((h - GROUND_TOP) * 0.45 / bands)
-    for i = 0, bands - 1 do
-        addRect(b, 16, GROUND_TOP + i * hazeH, w - 32, hazeH, C.cyan, 0.075 * (1 - i / bands))
-    end
-    local nearH = math.floor((h - GROUND_TOP) * 0.3 / bands)
-    for i = 0, bands - 1 do
-        addRect(b, 16, h - 16 - (i + 1) * nearH, w - 32, nearH, C.abyss, 0.09 * (1 - i / bands))
-    end
+    local hazeH = math.floor((h - GROUND_TOP) * 0.45)
+    local nearH = math.floor((h - GROUND_TOP) * 0.3)
+    addOverlay(b, "ov_haze", 16, GROUND_TOP, w - 32, hazeH)
+    addOverlay(b, "ov_dark", 16, h - 16 - nearH, w - 32, nearH)
     for i = 0, 2 do
-        addRect(b, 16, GROUND_TOP + i * 30, (w - 32) * (1 - i / 3), 30, C.yellow, 0.05)
-        addRect(b, 16 + (w - 32) * (i / 3), h - 16 - (i + 1) * 30, (w - 32) * (1 - i / 3), 30, C.navy, 0.05)
+        addOverlay(b, "ov_yellow", 16, GROUND_TOP + i * 30, (w - 32) * (1 - i / 3), 30)
+        addOverlay(b, "ov_navy", 16 + (w - 32) * (i / 3), h - 16 - (i + 1) * 30, (w - 32) * (1 - i / 3), 30)
     end
+    return useTiles
 end
 
 local function fillPlazas(b, w, h, theme)
@@ -272,11 +322,30 @@ local function fillDecals(b, w, h, rng, theme)
 end
 
 local function fillWallShadows(b, w, h)
-    for i = 0, 3 do
-        addRect(b, 16, GROUND_TOP + i * 3, w - 32, 3, C.abyss, 0.34 - i * 0.08)
-        addRect(b, 16 + i * 3, GROUND_TOP, 3, h - GROUND_TOP - 16, C.abyss, 0.30 - i * 0.07)
+    addOverlay(b, "ov_wall_top", 16, GROUND_TOP, w - 32, 12)
+    addOverlay(b, "ov_wall_left", 16, GROUND_TOP, 12, h - GROUND_TOP - 16)
+    addOverlay(b, "ov_abyss12", w - 26, GROUND_TOP, 10, h - GROUND_TOP - 16)
+end
+
+-- Ombres portées des rochers et souches : intégrées au lot du sol (sprites pré-colorés)
+local function fillRockShadows(b, om)
+    if not om or not om.rockShadows then return end
+    for _, sh in ipairs(om.rockShadows) do
+        if sh[1] == "ellipse" then
+            local f = Art.frame("fx_shadow_d1", 1)
+            if f then
+                b:setColor(1, 1, 1, 1)
+                b:add(f.quad, math.floor(sh[2]), math.floor(sh[3]), 0, sh[4] * 2 / f.w, sh[5] * 2 / f.h, f.ox, f.oy)
+            end
+        else
+            local minX = math.min(sh[2], sh[4], sh[6], sh[8])
+            local maxX = math.max(sh[2], sh[4], sh[6], sh[8])
+            local minY = math.min(sh[3], sh[5], sh[7], sh[9])
+            local maxY = math.max(sh[3], sh[5], sh[7], sh[9])
+            addOverlay(b, "ov_shadow", minX, minY, maxX - minX, maxY - minY)
+        end
     end
-    addRect(b, w - 26, GROUND_TOP, 10, h - GROUND_TOP - 16, C.abyss, 0.12)
+    om.rockShadows = {}
 end
 
 function Arena:buildGround(mapW, mapH, palette, obstacleManager)
@@ -291,13 +360,15 @@ function Arena:buildGround(mapW, mapH, palette, obstacleManager)
 
     if not self.groundBatch then
         -- Sol découpé en tuiles de 128 px : seules les tuiles visibles partent au GPU
-        self.groundBatch = Gpu.newChunkedBatch(Art.image, 128, 260)
+        -- Un seul lot pour tout le sol : mesuré sur Old 3DS, 0,8 ms contre 1,3 ms découpé
+        -- (un appel GPU coûte ~80 µs, un sommet ~0,6 µs). Les murs, eux, restent découpés.
+        self.groundBatch = Gpu.newBatch(Art.image, 900, "static")
     end
     self.canvas = self.groundBatch
     self.canvasW = w
     self.canvasH = h
     local b = self.groundBatch
-    b:reset(w, h, -48, -48)
+    b:clear()
     rectLists = { under = {}, over = {} }
     self.rectsUnder = rectLists.under
     self.rectsOver = rectLists.over
@@ -308,11 +379,11 @@ function Arena:buildGround(mapW, mapH, palette, obstacleManager)
 
     layer(b, 1)
     fillCliff(b, w, h, rng, theme)
-    fillGround(b, w, h, theme, rng)
+    local tiled = fillGround(b, w, h, theme, rng, self.themeId)
     layer(b, 5)
     fillPlazas(b, w, h, theme)
     layer(b, 6)
-    fillDecals(b, w, h, rng, theme)
+    if not tiled then fillDecals(b, w, h, rng, theme) end -- détails déjà dans les tuiles
     layer(b, 7)
     fillWallShadows(b, w, h)
 
@@ -320,6 +391,7 @@ function Arena:buildGround(mapW, mapH, palette, obstacleManager)
 
     if self.obstacleManager and self.obstacleManager.bakeStatic then
         self.obstacleManager:bakeStatic()
+        fillRockShadows(b, self.obstacleManager)
     end
     if self.obstacleManager and self.obstacleManager.buildProps then
         self.obstacleManager:buildProps()
@@ -338,7 +410,7 @@ end
 function Arena:buildWalls(w, h, rng, theme)
     theme = theme or self.theme or WorldManager.getTheme(1)
     if not self.wallBatch then
-        self.wallBatch = Gpu.newChunkedBatch(Art.image, 160, WALL_BATCH_SIZE)
+        self.wallBatch = Gpu.newChunkedBatch(Art.image, 256, WALL_BATCH_SIZE)
     end
     local b = self.wallBatch
     b:reset(w, h, -64, -64)
@@ -382,6 +454,33 @@ end
 -- ============================================================================
 -- 4. RENDU PAR FRAME (1 DRAW CALL SOL + 1 DRAW CALL MURS)
 -- ============================================================================
+-- Rectangle monde visible par la caméra (élargi de `margin` pixels)
+function Arena:viewRect(margin)
+    local cam = self.camera
+    if not cam then
+        return -64, -64, (self._groundW or 640) + 64, (self._groundH or 480) + 96
+    end
+    local x0 = cam.x - cam.halfW - margin
+    local y0 = cam.y - cam.halfH - margin
+    return x0, y0, x0 + cam.viewportW + margin * 2, y0 + cam.viewportH + margin * 2
+end
+
+-- Sol dessiné directement (tous ses sprites et aplats) dans le rectangle donné
+local Perf = require("src.core.perf")
+function Arena:drawGroundLive(x0, y0, x1, y1)
+    Perf.sec("h:sol-prep")
+    drawRectList(self.rectsUnder, x0, y0, x1, y1)
+    Perf.sec("h:sol-sous")
+    self.groundBatch:draw()
+    Perf.sec("h:sol-tuiles")
+    if self.obstacleManager and self.obstacleManager.drawStaticGround then
+        self.obstacleManager:drawStaticGround(x0, y0, x1, y1)
+    end
+    Perf.sec("h:sol-statique")
+    drawRectList(self.rectsOver, x0, y0, x1, y1)
+    Perf.sec("h:sol-voiles")
+end
+
 function Arena:draw(isGateOpen, palette, spawnWarnings, mapW, mapH)
     local w = mapW or Config.TOP_WIDTH
     local h = mapH or Config.TOP_HEIGHT
@@ -393,20 +492,7 @@ function Arena:draw(isGateOpen, palette, spawnWarnings, mapW, mapH)
 
     love.graphics.setColor(1, 1, 1, 1)
     if self.groundBatch then
-        local cam = self.camera
-        local x0, y0, x1, y1 = -64, -64, w + 64, h + 96
-        if cam then
-            x0 = cam.x - cam.halfW - 16
-            y0 = cam.y - cam.halfH - 16
-            x1 = x0 + cam.viewportW + 32
-            y1 = y0 + cam.viewportH + 32
-        end
-        drawRectList(self.rectsUnder, x0, y0, x1, y1)
-        self.groundBatch:drawView(x0, y0, x1, y1)
-        if self.obstacleManager and self.obstacleManager.drawStaticGround then
-            self.obstacleManager:drawStaticGround(x0, y0, x1, y1)
-        end
-        drawRectList(self.rectsOver, x0, y0, x1, y1)
+        self:drawGroundLive(self:viewRect(16))
     end
 
     if spawnWarnings and #spawnWarnings > 0 then
@@ -438,13 +524,8 @@ function Arena:drawWalls(isGateOpen, mapW)
     local t = love.timer.getTime()
     love.graphics.setColor(1, 1, 1, 1)
     if self.wallBatch then
-        local cam = self.camera
-        if cam then
-            local x0, y0 = cam.x - cam.halfW, cam.y - cam.halfH
-            self.wallBatch:drawView(x0, y0, x0 + cam.viewportW, y0 + cam.viewportH, 56)
-        else
-            self.wallBatch:drawView(-64, -64, w + 64, (self._groundH or 480) + 64, 56)
-        end
+        local x0, y0, x1, y1 = self:viewRect(0)
+        self.wallBatch:drawView(x0, y0, x1, y1, 56)
     end
 
     local gx, gy = math.floor(w / 2), 32

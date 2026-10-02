@@ -19,6 +19,25 @@ local HeroSprites = require("src.render.sprites.heroes")
 local Heroes = require("src.data.heroes")
 local Skills = require("src.data.skills")
 local Bestiary = require("src.data.bestiary")
+local Perf = require("src.core.perf")
+local Gpu = require("src.core.gpu")
+local PxColors = require("src.render.px_colors")
+
+-- Couleur nommée de la palette la plus proche (les couleurs de thème sont en hexadécimal)
+local nearestCache = {}
+local function PxNearest(c)
+    local key = math.floor(c[1] * 255) * 65536 + math.floor(c[2] * 255) * 256 + math.floor(c[3] * 255)
+    local hit = nearestCache[key]
+    if hit then return hit end
+    local best, bestD = Palette.C.moss, math.huge
+    for _, pc in pairs(PxColors.list()) do
+        local dr, dg, db = pc[1] - c[1], pc[2] - c[2], pc[3] - c[3]
+        local d = dr * dr + dg * dg + db * db
+        if d < bestD then best, bestD = pc, d end
+    end
+    nearestCache[key] = best
+    return best
+end
 
 local C = Palette.C
 local floor = math.floor
@@ -80,70 +99,149 @@ function HUD:update(dt, player, ultCharge)
 end
 
 -- ============================================================================
--- TABLEAU DE BORD COMPLET
+-- TABLEAU DE BORD COMPLET : couche fixe enregistrée + couche vivante
 -- ============================================================================
-function HUD:drawDashboard(game, pauseBtn)
-    local player = game.player
-    local boss = self:findBoss(game)
+-- Sur Old 3DS chaque opération de dessin coûte (appel GPU ~80 µs, et autant en Lua pour une
+-- suite de sprites). La couche fixe (fonds, panneaux, libellés, icônes, bouton pause, carte
+-- de la salle, compétences) est enregistrée dans un SpriteBatch (Gpu.beginRecord) et
+-- réaffichée en 1 appel tant que rien ne change. Seules les valeurs vivantes (jauges,
+-- compteurs, points de la mini-carte, anneaux de charge) sont dessinées à chaque fois.
+local STATIC_FIELDS = { "heroId", "room", "chapter", "skills", "boss", "bossType", "dmg", "crit",
+    "arrows", "dodge", "maxHp", "level", "gate", "ultReady", "mapW", "mapH", "theme" }
 
-    -- Fond : bleu nuit uni + bandeau supérieur (2 appels, plus de motif rayé)
+local function playerStats(player)
+    local w = player.currentWeapon
+    local dmg = floor(w.damage * (player.damageMult or 1.0))
+    local arrows = (player.frontArrows or 1) + (player.diagArrows or 0) * 2 + (player.rearArrows or 0) + (player.sideArrows or 0) * 2
+    return dmg, floor((player.critChance or 0) * 100), arrows, floor((player.dodgeChance or 0) * 100)
+end
+
+-- Relève l'état qui détermine la couche fixe ; vrai si elle doit être réenregistrée
+function HUD:staticChanged(game, boss)
+    local st = self.staticState
+    if not st then
+        st = {}
+        self.staticState = st
+    end
+    local player = game.player
+    local dmg, crit, arrows, dodge = playerStats(player)
+    local cur = self.staticCur or {}
+    self.staticCur = cur
+    cur.heroId = player.heroId
+    cur.room = game.roomNumber or 1
+    cur.chapter = game.currentChapter and game.currentChapter.name or false
+    cur.skills = #(game.acquiredSkills or {})
+    cur.boss = boss ~= nil
+    cur.bossType = boss and boss.type or false
+    cur.dmg, cur.crit, cur.arrows, cur.dodge = dmg, crit, arrows, dodge
+    cur.maxHp = player.maxHp
+    cur.level = player.level or 1
+    cur.gate = game.isGateOpen and true or false
+    cur.ultReady = (game.ultimateCharge or 0) >= 1.0
+    cur.mapW, cur.mapH = game.mapW or 600, game.mapH or 460
+    cur.theme = game.arena and game.arena.theme or false
+    local changed = false
+    for _, k in ipairs(STATIC_FIELDS) do
+        if st[k] ~= cur[k] then
+            st[k] = cur[k]
+            changed = true
+        end
+    end
+    return changed
+end
+
+function HUD:drawDashboard(game, pauseBtn)
+    local boss = self:findBoss(game)
+    if not self.staticBatch then
+        self.staticBatch = love.graphics.newSpriteBatch(Art.image, 3000, "static")
+    end
+    if self:staticChanged(game, boss) or self.staticPause ~= pauseBtn then
+        self.staticPause = pauseBtn
+        Perf.event("hud")
+        Gpu.beginRecord(self.staticBatch)
+        self:drawStatic(game, boss, pauseBtn)
+        Gpu.endRecord()
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(self.staticBatch)
+    Perf.sec("b:fixe")
+    self:drawLive(game, boss)
+    Perf.sec("b:vivant")
+    if self.tooltip then self:drawTooltip(self.tooltip) end
+end
+
+-- Barre de jauge : fond fixe / remplissage vivant (2 aplats)
+local function barFrame(x, y, w, h)
+    Skin.roundRect(C.ink, x, y, w, h, 2)
+    Skin.rect(C.night, x + 1, y + 1, w - 2, h - 2)
+end
+
+local function barFill(x, y, w, h, ratio, themeName)
+    local fw = floor((w - 2) * math.max(0, math.min(1, ratio)) + 0.5)
+    if fw <= 0 then return end
+    local th = Skin.theme(themeName)
+    Skin.rect(th.main, x + 1, y + 1, fw, h - 2)
+    Skin.rect(th.light, x + 1, y + 1, fw, 1)
+end
+
+-- ----------------------------------------------------------------------------
+-- COUCHE FIXE (enregistrée)
+-- ----------------------------------------------------------------------------
+function HUD:drawStatic(game, boss, pb)
+    local player = game.player
+    local cur = self.staticCur
+
+    -- Fond
     Skin.rect(C.night, 0, 0, W, H)
     Skin.rect(C.ink, 0, 0, W, 25)
     Skin.rect(C.ink, 0, 189, W, 51, 0.55)
 
-    self:drawTopBar(player, game.goldEarnedRun, pauseBtn)
-    self:drawMinimap(game)
-    if boss then
-        self:drawBossPanel(boss)
-    else
-        self:drawHeroPanel(player, game.roomNumber, game.currentChapter, game.kills)
-    end
-    self:drawSkillStrip(game.acquiredSkills)
-    self:drawActions(player, game.ultimateCharge, game.kills)
-    if self.tooltip then self:drawTooltip(self.tooltip) end
-end
-
--- ============================================================================
--- BARRE DU HAUT : niveau, XP, or, pause
--- ============================================================================
-function HUD:drawTopBar(player, gold, pb)
-    Skin.disc(C.cyan, 13, 12, 11)
-    Skin.disc(C.navy, 13, 12, 10)
-    Skin.disc(C.blue, 13, 11, 8)
-    Skin.bar(28, 6, 196, 13, self.displayXp, "gold", 4)
-    PixelFont.printf(tostring(player.level or 1), 1, 7, 25, "center", C.white, "main")
-    PixelFont.printf("NIVEAU " .. (player.level or 1), 28, 3, 196, "center", C.white, "tiny")
-
+    -- Barre du haut : badge de niveau, cadre d'XP, pièce, bouton pause
+    Skin.roundRect(C.cyan, 2, 1, 23, 23, 3)
+    Skin.roundRect(C.navy, 3, 2, 21, 21, 3)
+    Skin.roundRect(C.blue, 4, 3, 19, 18, 3)
+    PixelFont.printf(tostring(cur.level), 1, 7, 25, "center", C.white, "main")
+    barFrame(28, 6, 196, 13)
     love.graphics.setColor(1, 1, 1, 1)
     Art.draw("icon_coin", 1, 236, 12)
-    PixelFont.print(tostring(floor(gold or 0)), 244, 7, C.yellow, "main")
-
     if pb then
         local oy = Skin.button(pb.x, pb.y, pb.w, pb.h, "blue", false)
         love.graphics.setColor(1, 1, 1, 1)
         Art.draw("icon_pause", 1, pb.x + floor(pb.w / 2), pb.y + oy + floor((pb.h - 3) / 2))
     end
+
+    self:drawMinimapStatic(game)
+    if boss then
+        self:drawBossStatic(boss)
+    else
+        self:drawHeroStatic(player, cur)
+    end
+    self:drawSkillStrip(game.acquiredSkills)
+    self:drawActionsStatic(cur.ultReady)
 end
 
--- ============================================================================
--- MINI-CARTE
--- ============================================================================
-function HUD:drawMinimap(game)
+function HUD:minimapFrame(game)
+    local m = MAP
+    local mapW, mapH = game.mapW or 600, game.mapH or 460
+    local s = math.min((m.w - 12) / mapW, (m.h - 18) / mapH)
+    local ox = floor(m.x + (m.w - mapW * s) / 2)
+    local oy = floor(m.y + 13 + ((m.h - 18) - mapH * s) / 2)
+    return s, ox, oy, mapW, mapH
+end
+
+function HUD:drawMinimapStatic(game)
     local m = MAP
     Skin.panel(m.x, m.y, m.w, m.h, "dark")
-    local mapW, mapH = game.mapW or 600, game.mapH or 460
-    local innerW, innerH = m.w - 12, m.h - 18
-    local s = math.min(innerW / mapW, innerH / mapH)
-    local ox = floor(m.x + (m.w - mapW * s) / 2)
-    local oy = floor(m.y + 13 + (innerH - mapH * s) / 2)
-
-    -- Sol de l'île et bord
+    local s, ox, oy, mapW, mapH = self:minimapFrame(game)
     local theme = game.arena and game.arena.theme
-    local ground = theme and Palette.hex(theme.groundDark or "438a3e") or C.moss
+    local ground = C.moss
+    if theme and theme.groundDark then
+        ground = Palette.hex(theme.groundDark)
+        -- couleur hors palette nommée : on prend la plus proche des tons de sol nommés
+        ground = PxNearest(ground)
+    end
     Skin.rect(C.ink, ox - 1, oy - 1, floor(mapW * s) + 2, floor(mapH * s) + 2)
     Skin.rect(ground, ox, oy, floor(mapW * s), floor(mapH * s))
-
-    -- Obstacles (aplats), puis tous les points (sprites groupés en 1 appel)
     local om = game.obstacleManager
     if om then
         for _, r in ipairs(om.waters or {}) do
@@ -151,69 +249,42 @@ function HUD:drawMinimap(game)
         end
         for _, r in ipairs(om.hazards or {}) do
             local col = (r.kind == "lava") and C.orange or ((r.kind == "ice") and C.cyan or C.sand)
-            Skin.rect(col, ox + floor(r.x * s), oy + floor(r.y * s), math.max(1, floor(r.w * s)), math.max(1, floor(r.h * s)), 0.8)
+            Skin.rect(col, ox + floor(r.x * s), oy + floor(r.y * s), math.max(1, floor(r.w * s)), math.max(1, floor(r.h * s)))
         end
         for _, r in ipairs(om.rocks or {}) do
             Skin.rect(C.fog, ox + floor(r.x * s), oy + floor(r.y * s), math.max(2, floor(r.w * s)), math.max(2, floor(r.h * s)))
         end
     end
-
-    PixelFont.print("SALLE " .. (game.roomNumber or 1), m.x + 6, m.y + 3, C.silver, "tiny")
+    PixelFont.print("STAGE " .. (game.roomNumber or 1), m.x + 6, m.y + 3, C.silver, "tiny")
     love.graphics.setColor(1, 1, 1, 1)
     Art.draw(game.isGateOpen and "icon_mm_gate_open" or "icon_mm_gate_closed", 1, ox + floor(mapW * s / 2), oy + 3)
-
-    local pool = game.dummyPool
-    if pool then
-        for i = 1, pool.activeCount do
-            local d = pool.items[pool.activeList[i]]
-            if d and d.alive then
-                Art.draw(d.isBoss and "icon_mm_boss" or "icon_mm_enemy", 1, ox + floor(d.x * s), oy + floor(d.y * s))
-            end
-        end
-    end
-    local p = game.player
-    if p and (floor(love.timer.getTime() * 4) % 4 ~= 0) then
-        Art.draw("icon_mm_player", 1, ox + floor(p.x * s), oy + floor(p.y * s))
-    end
 end
 
--- ============================================================================
--- FICHE HÉROS / BOSS
--- ============================================================================
-function HUD:drawHeroPanel(player, room, chapter, kills)
+function HUD:drawHeroStatic(player, cur)
     local x, y = SIDE.x, SIDE.y
     Skin.panel(x, y, SIDE.w, SIDE.h, "dark")
-    local ratio = math.max(0, math.min(1, self.displayHp / math.max(1, player.maxHp)))
-    Skin.bar(x + 4, y + 16, SIDE.w - 8, 13, ratio, ratio < 0.3 and "red" or "green", 5)
+    barFrame(x + 4, y + 16, SIDE.w - 8, 13)
     Skin.rect(C.slate, x + 6, y + 64, SIDE.w - 12, 1)
-
     local hero = Heroes.get(player.heroId)
     PixelFont.printf(hero.name:upper(), x, y + 3, SIDE.w, "center", C.yellow, "main")
-    PixelFont.printf(string.format("%d/%d", math.max(0, floor(player.hp)), player.maxHp), x + 4, y + 19, SIDE.w - 8, "center", C.white, "tiny")
-
-    local w = player.currentWeapon
-    local dmg = floor(w.damage * (player.damageMult or 1.0))
-    local arrows = (player.frontArrows or 1) + (player.diagArrows or 0) * 2 + (player.rearArrows or 0) + (player.sideArrows or 0) * 2
     love.graphics.setColor(1, 1, 1, 1)
     Art.draw("icon_sword", 1, x + 10, y + 39)
     Art.draw("icon_star", 1, x + 62, y + 39)
     Art.draw("icon_skill_multishot", 1, x + 10, y + 54)
     Art.draw("icon_skill_boots", 1, x + 62, y + 54)
-    PixelFont.print(tostring(dmg), x + 18, y + 33, C.white, "main")
-    PixelFont.print(floor((player.critChance or 0) * 100) .. "%", x + 70, y + 33, C.white, "main")
-    PixelFont.print("×" .. arrows, x + 18, y + 48, C.white, "main")
-    PixelFont.print(floor((player.dodgeChance or 0) * 100) .. "%", x + 70, y + 48, C.white, "main")
+    PixelFont.print(tostring(cur.dmg), x + 18, y + 33, C.white, "main")
+    PixelFont.print(cur.crit .. "%", x + 70, y + 33, C.white, "main")
+    PixelFont.print("×" .. cur.arrows, x + 18, y + 48, C.white, "main")
+    PixelFont.print(cur.dodge .. "%", x + 70, y + 48, C.white, "main")
 
-    room = room or 1
-    PixelFont.print("SALLE", x + 6, y + 70, C.silver, "tiny")
+    local room = cur.room
+    PixelFont.print("STAGE", x + 6, y + 70, C.silver, "tiny")
     PixelFont.print(tostring(room), x + 6, y + 77, C.white, "main", 2, "shadow")
     PixelFont.print("/50", x + 8 + PixelFont.getWidth(tostring(room), "main", 2), y + 87, C.fog, "main")
     local toBoss = 10 - (room % 10)
     local bossText = (room % 10 == 0) and "BOSS !" or ("BOSS : " .. toBoss)
     PixelFont.printf(bossText, x + 52, y + 72, SIDE.w - 56, "right", (room % 10 == 0) and C.red or C.silver, "tiny")
-    PixelFont.printf("TUÉS " .. (kills or 0), x + 52, y + 84, SIDE.w - 56, "right", C.white, "tiny")
-    local chapterName = chapter and chapter.name or "Forêt Verdoyante"
-    PixelFont.printf(chapterName, x + 4, y + 104, SIDE.w - 8, "center", C.cyan, "tiny", 1, nil, 1)
+    PixelFont.printf(cur.chapter or "Verdant Forest", x + 4, y + 104, SIDE.w - 8, "center", C.cyan, "tiny", 1, nil, 1)
 end
 
 function HUD:findBoss(game)
@@ -226,37 +297,30 @@ function HUD:findBoss(game)
     return nil
 end
 
-function HUD:drawBossPanel(boss)
+function HUD:drawBossStatic(boss)
     local x, y = SIDE.x, SIDE.y
     Skin.panel(x, y, SIDE.w, SIDE.h, "dark")
     Skin.roundRect(C.wine, x + 1, y + 1, SIDE.w - 2, 14, 2)
-    local ratio = math.max(0, math.min(1, boss.hp / math.max(1, boss.maxHp)))
-    self.displayBossHp = self.displayBossHp + (ratio - self.displayBossHp) * 0.25
-    Skin.bar(x + 4, y + 36, SIDE.w - 8, 16, self.displayBossHp, "red", 10)
+    barFrame(x + 4, y + 36, SIDE.w - 8, 16)
     PixelFont.printf("BOSS", x, y + 4, SIDE.w, "center", C.white, "main")
     PixelFont.printf((monsterNames[boss.type] or boss.type or "?"):upper(), x + 2, y + 20, SIDE.w - 4, "center", C.yellow, "tiny", 1, nil, 1)
-    PixelFont.printf(floor(ratio * 100) .. "%", x, y + 58, SIDE.w, "center", C.white, "main", 2, "shadow")
-    if boss.enraged or (ratio < 0.5) then
-        PixelFont.printf("ENRAGÉ !", x, y + 86, SIDE.w, "center", C.red, "main")
-    end
-    PixelFont.printf("Esquive ses attaques (R)", x + 4, y + 104, SIDE.w - 8, "center", C.silver, "tiny", 1, nil, 1)
+    PixelFont.printf("Dodge attacks (R)", x + 4, y + 104, SIDE.w - 8, "center", C.silver, "tiny", 1, nil, 1)
 end
 
 -- ============================================================================
--- COMPÉTENCES ACQUISES
+-- COMPÉTENCES ACQUISES (couche fixe)
 -- ============================================================================
 function HUD:drawSkillStrip(skills)
     local st = SKILLS
     Skin.panel(st.x, st.y, st.w, st.h, "inset")
     skills = skills or {}
     local n = math.min(#skills, st.slots)
-    -- 1. Liserés de rareté (aplats), 2. icônes (un seul lot)
     for i = 1, n do
         local th = Skin.theme(RARITY_THEME[skills[i].rarity] or "gray")
         Skin.rect(th.main, st.x + 6 + (i - 1) * st.step, st.y + st.h - 6, 24, 2)
     end
     if #skills == 0 then
-        PixelFont.printf("Monte de niveau pour gagner des compétences", st.x, st.y + 14, st.w, "center", C.steel, "tiny")
+        PixelFont.printf("Level up to choose skills", st.x, st.y + 14, st.w, "center", C.steel, "tiny")
         return
     end
     love.graphics.setColor(1, 1, 1, 1)
@@ -293,60 +357,106 @@ end
 -- ============================================================================
 -- ACTIONS : esquive (R) et ultime (L)
 -- ============================================================================
--- Anneau de charge : secteur allumé + secteur éteint + disque central (3 appels)
+function HUD:drawActionsStatic(ready)
+    local dc, uc = self.dashCircle, self.ultCircle
+    Skin.pill(dc.cx + 12, dc.cy + 10, 14, 11, "gray", nil)
+    Skin.pill(uc.cx + 14, uc.cy + 12, 14, 11, "gray", nil)
+    PixelFont.print("R", dc.cx + 17, dc.cy + 12, C.white, "tiny")
+    PixelFont.print("L", uc.cx + 19, uc.cy + 14, C.white, "tiny")
+    love.graphics.setColor(1, 1, 1, 1)
+    Art.draw("icon_skull", 1, 78, 206)
+    PixelFont.print("KILLS", 78, 216, C.fog, "tiny")
+    PixelFont.printf("ULTIMATE", 196, 226, 120, "center", ready and C.amber or C.fog, "tiny")
+end
+
+-- Anneau de charge : secteur allumé + secteur éteint (2 appels)
 local function ringGauge(cx, cy, r, ratio, lit, dim)
     ratio = math.min(1, math.max(0, ratio))
     local top = -math.pi / 2
     local split = top + ratio * math.pi * 2
     if ratio < 1 then
         love.graphics.setColor(dim[1], dim[2], dim[3], 1)
-        love.graphics.arc("fill", cx, cy, r + 1, split, top + math.pi * 2, 24)
+        love.graphics.arc("fill", cx, cy, r + 1, split, top + math.pi * 2, 20)
     end
     if ratio > 0 then
         love.graphics.setColor(lit[1], lit[2], lit[3], 1)
-        love.graphics.arc("fill", cx, cy, r + 1, top, split, 24)
+        love.graphics.arc("fill", cx, cy, r + 1, top, split, 20)
     end
 end
 
-function HUD:drawActions(player, ultCharge, kills)
+-- ----------------------------------------------------------------------------
+-- COUCHE VIVANTE (chaque fois que l'écran du bas est redessiné)
+-- ----------------------------------------------------------------------------
+function HUD:drawLive(game, boss)
+    local player = game.player
     local t = love.timer.getTime()
-    local dc, uc = self.dashCircle, self.ultCircle
-    local cd = player and player.dashCooldownTimer or 0
-    local dashReady = cd <= 0
-    local dashRatio = dashReady and 1 or (1 - cd / ((player and player.dashCooldown) or 1.5))
-    local ready = ultCharge >= 1.0
 
-    -- Aplats : halos, anneaux, boutons
+    -- Jauges : XP, PV ou vie du boss
+    barFill(28, 6, 196, 13, self.displayXp, "gold")
+    local x, y = SIDE.x, SIDE.y
+    local bossRatio
+    if boss then
+        bossRatio = math.max(0, math.min(1, boss.hp / math.max(1, boss.maxHp)))
+        self.displayBossHp = self.displayBossHp + (bossRatio - self.displayBossHp) * 0.25
+        barFill(x + 4, y + 36, SIDE.w - 8, 16, self.displayBossHp, "red")
+    else
+        local ratio = math.max(0, math.min(1, self.displayHp / math.max(1, player.maxHp)))
+        barFill(x + 4, y + 16, SIDE.w - 8, 13, ratio, ratio < 0.3 and "red" or "green")
+    end
+
+    -- Anneaux et boutons ronds (primitives)
+    local dc, uc = self.dashCircle, self.ultCircle
+    local cd = player.dashCooldownTimer or 0
+    local dashReady = cd <= 0
+    local dashRatio = dashReady and 1 or (1 - cd / (player.dashCooldown or 1.5))
+    local ultCharge = game.ultimateCharge or 0
+    local ready = ultCharge >= 1.0
     if ready then
         local pulse = floor((math.sin(self.ultPulse) + 1) * 2)
         Skin.disc(C.amber, uc.cx, uc.cy, uc.radius + 3 + pulse, 0.3)
     end
     ringGauge(dc.cx, dc.cy, dc.radius, dashRatio, dashReady and C.cyan or C.blue, C.slate)
-    Skin.disc(C.ink, dc.cx, dc.cy, dc.radius - 3)
-    Skin.disc(dashReady and C.blue or C.slate, dc.cx, dc.cy, dc.radius - 5)
+    Skin.disc(dashReady and C.blue or C.slate, dc.cx, dc.cy, dc.radius - 4)
     ringGauge(uc.cx, uc.cy, uc.radius, ultCharge, ready and C.yellow or C.amber, C.slate)
-    Skin.disc(C.ink, uc.cx, uc.cy, uc.radius - 3)
-    Skin.disc(ready and C.orange or C.slate, uc.cx, uc.cy, uc.radius - 5)
-    Skin.pill(dc.cx + 12, dc.cy + 10, 14, 11, "gray", nil)
-    Skin.pill(uc.cx + 14, uc.cy + 12, 14, 11, "gray", nil)
+    Skin.disc(ready and C.orange or C.slate, uc.cx, uc.cy, uc.radius - 4)
 
-    -- Sprites et textes (un lot)
+    -- Sprites : icônes, points de la mini-carte, textes (fusionnés par l'auto-batcher)
     love.graphics.setColor(1, 1, 1, 1)
     Art.drawEx("icon_bolt", 1, dc.cx, dc.cy, 0, 2, 2)
     local bob = ready and floor(math.sin(t * 6) * 1.5 + 0.5) or 0
     Art.drawEx("icon_star", 1, uc.cx, uc.cy + bob, 0, 2, 2)
-    Art.draw("icon_skull", 1, 78, 206)
-    PixelFont.print("R", dc.cx + 17, dc.cy + 12, C.white, "tiny")
-    PixelFont.print("L", uc.cx + 19, uc.cy + 14, C.white, "tiny")
+
+    local s, ox, oy = self:minimapFrame(game)
+    local pool = game.dummyPool
+    if pool then
+        for i = 1, pool.activeCount do
+            local d = pool.items[pool.activeList[i]]
+            if d and d.alive then
+                Art.draw(d.isBoss and "icon_mm_boss" or "icon_mm_enemy", 1, ox + floor(d.x * s), oy + floor(d.y * s))
+            end
+        end
+    end
+    if floor(t * 4) % 4 ~= 0 then
+        Art.draw("icon_mm_player", 1, ox + floor(player.x * s), oy + floor(player.y * s))
+    end
+
+    PixelFont.print(tostring(floor(game.goldEarnedRun or 0)), 244, 7, C.yellow, "main")
+    PixelFont.printf("LEVEL " .. (player.level or 1), 28, 3, 196, "center", C.white, "tiny")
+    PixelFont.print(tostring(game.kills or 0), 86, 201, C.white, "main")
     if not dashReady then
         PixelFont.printf(string.format("%.1f", cd), dc.cx - 20, dc.cy - 5, 40, "center", C.white, "main")
     end
-    PixelFont.print(tostring(kills or 0), 86, 201, C.white, "main")
-    PixelFont.print("TUÉS", 78, 216, C.fog, "tiny")
-
-    PixelFont.printf(ready and "PRÊT !" or (floor(math.min(1, ultCharge) * 100) .. "%"), 196, 200, 120, "center",
+    PixelFont.printf(ready and "READY!" or (floor(math.min(1, ultCharge) * 100) .. "%"), 196, 200, 120, "center",
         ready and C.yellow or C.white, "main", 2, "shadow")
-    PixelFont.printf("ULTIME", 196, 226, 120, "center", ready and C.amber or C.fog, "tiny")
+    if boss then
+        PixelFont.printf(floor(bossRatio * 100) .. "%", x, y + 58, SIDE.w, "center", C.white, "main", 2, "shadow")
+        if boss.enraged or bossRatio < 0.5 then
+            PixelFont.printf("ENRAGED!", x, y + 86, SIDE.w, "center", C.red, "main")
+        end
+    else
+        PixelFont.printf(string.format("%d/%d", math.max(0, floor(player.hp)), player.maxHp), x + 4, y + 19, SIDE.w - 8, "center", C.white, "tiny")
+        PixelFont.printf("KILLS " .. (game.kills or 0), x + 52, y + 84, SIDE.w - 56, "right", C.white, "tiny")
+    end
 end
 
 -- ============================================================================
@@ -383,8 +493,8 @@ function HUD:drawDraftModal(draftOptions, acquiredSkills, cursor)
     drawRays(W / 2, 18, t)
 
     Skin.ribbon(W / 2, 5, 244, 28, "gold")
-    PixelFont.printf("NIVEAU SUPÉRIEUR !", 0, 6, W, "center", C.white, "main", 2, "shadow")
-    PixelFont.printf("TOUCHE UNE CARTE  ·  CROIX + A", 0, 37, W, "center", C.silver, "tiny")
+    PixelFont.printf("LEVEL UP!", 0, 6, W, "center", C.white, "main", 2, "shadow")
+    PixelFont.printf("TOUCH A CARD  ·  D-PAD + A", 0, 37, W, "center", C.silver, "tiny")
 
     for i = 1, math.min(3, #draftOptions) do
         local skill = draftOptions[i]
@@ -409,7 +519,7 @@ function HUD:drawDraftModal(draftOptions, acquiredSkills, cursor)
         Skin.rect(C.slate, x + 10, y + 84, w - 20, 1)
         local owned = Skills.stackCount(acquiredSkills, skill.id)
         if owned > 0 then
-            Skin.pill(x + 3, y + 18, 34, 12, "gold", "NV." .. (owned + 1), "tiny")
+            Skin.pill(x + 3, y + 18, 34, 12, "gold", "LV." .. (owned + 1), "tiny")
         end
         Skin.pill(x + floor(w / 2) - 10, y + h - 16, 20, 12, selected and "gold" or themeName, tostring(i), "tiny")
 

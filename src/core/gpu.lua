@@ -108,6 +108,19 @@ local rawDraw = nil
 local rawSetColor = nil
 local cr, cg, cb, ca = 1, 1, 1, 1 -- couleur courante (suivie par l'enveloppe de setColor)
 
+-- ============================================================================
+-- Enregistrement : pendant Gpu.beginRecord(sb) … Gpu.endRecord(), les sprites blancs de
+-- l'atlas sont ajoutés au SpriteBatch `sb` (persistant) au lieu d'être dessinés. Toute
+-- autre primitive est ignorée : le contenu enregistré doit être fait de sprites
+-- (pixels pré-colorés, glyphes, icônes). Sert aux parties fixes de l'interface, affichées
+-- ensuite en 1 seul appel GPU tant qu'elles ne changent pas.
+-- ============================================================================
+local recordSB = nil
+
+function Gpu.isRecording()
+    return recordSB ~= nil
+end
+
 function Gpu.setAutoBatchImage(image)
     autoImage = image
     auto = nil
@@ -115,7 +128,7 @@ function Gpu.setAutoBatchImage(image)
 end
 
 local function flush()
-    if autoCount == 0 then return end
+    if autoCount == 0 or recordSB then return end
     local n = autoCount
     autoCount = 0
     local cost = n * 6
@@ -153,6 +166,33 @@ local function flush()
 end
 Gpu.flush = flush
 
+-- Chemin direct pour les sprites de l'atlas (personnages, lettres, pixels pré-colorés) :
+-- même effet que love.graphics.draw(image, quad, …) mais sans l'enveloppe générique, dont le
+-- coût Lua par sprite comptait sur Old 3DS.
+function Gpu.addSprite(image, quad, x, y, r, sx, sy, ox, oy)
+    if image ~= autoImage or not colorIsWhite then
+        return g.draw(image, quad, x, y, r, sx, sy, ox, oy)
+    end
+    if recordSB then
+        recordSB:add(quad, x, y, r or 0, sx or 1, sy or 1, ox or 0, oy or 0)
+        return
+    end
+    if not auto then auto = g.newSpriteBatch(autoImage, AUTO_SIZE, "stream") end
+    auto:add(quad, x, y, r or 0, sx or 1, sy or 1, ox or 0, oy or 0)
+    autoCount = autoCount + 1
+    if autoCount >= AUTO_SIZE then flush() end
+end
+
+function Gpu.beginRecord(sb)
+    flush()
+    sb:clear()
+    recordSB = sb
+end
+
+function Gpu.endRecord()
+    recordSB = nil
+end
+
 -- Enveloppe les fonctions de dessin de love.graphics (idempotent)
 function Gpu.install()
     if installed or not g then return end
@@ -175,6 +215,10 @@ function Gpu.install()
     end
 
     g.draw = function(obj, a, ...)
+        if recordSB then
+            if obj == autoImage and colorIsWhite and type(a) == "userdata" then recordSB:add(a, ...) end
+            return
+        end
         if obj == autoImage and colorIsWhite and type(a) == "userdata" then
             if not auto then auto = g.newSpriteBatch(autoImage, AUTO_SIZE, "stream") end
             auto:add(a, ...)
@@ -208,6 +252,7 @@ function Gpu.install()
 
     local rawRect = g.rectangle
     g.rectangle = function(mode, x, y, w, h, rx, ...)
+        if recordSB then return end
         if autoCount > 0 then flush() end
         local cost = (mode == "line") and 24 or 4
         if rx and rx > 0 then cost = cost + 16 end
@@ -216,6 +261,7 @@ function Gpu.install()
 
     local rawCircle = g.circle
     g.circle = function(mode, x, y, r, seg)
+        if recordSB then return end
         if autoCount > 0 then flush() end
         local n = seg or ellipsePoints(r)
         local cost = (mode == "line") and n * 6 or n + 2
@@ -235,6 +281,7 @@ function Gpu.install()
     local rawArc = g.arc
     if rawArc then
         g.arc = function(mode, ...)
+            if recordSB then return end
             if autoCount > 0 then flush() end
             if reserve(48) then return rawArc(mode, ...) end
         end
@@ -242,6 +289,7 @@ function Gpu.install()
 
     local rawPolygon = g.polygon
     g.polygon = function(mode, ...)
+        if recordSB then return end
         if autoCount > 0 then flush() end
         local n = select("#", ...)
         local first = ...
@@ -253,6 +301,7 @@ function Gpu.install()
 
     local rawLine = g.line
     g.line = function(...)
+        if recordSB then return end
         if autoCount > 0 then flush() end
         local n = select("#", ...)
         local first = ...
@@ -444,8 +493,10 @@ function Chunked:reset(worldW, worldH, originX, originY)
     self.oy = originY or -64
     self.cols = math.max(1, math.ceil((worldW - self.ox + 64) / self.chunk))
     self.rows = math.max(1, math.ceil((worldH - self.oy + 96) / self.chunk))
-    for _, cells in ipairs(self.layers) do
-        for _, c in ipairs(cells) do c:clear() end
+    -- pairs et non ipairs : la table des tuiles est creuse (index = ligne * colonnes + col),
+    -- ipairs s'arrêtait au premier trou et laissait les tuiles de la salle précédente à l'écran
+    for _, cells in pairs(self.layers) do
+        for _, c in pairs(cells) do c:clear() end
     end
     self.layer = 1
     self.maxLayer = 1

@@ -8,6 +8,7 @@
 
 local Screen = require("src.core.screen")
 local Depth = require("src.render.depth")
+local Perf = require("src.core.perf")
 
 -- LÖVE Potion active la stéréo au démarrage (gfxSet3D(true)) : l'écran du haut est alors
 -- rendu deux fois par image (œil gauche + œil droit) même curseur 3D à zéro. On ne garde la
@@ -76,7 +77,9 @@ function RunLoop.run()
                 end
             end
             if drawBottom then Screen.bottomDirty = false end
+            local tp = love.timer.getTime()
             love.graphics.present()
+            Perf.add("present", love.timer.getTime() - tp)
         end
 
         if love.timer then love.timer.sleep(0.001) end

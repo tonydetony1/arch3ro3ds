@@ -4,6 +4,9 @@
 
 local Palette = require("src.render.palette")
 local PixelFont = require("src.ui.pixel_font")
+local PxColors = require("src.render.px_colors")
+local Art = require("src.render.art")
+local Gpu = require("src.core.gpu")
 
 local Skin = {}
 
@@ -14,8 +17,28 @@ local function set(c, a)
     love.graphics.setColor(c[1], c[2], c[3], a or c[4] or 1)
 end
 
+-- Pixel pré-coloré de l'atlas pour (couleur, opacité), ou nil. Utilisé uniquement pendant
+-- l'enregistrement des parties fixes de l'interface (Gpu.beginRecord) : en dessin direct, une
+-- primitive coûte moins cher en Lua qu'un empilement de sprites sur Old 3DS (mesuré).
+local function pxSprite(c, a)
+    if not Gpu.isRecording() then return nil end
+    local name = PxColors.nameOf(c)
+    if not name then return nil end
+    local sprite = PxColors.spriteName(name, a or c[4] or 1)
+    if sprite and Art.has(sprite) then return sprite end
+    return nil
+end
+
+-- Aplat : pixel pré-coloré étiré (regroupé avec les autres sprites par l'auto-batcher),
+-- sinon rectangle teinté classique
 local function rect(c, x, y, w, h, a)
     if w <= 0 or h <= 0 then return end
+    local sprite = pxSprite(c, a)
+    if sprite then
+        love.graphics.setColor(1, 1, 1, 1)
+        Art.drawEx(sprite, 1, x, y, 0, w, h)
+        return
+    end
     set(c, a)
     love.graphics.rectangle("fill", x, y, w, h)
 end
@@ -28,6 +51,21 @@ local octo = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 function Skin.roundRect(c, x, y, w, h, r, a)
     x, y, w, h = floor(x), floor(y), floor(w), floor(h)
     if w <= 0 or h <= 0 then return end
+    -- Couleur précuite : coins en escalier faits de pixels étirés (tous dans le même lot)
+    if pxSprite(c, a) then
+        if r <= 0 or w <= r * 2 or h <= r * 2 then
+            rect(c, x, y, w, h, a)
+            return
+        end
+        rect(c, x + r, y, w - r * 2, h, a)
+        for i = 1, r do
+            local inset = r - i + 1
+            if i == r then inset = 1 end
+            rect(c, x + i - 1, y + inset, 1, h - inset * 2, a)
+            rect(c, x + w - i, y + inset, 1, h - inset * 2, a)
+        end
+        return
+    end
     set(c, a)
     if r <= 0 or w <= r * 2 or h <= r * 2 then
         love.graphics.rectangle("fill", x, y, w, h)
@@ -64,9 +102,9 @@ end
 -- ---------------------------------------------------------------------------
 Skin.THEMES = {
     gold   = { main = C.amber,  light = C.yellow,            dark = C.orange, lip = C.rust },
-    blue   = { main = C.blue,   light = C.cyan,              dark = C.navy,   lip = Palette.hex("0d3563") },
-    green  = { main = C.leaf,   light = Palette.hex("a8e890"), dark = C.moss, lip = C.pine },
-    red    = { main = C.red,    light = C.pink,              dark = C.wine,   lip = Palette.hex("6b1622") },
+    blue   = { main = C.blue,   light = C.cyan,              dark = C.navy,   lip = PxColors.EXTRA.blueLip },
+    green  = { main = C.leaf,   light = PxColors.EXTRA.greenLight, dark = C.moss, lip = C.pine },
+    red    = { main = C.red,    light = C.pink,              dark = C.wine,   lip = PxColors.EXTRA.redLip },
     purple = { main = C.magenta, light = C.pink,             dark = C.plum,   lip = C.umber },
     gray   = { main = C.fog,    light = C.silver,            dark = C.steel,  lip = C.slate },
     dark   = { main = C.slate,  light = C.steel,             dark = C.night,  lip = C.ink },

@@ -23,32 +23,32 @@ local Balance = require("src.data.balance")
 local MenuState = {}
 MenuState.__index = MenuState
 
-local MODE_LABELS = { ascension = "Ascension", infinite = "Le Gouffre", boss_rush = "Boss Rush", survival = "Arène" }
+local MODE_LABELS = { ascension = "Ascension", infinite = "The Abyss", boss_rush = "Boss Rush", survival = "Arena" }
 
 function MenuState.new(stateMachine)
     local self = setmetatable({}, MenuState)
     self.sm = stateMachine
     self.saveData = nil
 
-    -- Onglet actif : "play", "heroes", "equipment", "talents", "chests"
+    -- Active tab: "play", "heroes", "equipment", "talents", "chests"
     self.currentTab = "play"
-    self.selectedMode = "ascension" -- "ascension" ou "infinite"
+    self.selectedMode = "ascension"
     self.selectedHeroPreview = "atreus"
-    self.heroSubPage = "roster"   -- "roster" ou "bestiary"
-    self.questSubPage = "quests"  -- "quests" ou "achievements"
-    self.chestSubPage = "chests"  -- "chests" ou "shop"
-    self.settingsOpen = false     -- page Paramètres (réglages 3DS)
+    self.heroSubPage = "roster"
+    self.questSubPage = "quests"
+    self.chestSubPage = "chests"
+    self.settingsOpen = false
     self.bestiarySelected = "slime"
 
-    -- Gestionnaire d'inventaire dédié avec défilement tactile
+    -- Dedicated inventory manager with kinetic scrolling
     self.inventory = Inventory.new()
 
-    -- Chapitres Archero 2 avec biomes et paliers distincts
+    -- Chapters with distinct biomes and floors
     self.chapters = {
-        { id = 1, name = "Plaines Emeraude", floors = 50, theme = "green", desc = "Slimes & Loups des bois", bg = {0.10, 0.22, 0.14} },
-        { id = 2, name = "Cavernes Cristallines", floors = 30, theme = "blue", desc = "Chauves-souris & Stalactites", bg = {0.08, 0.16, 0.28} },
-        { id = 3, name = "Dunes Brulantes", floors = 20, theme = "gold", desc = "Scorpions & Vers de magma", bg = {0.28, 0.18, 0.08} },
-        { id = 4, name = "Citadelle des Ombres", floors = 50, theme = "purple", desc = "Spectres & Squelettes Noirs", bg = {0.20, 0.10, 0.28} },
+        { id = 1, name = "Emerald Plains", floors = 50, theme = "green", desc = "Slimes & Forest Wolves", bg = {0.10, 0.22, 0.14} },
+        { id = 2, name = "Crystal Caverns", floors = 30, theme = "blue", desc = "Bats & Stalactites", bg = {0.08, 0.16, 0.28} },
+        { id = 3, name = "Scorching Dunes", floors = 20, theme = "gold", desc = "Scorpions & Magma Worms", bg = {0.28, 0.18, 0.08} },
+        { id = 4, name = "Shadow Citadel", floors = 50, theme = "purple", desc = "Wraiths & Dark Skeletons", bg = {0.20, 0.10, 0.28} },
     }
 
     -- Séquence Gacha d'ouverture de coffre
@@ -84,14 +84,14 @@ function MenuState.new(stateMachine)
     self.patrolRewardText = nil
     self.patrolRewardTimer = 0
 
-    -- Barre de navigation tactile Bento 2026 flottante (5 capsules ergonomiques réparties sur 308px)
+    -- Floating Bento touch navigation bar
     self.tabs = {
-        { id = "play",      name = "JOUER",   icon = "swords",   x = 6,   y = 207, w = 48, h = 26, theme = "emerald" },
-        { id = "quests",    name = "QUETES",  icon = "check",    x = 57,  y = 207, w = 48, h = 26, theme = "amber"   },
-        { id = "heroes",    name = "HEROS",   icon = "hero",     x = 108, y = 207, w = 48, h = 26, theme = "sapphire"},
+        { id = "play",      name = "PLAY",    icon = "swords",   x = 6,   y = 207, w = 48, h = 26, theme = "emerald" },
+        { id = "quests",    name = "QUESTS",  icon = "check",    x = 57,  y = 207, w = 48, h = 26, theme = "amber"   },
+        { id = "heroes",    name = "HEROES",  icon = "hero",     x = 108, y = 207, w = 48, h = 26, theme = "sapphire"},
         { id = "equipment", name = "FORGE",   icon = "shield",   x = 159, y = 207, w = 48, h = 26, theme = "sapphire"},
-        { id = "talents",   name = "TALENT",  icon = "rune",     x = 210, y = 207, w = 48, h = 26, theme = "violet"  },
-        { id = "chests",    name = "COFFRE",  icon = "chest",    x = 261, y = 207, w = 48, h = 26, theme = "amber"   },
+        { id = "talents",   name = "TALENTS", icon = "rune",     x = 210, y = 207, w = 48, h = 26, theme = "violet"  },
+        { id = "chests",    name = "CHESTS",  icon = "chest",    x = 261, y = 207, w = 48, h = 26, theme = "amber"   },
     }
 
 
@@ -273,7 +273,7 @@ function MenuState:drawTop()
     -- En-tête : niveau, or, gemmes, énergie
     -- ------------------------------------------------------------------
     UI.drawBentoCard(6, 4, w - 12, 24, {})
-    UI.drawPillBadge(10, 7, 50, 18, string.format("NIV. %d", self.saveData.accountLevel or 1),
+    UI.drawPillBadge(10, 7, 50, 18, string.format("LV. %d", self.saveData.accountLevel or 1),
         { 0.14, 0.18, 0.28, 0.95 }, { 1.0, 0.82, 0.20, 0.9 }, { 1.0, 0.88, 0.30, 1.0 })
     UI.drawIcon("gold", 76, 16, 11)
     UI.drawText(string.format("%d", self.saveData.gold), 86, 10, Palette.C.yellow)
@@ -281,10 +281,10 @@ function MenuState:drawTop()
     UI.drawText(string.format("%d", self.saveData.gems), 166, 10, Palette.C.leaf)
     UI.drawIcon("energy", 232, 16, 11)
     UI.drawText(string.format("%d/%d", self.saveData.energy, self.saveData.maxEnergy), 242, 10, Palette.C.cyan)
-    UI.drawPillButton(w - 76, 5, 68, 20, "OPTIONS", "gray", self.pressedBtn == "open_settings", "rune")
+    UI.drawPillButton(w - 76, 5, 68, 20, "SETTINGS", "gray", self.pressedBtn == "open_settings", "rune")
 
     -- ------------------------------------------------------------------
-    -- Fiche de puissance (attaque / points de vie)
+    -- Power Card (attack / max health)
     -- ------------------------------------------------------------------
     local totalAtk = hData.baseAtkBonus or 0
     local totalHp = 100 + (hData.baseHpBonus or 0)
@@ -301,23 +301,23 @@ function MenuState:drawTop()
 
     UI.drawBentoCard(6, 36, 92, 40, { accentColor = { 0.95, 0.28, 0.30, 0.9 } })
     UI.drawIcon("swords", 18, 52, 11)
-    UI.drawText("ATTAQUE", 28, 46, { 1.0, 0.45, 0.45, 1.0 })
+    UI.drawText("ATTACK", 28, 46, { 1.0, 0.45, 0.45, 1.0 })
     UI.drawTextAligned(string.format("%d", totalAtk), 6, 60, 92, "center", Palette.C.white)
 
     UI.drawBentoCard(w - 98, 36, 92, 40, { accentColor = { 0.30, 0.92, 0.48, 0.9 } })
     UI.drawIcon("heart", w - 86, 52, 11)
-    UI.drawText("POINTS VIE", w - 76, 46, { 0.45, 1.0, 0.65, 1.0 })
+    UI.drawText("HEALTH", w - 76, 46, { 0.45, 1.0, 0.65, 1.0 })
     UI.drawTextAligned(string.format("%d", totalHp), w - 98, 60, 92, "center", Palette.C.white)
 
     -- ------------------------------------------------------------------
-    -- Bannières : héros et passif
+    -- Banners: hero and passive
     -- ------------------------------------------------------------------
     Skin.ribbon(w / 2, 186, 214, 20, "gold")
     UI.drawTextAligned(string.format("%s - %s", hData.name:upper(), hData.title:upper()), w / 2 - 107, 190, 214, "center", Palette.C.white)
 
     UI.drawBentoCard(14, 212, w - 28, 24, {})
     UI.setFont("tiny")
-    UI.drawTextAligned(string.format("PASSIF : %s", hData.passiveName:upper()), 18, 215, w - 36, "center", Palette.C.yellow)
+    UI.drawTextAligned(string.format("PASSIVE: %s", hData.passiveName:upper()), 18, 215, w - 36, "center", Palette.C.yellow)
     UI.drawTextAligned(hData.passiveDesc, 18, 224, w - 36, "center", { 0.85, 0.92, 1.0, 0.95 })
     UI.setFont("main")
 end
@@ -401,23 +401,23 @@ function MenuState:drawPlayTab()
         isElevated = true,
     })
 
-    -- En-tête : Badge Chapitre + Chevrons de défilement intégrés
-    UI.drawPillBadge(cx + 8, cy + 8, 70, 18, string.format("CHAPITRE %d", chap.id), {0.14, 0.18, 0.26, 0.9}, {1.0, 0.80, 0.20, 0.9}, {1.0, 0.88, 0.30, 1.0})
+    -- Header: Chapter Badge + Integrated Nav Chevrons
+    UI.drawPillBadge(cx + 8, cy + 8, 70, 18, string.format("CHAPTER %d", chap.id), {0.14, 0.18, 0.26, 0.9}, {1.0, 0.80, 0.20, 0.9}, {1.0, 0.88, 0.30, 1.0})
     UI.drawPillButton(cx + cw - 48, cy + 8, 20, 18, "", "blue", self.pressedBtn == "chap_prev", "arrow_left")
     UI.drawPillButton(cx + cw - 24, cy + 8, 20, 18, "", "blue", self.pressedBtn == "chap_next", "arrow_right")
 
-    -- Nom du Chapitre
+    -- Chapter Name
     UI.drawText(chap.name:upper(), cx + 10, cy + 30, {0.98, 0.98, 1.0, 1.0}, {0.05, 0.06, 0.09, 1.0})
     local prevF = love.graphics.getFont()
     love.graphics.setFont(UI.getFont("tiny"))
     UI.drawText(chap.desc, cx + 10, cy + 46, {0.72, 0.80, 0.92, 1.0})
 
-    -- Barre de progression de l'étage
+    -- Floor progress bar
     local barW = cw - 20
     local barX = cx + 10
     local barY = cy + 62
     local progress = math.min(1.0, (self.saveData.records.ascensionMax or 1) / chap.floors)
-    UI.drawText(string.format("Étage %d / %d", math.min(chap.floors, self.saveData.records.ascensionMax or 1), chap.floors), barX, barY - 2, {0.85, 0.92, 1.0, 0.95})
+    UI.drawText(string.format("Floor %d / %d", math.min(chap.floors, self.saveData.records.ascensionMax or 1), chap.floors), barX, barY - 2, {0.85, 0.92, 1.0, 0.95})
     love.graphics.setFont(prevF)
 
     -- Track de barre
@@ -427,7 +427,7 @@ function MenuState:drawPlayTab()
     love.graphics.setColor(0.20, 0.85, 0.45, 1.0)
     love.graphics.rectangle("fill", barX, barY + 12, math.max(4, barW * progress), 6, 3, 3)
 
-    -- 2. BENTO 2 (HAUT-DROITE, 108x88) : PATROUILLE AFK (IDLE CHEST)
+    -- 2. BENTO 2: AFK PATROL (IDLE CHEST)
     local px, py, pw, ph = 206, 6, 108, 88
     local patrolAmt = math.floor(self.saveData.patrolGold or 0)
     local canClaim = (patrolAmt > 0)
@@ -439,30 +439,30 @@ function MenuState:drawPlayTab()
         isElevated = true,
     })
 
-    -- Coffre rebondissant & Montant
+    -- Bouncing chest & Amount
     local bounce = math.sin(t * 3.5) * 2.0
     UI.drawIcon("chest", px + 22, py + 26 + bounce, 14, {1.0, 0.85, 0.20, 1.0})
-    UI.drawText("PATROUILLE", px + 38, py + 12, {1.0, 0.88, 0.35, 1.0})
+    UI.drawText("PATROL", px + 38, py + 12, {1.0, 0.88, 0.35, 1.0})
     UI.drawText(string.format("+%d G", patrolAmt), px + 38, py + 26, {0.35, 0.95, 0.55, 1.0})
 
-    -- Bouton micro-pill Récolter
-    UI.drawPillButton(px + 10, py + 58, pw - 20, 20, "RÉCOLTER", canClaim and "gold" or "gray", self.pressedBtn == "claim_patrol", "gold")
+    -- Claim button
+    UI.drawPillButton(px + 10, py + 58, pw - 20, 20, "COLLECT", canClaim and "gold" or "gray", self.pressedBtn == "claim_patrol", "gold")
 
-    -- Feedback texte de récolte
+    -- Feedback
     if self.patrolRewardTimer and self.patrolRewardTimer > 0 then
-        UI.drawTextAligned(self.patrolRewardText or "+OR", px, py + 38, pw, "center", {1.0, 0.95, 0.20, 1.0}, {0.05, 0.05, 0.05, 1.0})
+        UI.drawTextAligned(self.patrolRewardText or "+GOLD", px, py + 38, pw, "center", {1.0, 0.95, 0.20, 1.0}, {0.05, 0.05, 0.05, 1.0})
     end
 
-    -- 3. SÉLECTEUR DE MODES (4 cartes : Ascension, Gouffre, Boss Rush, Survie)
+    -- 3. MODE SELECTOR (4 cards: Ascension, Abyss, Boss Rush, Survival)
     local events = Save.getEvents()
     local mx, my, mw = 6, 100, 118
     UI.drawBentoCard(mx, my, mw, 96, {})
 
     local modes = {
-        { id = "ascension", name = "ASCENSION", sub = "50 étages | Max " .. (self.saveData.records.ascensionMax or 1), theme = { 0.40, 0.85, 1.0, 1.0 } },
-        { id = "infinite",  name = "LE GOUFFRE", sub = "Survie infinie | Max " .. (self.saveData.records.infiniteMax or 0), theme = { 0.90, 0.45, 1.0, 1.0 } },
-        { id = "boss_rush", name = "BOSS RUSH",  sub = "Boss d'affilée | Max " .. (events.bossRushBest or 0), theme = { 1.0, 0.45, 0.35, 1.0 } },
-        { id = "survival",  name = "ARÈNE",      sub = "Vagues | Max " .. (events.survivalBest or 0), theme = { 0.45, 1.0, 0.60, 1.0 } },
+        { id = "ascension", name = "ASCENSION", sub = "50 floors | Best " .. (self.saveData.records.ascensionMax or 1), theme = { 0.40, 0.85, 1.0, 1.0 } },
+        { id = "infinite",  name = "THE ABYSS", sub = "Endless | Best " .. (self.saveData.records.infiniteMax or 0), theme = { 0.90, 0.45, 1.0, 1.0 } },
+        { id = "boss_rush", name = "BOSS RUSH",  sub = "Consecutive bosses | Best " .. (events.bossRushBest or 0), theme = { 1.0, 0.45, 0.35, 1.0 } },
+        { id = "survival",  name = "ARENA",      sub = "Waves | Best " .. (events.survivalBest or 0), theme = { 0.45, 1.0, 0.60, 1.0 } },
     }
 
     for i, mode in ipairs(modes) do
@@ -475,7 +475,7 @@ function MenuState:drawPlayTab()
         UI.setFont("main")
     end
 
-    -- 4. BENTO 4 (BAS-DROITE, 184x96) : MASTER LAUNCHER TILE
+    -- 4. BENTO 4: MASTER LAUNCHER TILE
     local lx, ly, lw, lh = 130, 100, 184, 96
     local hasEnergy = (self.saveData.energy or 0) >= Balance.energyCost(self.selectedMode)
     local pulse = 0.5 + 0.5 * math.sin(t * 3.2)
@@ -489,32 +489,30 @@ function MenuState:drawPlayTab()
         isElevated = true,
     })
 
-    -- Badge Énergie au sommet
-    -- Badge bonus : la partie reste lançable sans énergie, le bonus d'or est simplement perdu
-    local bonusLabel = hasEnergy and "BONUS +50% OR" or "SANS BONUS"
+    -- Energy bonus badge
+    local bonusLabel = hasEnergy and "BONUS +50% GOLD" or "NO BONUS"
     UI.drawPillBadge(lx + 8, ly + 8, 92, 18, bonusLabel,
         hasEnergy and {0.08, 0.32, 0.20, 0.9} or {0.16, 0.18, 0.24, 0.9},
         hasEnergy and {0.30, 0.85, 0.50, 0.9} or {0.35, 0.40, 0.50, 0.9},
         hasEnergy and {0.80, 1.0, 0.90, 1.0} or {0.65, 0.70, 0.80, 1.0}, "energy")
 
-    -- Bouton principal : vrai bouton bombé (action n°1 de l'écran), pastille A à droite
-    -- Course interrompue : le bouton devient REPRENDRE (+ bouton pour abandonner)
+    -- Main battle / resume button
     local run = Save.getRun()
     local bx, by, bw, bh = lx + 8, ly + 30, lw - 16, 40
     if hasEnergy then
-        Skin.roundRect(Palette.C.yellow, bx - 2, by - 2, bw + 4, bh + 4, 3, 0.25 + pulse * 0.35)
+        Skin.roundRect(Palette.C.leaf, bx - 2, by - 2, bw + 4, bh + 4, 3, 0.25 + pulse * 0.35)
     end
-    local oy = Skin.button(bx, by, bw, bh, run and "gold" or "green", self.pressedBtn == "play")
-    local label = run and "REPRENDRE" or "JOUER"
+    local oy = Skin.button(bx, by, bw, bh, "green", self.pressedBtn == "play")
+    local label = run and "RESUME" or "BATTLE"
     local labelW = PixelFont.getWidth(label, "main", 2)
     local tx = math.floor(bx + (bw - 18 - (labelW + 20)) / 2)
     local midY = by + oy + math.floor((bh - 3) / 2)
-    UI.drawIcon("swords", tx + 7, midY, 15)
+    UI.drawIcon("swords", tx + 7, midY, 20)
     PixelFont.print(label, tx + 20, midY - 11, Palette.C.white, "main", 2, "shadow")
     Skin.pill(bx + bw - 20, midY - 6, 14, 12, "dark", "A")
 
-    -- Sous-titre Mode & Chapitre
-    local subLabel = run and string.format("Salle %d - partie en cours", run.room or 1)
+    -- Subtitle Mode & Chapter
+    local subLabel = run and string.format("Room %d - in progress", run.room or 1)
         or string.format("%s - Ch.%d", MODE_LABELS[self.selectedMode] or "Ascension", chap.id)
     PixelFont.printf(subLabel, lx, ly + 78, lw, "center", {0.60, 0.95, 0.75, 1.0}, "main")
     if run then
@@ -532,11 +530,11 @@ function MenuState:drawQuestsTab()
     local W = Config.BOTTOM_WIDTH
 
     UI.drawBentoCard(6, 4, W - 12, 42, {})
-    UI.drawText("QUÊTES DU JOUR", 14, 7, Palette.C.yellow)
-    UI.drawPillButton(W - 122, 5, 56, 16, "QUÊTES", "gold", false)
-    UI.drawPillButton(W - 64, 5, 56, 16, "SUCCÈS", "dark", self.pressedBtn == "tab_achievements")
+    UI.drawText("DAILY QUESTS", 14, 7, Palette.C.yellow)
+    UI.drawPillButton(W - 122, 5, 56, 16, "QUESTS", "gold", false)
+    UI.drawPillButton(W - 64, 5, 56, 16, "ACHIEV.", "dark", self.pressedBtn == "tab_achievements")
 
-    -- Jauge du passe avec ses paliers
+    -- Battle pass gauge and tiers
     local barX, barY, barW = 14, 24, W - 28
     UI.drawBar(barX, barY, barW, 12, (q.points or 0) / Quests.MAX_POINTS, "gold")
     UI.setFont("tiny")
@@ -552,7 +550,7 @@ function MenuState:drawQuestsTab()
         UI.drawIcon(claimed and "check" or "chest", tx + 9, barY + 19, 9)
     end
 
-    -- Liste des missions
+    -- Mission list
     local dailyList = Save.getDailyQuestList()
     for i, quest in ipairs(dailyList) do
         local progress, done, claimed = Quests.state(quest, q)
@@ -564,24 +562,24 @@ function MenuState:drawQuestsTab()
         UI.drawBar(32, y + 16, 150, 8, progress / quest.goal, done and "green" or "blue")
         UI.setFont("tiny")
         UI.drawTextAligned(string.format("%d/%d", progress, quest.goal), 32, y + 17, 150, "center", Palette.C.white)
-        local rewardText = quest.reward.gold and (quest.reward.gold .. " OR") or ((quest.reward.gems or 0) .. " GEM")
+        local rewardText = quest.reward.gold and (quest.reward.gold .. " GOLD") or ((quest.reward.gems or 0) .. " GEMS")
         UI.drawTextAligned("+" .. rewardText, 188, y + 17, 60, "center", Palette.C.yellow)
         UI.setFont("main")
 
         if claimed then
-            UI.drawPillBadge(252, y + 5, 58, 18, "FAIT", { 0.14, 0.17, 0.24, 0.95 }, { 0.30, 0.35, 0.45, 0.8 }, Palette.C.fog, "check")
+            UI.drawPillBadge(252, y + 5, 58, 18, "CLAIMED", { 0.14, 0.17, 0.24, 0.95 }, { 0.30, 0.35, 0.45, 0.8 }, Palette.C.fog, "check")
         elseif done then
-            UI.drawPillButton(252, y + 4, 58, 20, "PRENDRE", "gold", self.pressedBtn == ("quest_" .. quest.id))
+            UI.drawPillButton(252, y + 4, 58, 20, "CLAIM", "gold", self.pressedBtn == ("quest_" .. quest.id))
         else
-            UI.drawPillBadge(252, y + 5, 58, 18, "EN COURS", { 0.10, 0.12, 0.18, 0.9 }, { 0.22, 0.26, 0.36, 0.8 }, Palette.C.steel)
+            UI.drawPillBadge(252, y + 5, 58, 18, "ACTIVE", { 0.10, 0.12, 0.18, 0.9 }, { 0.22, 0.26, 0.36, 0.8 }, Palette.C.steel)
         end
     end
 
-    -- Missions de la semaine : objectifs longs, grosses récompenses
+    -- Weekly missions
     local weeklyList, w = Save.getWeeklyQuestList()
     local baseY = 52 + #dailyList * 29 + 2
     UI.setFont("tiny")
-    UI.drawTextAligned("MISSIONS DE LA SEMAINE", 6, baseY, W - 12, "left", Palette.C.cyan)
+    UI.drawTextAligned("WEEKLY MISSIONS", 6, baseY, W - 12, "left", Palette.C.cyan)
     UI.setFont("main")
     for i, quest in ipairs(weeklyList) do
         local progress, done, claimed = Quests.state(quest, w)
@@ -591,15 +589,15 @@ function MenuState:drawQuestsTab()
             UI.setFont("tiny")
             UI.drawText(quest.name, 12, y + 3, claimed and Palette.C.fog or Palette.C.white)
             UI.drawTextAligned(string.format("%d/%d", progress, quest.goal), 150, y + 3, 50, "right", Palette.C.silver)
-            local rewardText = quest.reward.gold and (quest.reward.gold .. " OR") or ((quest.reward.gems or 0) .. " GEM")
+            local rewardText = quest.reward.gold and (quest.reward.gold .. " GOLD") or ((quest.reward.gems or 0) .. " GEMS")
             UI.drawTextAligned("+" .. rewardText, 204, y + 3, 50, "right", Palette.C.yellow)
             UI.setFont("main")
             if claimed then
-                UI.drawPillBadge(258, y + 3, 52, 14, "FAIT", { 0.14, 0.17, 0.24, 0.95 }, { 0.30, 0.35, 0.45, 0.8 }, Palette.C.fog)
+                UI.drawPillBadge(258, y + 3, 52, 14, "CLAIMED", { 0.14, 0.17, 0.24, 0.95 }, { 0.30, 0.35, 0.45, 0.8 }, Palette.C.fog)
             elseif done then
-                UI.drawPillButton(258, y + 2, 52, 16, "PRENDRE", "gold", self.pressedBtn == ("weekly_" .. quest.id))
+                UI.drawPillButton(258, y + 2, 52, 16, "CLAIM", "gold", self.pressedBtn == ("weekly_" .. quest.id))
             else
-                UI.drawPillBadge(258, y + 3, 52, 14, "EN COURS", { 0.10, 0.12, 0.18, 0.9 }, { 0.22, 0.26, 0.36, 0.8 }, Palette.C.steel)
+                UI.drawPillBadge(258, y + 3, 52, 14, "ACTIVE", { 0.10, 0.12, 0.18, 0.9 }, { 0.22, 0.26, 0.36, 0.8 }, Palette.C.steel)
             end
         end
     end
@@ -613,9 +611,9 @@ function MenuState:drawAchievementsPage()
     local d = Save.get()
 
     UI.drawBentoCard(6, 4, W - 12, 22, {})
-    UI.drawText("SUCCÈS", 14, 7, Palette.C.yellow)
-    UI.drawPillButton(W - 122, 5, 56, 16, "QUÊTES", "dark", self.pressedBtn == "tab_quests")
-    UI.drawPillButton(W - 64, 5, 56, 16, "SUCCÈS", "gold", false)
+    UI.drawText("ACHIEVEMENTS", 14, 7, Palette.C.yellow)
+    UI.drawPillButton(W - 122, 5, 56, 16, "QUESTS", "dark", self.pressedBtn == "tab_quests")
+    UI.drawPillButton(W - 64, 5, 56, 16, "ACHIEV.", "gold", false)
 
     for i, a in ipairs(Achievements.LIST) do
         local value, done, claimed = Achievements.state(a, d)
@@ -631,9 +629,9 @@ function MenuState:drawAchievementsPage()
         if claimed then
             UI.drawTextAligned("OK", 262, y + 3, 48, "center", Palette.C.leaf)
         elseif done then
-            UI.drawPillButton(262, y + 1, 48, 11, "PRENDRE", "gold", self.pressedBtn == ("ach_" .. a.id))
+            UI.drawPillButton(262, y + 1, 48, 11, "CLAIM", "gold", self.pressedBtn == ("ach_" .. a.id))
         else
-            local reward = a.reward.gold and (a.reward.gold .. " OR") or ((a.reward.gems or 0) .. " GEM")
+            local reward = a.reward.gold and (a.reward.gold .. " GOLD") or ((a.reward.gems or 0) .. " GEMS")
             UI.drawTextAligned(reward, 262, y + 3, 48, "center", Palette.C.fog)
         end
         UI.setFont("main")
@@ -657,8 +655,8 @@ function MenuState:getShopOffers()
     return {
         { kind = "item", id = itemId, price = 400 + rnd(6) * 50, currency = "gold",
           label = (Items.get(itemId) and Items.get(itemId).name or itemId), icon = "chest" },
-        { kind = "gold", amount = 1500, price = 25, currency = "gems", label = "1500 PIÈCES D'OR", icon = "gold" },
-        { kind = "energy", amount = 10, price = 12, currency = "gems", label = "+10 ÉNERGIE", icon = "energy" },
+        { kind = "gold", amount = 1500, price = 25, currency = "gems", label = "1,500 GOLD", icon = "gold" },
+        { kind = "energy", amount = 10, price = 12, currency = "gems", label = "+10 ENERGY", icon = "energy" },
     }
 end
 
@@ -668,9 +666,9 @@ function MenuState:drawShopPage()
     local offers = self:getShopOffers()
 
     UI.drawBentoCard(6, 4, W - 12, 22, {})
-    UI.drawText("BOUTIQUE DU JOUR", 14, 7, Palette.C.yellow)
-    UI.drawPillButton(W - 122, 5, 56, 16, "COFFRES", "dark", self.pressedBtn == "tab_chests")
-    UI.drawPillButton(W - 64, 5, 56, 16, "BOUTIQUE", "gold", false)
+    UI.drawText("DAILY SHOP", 14, 7, Palette.C.yellow)
+    UI.drawPillButton(W - 122, 5, 56, 16, "CHESTS", "dark", self.pressedBtn == "tab_chests")
+    UI.drawPillButton(W - 64, 5, 56, 16, "SHOP", "gold", false)
 
     for i, offer in ipairs(offers) do
         local x = 6 + (i - 1) * 103
@@ -686,36 +684,32 @@ function MenuState:drawShopPage()
             UI.drawTextAligned("x" .. (offer.amount or 1), x + 4, 112, 91, "center", Palette.C.silver)
         end
         if bought then
-            UI.drawPillBadge(x + 8, 152, 83, 20, "ACHETÉ", { 0.14, 0.17, 0.24, 0.95 }, { 0.30, 0.35, 0.45, 0.8 }, Palette.C.fog, "check")
+            UI.drawPillBadge(x + 8, 152, 83, 20, "PURCHASED", { 0.14, 0.17, 0.24, 0.95 }, { 0.30, 0.35, 0.45, 0.8 }, Palette.C.fog, "check")
         else
             local theme = (offer.currency == "gems") and "violet" or "gold"
-            UI.drawPillButton(x + 8, 150, 83, 22, offer.price .. ((offer.currency == "gems") and " GEM" or " OR"),
+            UI.drawPillButton(x + 8, 150, 83, 22, offer.price .. ((offer.currency == "gems") and " GEMS" or " GOLD"),
                 theme, self.pressedBtn == ("shop_" .. i), offer.currency == "gems" and "gem" or "gold")
         end
     end
 
     UI.setFont("tiny")
-    UI.drawTextAligned("Nouvelles offres chaque jour", 6, 186, W - 12, "center", Palette.C.steel)
+    UI.drawTextAligned("New offers available every day", 6, 186, W - 12, "center", Palette.C.steel)
     UI.setFont("main")
 end
 
 -- ============================================================================
--- PAGE : BESTIAIRE (fiches, éliminations et maîtrise)
+-- PAGE : BESTIARY (fiches, éliminations et maîtrise)
 -- ============================================================================
 -- ============================================================================
--- PAGE PARAMÈTRES (écran du bas)
+-- PAGE SETTINGS (écran du bas)
 -- ============================================================================
--- Lignes : { id, libellé, type }
---   "slider" : réglage 0..max par pas, avec boutons − / +
---   "toggle" : interrupteur OUI / NON
---   "action" : bouton unique (réinitialisation)
 MenuState.SETTINGS_ROWS = {
-    { id = "music",      label = "MUSIQUE",        kind = "slider" },
-    { id = "sfx",        label = "EFFETS SONORES", kind = "slider" },
-    { id = "depth3d",    label = "PROFONDEUR 3D",  kind = "slider", max = 1.5 },
-    { id = "showDamage", label = "DEGATS AFFICHES", kind = "toggle" },
-    { id = "lowPower",   label = "MODE ECONOMIE",  kind = "toggle" },
-    { id = "reset",      label = "REINITIALISER LA PARTIE", kind = "action" },
+    { id = "music",      label = "MUSIC",           kind = "slider" },
+    { id = "sfx",        label = "SOUND EFFECTS",   kind = "slider" },
+    { id = "depth3d",    label = "3D DEPTH",        kind = "slider", max = 1.5 },
+    { id = "showDamage", label = "DAMAGE NUMBERS",  kind = "toggle" },
+    { id = "lowPower",   label = "BATTERY SAVER",   kind = "toggle" },
+    { id = "reset",      label = "RESET SAVE DATA", kind = "action" },
 }
 
 function MenuState:settingsValue(id)
@@ -733,8 +727,8 @@ function MenuState:drawSettingsPage()
     local W = Config.BOTTOM_WIDTH
 
     UI.drawBentoCard(6, 4, W - 12, 24, {})
-    UI.drawText("PARAMETRES", 14, 8, Palette.C.yellow)
-    UI.drawPillButton(W - 68, 5, 60, 20, "RETOUR", "gray", self.pressedBtn == "settings_back")
+    UI.drawText("SETTINGS", 14, 8, Palette.C.yellow)
+    UI.drawPillButton(W - 68, 5, 60, 20, "BACK", "gray", self.pressedBtn == "settings_back")
 
     local y = 34
     for _, row in ipairs(MenuState.SETTINGS_ROWS) do
@@ -747,7 +741,7 @@ function MenuState:drawSettingsPage()
             local value = self:settingsValue(row.id)
             local ratio = math.max(0, math.min(1, value / maxV))
             UI.drawPillButton(W - 104, y + 4, 22, 20, "-", "gray", self.pressedBtn == ("set_dec_" .. row.id))
-            -- Jauge
+            -- Gauge
             local bx, bw = W - 78, 44
             love.graphics.setColor(Palette.C.slate)
             love.graphics.rectangle("fill", bx, y + 11, bw, 6)
@@ -760,18 +754,18 @@ function MenuState:drawSettingsPage()
             UI.drawPillButton(W - 30, y + 4, 22, 20, "+", "gray", self.pressedBtn == ("set_inc_" .. row.id))
         elseif row.kind == "toggle" then
             local on = self:settingsValue(row.id)
-            UI.drawPillButton(W - 78, y + 4, 70, 20, on and "OUI" or "NON", on and "green" or "gray",
+            UI.drawPillButton(W - 78, y + 4, 70, 20, on and "ON" or "OFF", on and "green" or "gray",
                 self.pressedBtn == ("set_toggle_" .. row.id))
         else
             UI.drawPillButton(W - 90, y + 4, 82, 20,
-                self.confirmReset and "CONFIRMER ?" or "EFFACER", self.confirmReset and "red" or "gray",
+                self.confirmReset and "CONFIRM?" or "RESET", self.confirmReset and "red" or "gray",
                 self.pressedBtn == "set_reset")
         end
         y = y + h + 2
     end
 
     UI.setFont("tiny")
-    UI.drawTextAligned("A : valider   B : retour   L/R : onglets", 6, y + 4, W - 12, "center", Palette.C.fog)
+    UI.drawTextAligned("A: Confirm   B: Back   L/R: Switch Tabs", 6, y + 4, W - 12, "center", Palette.C.fog)
     UI.setFont("main")
 end
 
@@ -805,13 +799,13 @@ function MenuState:drawBestiaryPage()
     local t = love.timer.getTime()
 
     UI.drawBentoCard(6, 4, W - 12, 24, {})
-    UI.drawText("BESTIAIRE", 14, 8, Palette.C.yellow)
+    UI.drawText("BESTIARY", 14, 8, Palette.C.yellow)
     UI.setFont("tiny")
-    UI.drawTextAligned("MAÎTRISE : 50 / 200 / 500 ÉLIMINATIONS", 14, 10, W - 90, "right", Palette.C.fog)
+    UI.drawTextAligned("MASTERY: 50 / 200 / 500 KILLS", 14, 10, W - 90, "right", Palette.C.fog)
     UI.setFont("main")
-    UI.drawPillButton(W - 68, 5, 60, 20, "RETOUR", "gray", self.pressedBtn == "bestiary_back")
+    UI.drawPillButton(W - 68, 5, 60, 20, "BACK", "gray", self.pressedBtn == "bestiary_back")
 
-    -- Grille des monstres (6 x 3)
+    -- Monster grid (6 x 3)
     for i, entry in ipairs(Bestiary.ENTRIES) do
         local col = (i - 1) % 6
         local row = math.floor((i - 1) / 6)
@@ -841,20 +835,20 @@ function MenuState:drawBestiaryPage()
         end
     end
 
-    -- Fiche détaillée du monstre sélectionné
+    -- Detail card of selected monster
     local entry = Bestiary.entry(self.bestiarySelected) or Bestiary.ENTRIES[1]
     local kills = counters[entry.type] or 0
     UI.drawBentoCard(5, 174, W - 10, 28, { accentColor = { 0.45, 0.75, 1.0, 0.9 } })
     UI.drawText(entry.name:upper(), 12, 176, Palette.C.white)
     UI.setFont("tiny")
-    UI.drawTextAligned(string.format("%s | %s | FAIBLESSE : %s", entry.family:upper(), entry.attack:upper(), entry.weakness:upper()), 12, 176, W - 24, "right", Palette.C.fog)
+    UI.drawTextAligned(string.format("%s | %s | WEAKNESS: %s", entry.family:upper(), entry.attack:upper(), entry.weakness:upper()), 12, 176, W - 24, "right", Palette.C.fog)
     UI.drawTextAligned(entry.desc, 12, 186, W - 24, "left", Palette.C.silver)
 
     local bonus = Bestiary.bonusFor(kills)
     local nextTier = Bestiary.nextTier(kills)
-    local infoText = string.format("MAÎTRISE : +%d%% DÉGÂTS", math.floor(bonus * 100 + 0.5))
+    local infoText = string.format("MASTERY: +%d%% DAMAGE", math.floor(bonus * 100 + 0.5))
     if nextTier then
-        infoText = infoText .. string.format("  (PALIER SUIVANT : %d)", nextTier.kills)
+        infoText = infoText .. string.format("  (NEXT TIER: %d)", nextTier.kills)
     end
     UI.drawTextAligned(infoText, 12, 194, W - 24, "right", Palette.C.yellow)
     UI.setFont("main")
@@ -943,11 +937,11 @@ function MenuState:drawHeroesTab()
     love.graphics.setFont(prevF)
 
     -- Micro-badges des stats de base du héros
-    UI.drawPillBadge(cx + 8, cy + 96, 84, 22, string.format("+%d ATQ BASE", hData.baseAtkBonus), {0.20, 0.08, 0.10, 0.9}, {0.80, 0.25, 0.28, 0.85}, {1.0, 0.45, 0.45, 1.0}, "swords")
-    UI.drawPillBadge(cx + 100, cy + 96, 84, 22, string.format("+%d PV MAX", hData.baseHpBonus), {0.08, 0.20, 0.12, 0.9}, {0.25, 0.75, 0.40, 0.85}, {0.45, 1.0, 0.65, 1.0}, "heart")
+    UI.drawPillBadge(cx + 8, cy + 96, 84, 22, string.format("+%d BASE ATK", hData.baseAtkBonus), {0.20, 0.08, 0.10, 0.9}, {0.80, 0.25, 0.28, 0.85}, {1.0, 0.45, 0.45, 1.0}, "swords")
+    UI.drawPillBadge(cx + 100, cy + 96, 84, 22, string.format("+%d MAX HP", hData.baseHpBonus), {0.08, 0.20, 0.12, 0.9}, {0.25, 0.75, 0.40, 0.85}, {0.45, 1.0, 0.65, 1.0}, "heart")
 
-    -- 3. Bento Droite : Statut & Bouton d'Action (108x138)
-    UI.drawPillButton(14, 176, 178, 18, "BESTIAIRE", "violet", self.pressedBtn == "open_bestiary", "hero")
+    -- 3. Bento Right: Status & Action Button (108x138)
+    UI.drawPillButton(14, 176, 178, 18, "BESTIARY", "violet", self.pressedBtn == "open_bestiary", "hero")
 
     local bx, by, bw, bh = 206, 58, 108, 138
     UI.drawBentoCard(bx, by, bw, bh, {
@@ -958,18 +952,18 @@ function MenuState:drawHeroesTab()
 
     if isSelected then
         UI.drawIcon("check", bx + bw / 2, by + 40, 20, {0.25, 0.95, 0.45, 1.0})
-        UI.drawTextAligned("ACTIF", bx, by + 68, bw, "center", {0.35, 0.95, 0.55, 1.0})
-        UI.drawPillBadge(bx + 8, by + 96, bw - 16, 26, "HEROS ACTIF", {0.08, 0.24, 0.14, 0.9}, {0.25, 0.80, 0.45, 0.9}, {0.80, 1.0, 0.88, 1.0})
+        UI.drawTextAligned("EQUIPPED", bx, by + 68, bw, "center", {0.35, 0.95, 0.55, 1.0})
+        UI.drawPillBadge(bx + 8, by + 96, bw - 16, 26, "ACTIVE HERO", {0.08, 0.24, 0.14, 0.9}, {0.25, 0.80, 0.45, 0.9}, {0.80, 1.0, 0.88, 1.0})
     elseif isUnlocked then
         UI.drawIcon("hero", bx + bw / 2, by + 40, 18, {0.45, 0.75, 1.0, 1.0})
-        UI.drawTextAligned("DISPONIBLE", bx, by + 68, bw, "center", {0.70, 0.80, 0.95, 1.0})
-        UI.drawPillButton(bx + 8, by + 96, bw - 16, 30, "CHOISIR", "emerald", self.pressedBtn == "select_hero", "check")
+        UI.drawTextAligned("UNLOCKED", bx, by + 68, bw, "center", {0.70, 0.80, 0.95, 1.0})
+        UI.drawPillButton(bx + 8, by + 96, bw - 16, 30, "SELECT", "emerald", self.pressedBtn == "select_hero", "check")
     else
         UI.drawIcon("lock", bx + bw / 2, by + 34, 18, {0.95, 0.80, 0.20, 1.0})
         local costStr = string.format("%d %s", hData.cost, hData.costType:upper())
         UI.drawTextAligned(costStr, bx, by + 58, bw, "center", {1.0, 0.88, 0.30, 1.0})
         local canAfford = (hData.costType == "gold" and self.saveData.gold >= hData.cost) or (hData.costType == "gems" and self.saveData.gems >= hData.cost)
-        UI.drawPillButton(bx + 8, by + 96, bw - 16, 30, "DEBLOQUER", canAfford and "gold" or "gray", self.pressedBtn == "unlock_hero", hData.costType)
+        UI.drawPillButton(bx + 8, by + 96, bw - 16, 30, "UNLOCK", canAfford and "gold" or "gray", self.pressedBtn == "unlock_hero", hData.costType)
     end
 end
 
@@ -984,7 +978,7 @@ function MenuState:drawTalentsTab()
     local canUpgrade = (self.saveData.gold >= cost)
     local t = love.timer.getTime()
 
-    -- 1. Bento Haut : Sceau Sacré & Aperçu Global (308x52)
+    -- 1. Bento Top: Sacred Seal & Overview (308x52)
     local hx, hy, hw, hh = 6, 6, 308, 52
     UI.drawBentoCard(hx, hy, hw, hh, {
         r = 8,
@@ -994,51 +988,49 @@ function MenuState:drawTalentsTab()
         isElevated = true,
     })
 
-    -- Étoile magique rotative à gauche
+    -- Rotating rune
     love.graphics.push()
     love.graphics.translate(hx + 30, hy + 26)
     love.graphics.rotate(t * 0.8)
     UI.drawIcon("rune", 0, 0, 20, {0.95, 0.50, 1.0, 1.0})
     love.graphics.pop()
 
-    UI.drawText("SCEAU SACRÉ DES TALENTS", hx + 58, hy + 10, {1.0, 0.88, 0.25, 1.0})
-    UI.drawPillBadge(hx + 58, hy + 26, 120, 18, string.format("NIV. GLOBAL: %d", totalLevel), {0.18, 0.10, 0.28, 0.9}, {0.70, 0.30, 0.90, 0.9}, {0.95, 0.85, 1.0, 1.0})
+    UI.drawText("SACRED TALENT SEAL", hx + 58, hy + 10, {1.0, 0.88, 0.25, 1.0})
+    UI.drawPillBadge(hx + 58, hy + 26, 120, 18, string.format("TOTAL LEVEL: %d", totalLevel), {0.18, 0.10, 0.28, 0.9}, {0.70, 0.30, 0.90, 0.9}, {0.95, 0.85, 1.0, 1.0})
 
-    -- 2. 4 Cartes Bento en grille 2x2 des 4 Talents Majeurs
-    -- Ligne 1 (y = 62, h = 36)
-    -- Force (+5 ATQ)
+    -- 2. 4 Bento Cards (2x2 grid)
+    -- Strength (+5 ATK)
     local t1x, t1y, t1w, t1h = 6, 62, 150, 36
     UI.drawBentoCard(t1x, t1y, t1w, t1h, { r = 6, bg = {0.09, 0.11, 0.16, 0.95}, borderColor = {0.45, 0.20, 0.24, 0.8} })
     UI.drawIcon("swords", t1x + 14, t1y + 18, 8, {1.0, 0.45, 0.45, 1.0})
-    UI.drawText("FORCE (+5 ATQ)", t1x + 28, t1y + 6, {1.0, 0.45, 0.45, 1.0})
+    UI.drawText("STRENGTH (+5 ATK)", t1x + 28, t1y + 6, {1.0, 0.45, 0.45, 1.0})
     local prevF = love.graphics.getFont()
     love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawText(string.format("Niveau %d", talents.strength or 0), t1x + 28, t1y + 20, {0.80, 0.85, 0.95, 1.0})
+    UI.drawText(string.format("Level %d", talents.strength or 0), t1x + 28, t1y + 20, {0.80, 0.85, 0.95, 1.0})
 
-    -- Vitalité (+80 PV)
+    -- Vitality (+80 HP)
     local t2x, t2y, t2w, t2h = 164, 62, 150, 36
     UI.drawBentoCard(t2x, t2y, t2w, t2h, { r = 6, bg = {0.09, 0.11, 0.16, 0.95}, borderColor = {0.20, 0.45, 0.28, 0.8} })
     UI.drawIcon("heart", t2x + 14, t2y + 18, 8, {0.45, 1.0, 0.65, 1.0})
-    UI.drawText("VITALITÉ (+80 PV)", t2x + 28, t2y + 6, {0.45, 1.0, 0.65, 1.0})
-    UI.drawText(string.format("Niveau %d", talents.vitality or 0), t2x + 28, t2y + 20, {0.80, 0.85, 0.95, 1.0})
+    UI.drawText("VITALITY (+80 HP)", t2x + 28, t2y + 6, {0.45, 1.0, 0.65, 1.0})
+    UI.drawText(string.format("Level %d", talents.vitality or 0), t2x + 28, t2y + 20, {0.80, 0.85, 0.95, 1.0})
 
-    -- Ligne 2 (y = 102, h = 36)
-    -- Agilité (+1% Esquive)
+    -- Agility (+1% Dodge)
     local t3x, t3y, t3w, t3h = 6, 102, 150, 36
     UI.drawBentoCard(t3x, t3y, t3w, t3h, { r = 6, bg = {0.09, 0.11, 0.16, 0.95}, borderColor = {0.20, 0.35, 0.55, 0.8} })
     UI.drawIcon("sparkles", t3x + 14, t3y + 18, 8, {0.35, 0.85, 1.0, 1.0})
-    UI.drawText("AGILITÉ (+1% ESQ)", t3x + 28, t3y + 6, {0.40, 0.85, 1.0, 1.0})
-    UI.drawText(string.format("Niveau %d", talents.agility or 0), t3x + 28, t3y + 20, {0.80, 0.85, 0.95, 1.0})
+    UI.drawText("AGILITY (+1% DODGE)", t3x + 28, t3y + 6, {0.40, 0.85, 1.0, 1.0})
+    UI.drawText(string.format("Level %d", talents.agility or 0), t3x + 28, t3y + 20, {0.80, 0.85, 0.95, 1.0})
 
-    -- Récupération (+50 Soin)
+    -- Recovery (+50 Heal)
     local t4x, t4y, t4w, t4h = 164, 102, 150, 36
     UI.drawBentoCard(t4x, t4y, t4w, t4h, { r = 6, bg = {0.09, 0.11, 0.16, 0.95}, borderColor = {0.45, 0.38, 0.18, 0.8} })
     UI.drawIcon("hero", t4x + 14, t4y + 18, 8, {1.0, 0.85, 0.30, 1.0})
-    UI.drawText("RÉCUP. (+50 SOIN)", t4x + 28, t4y + 6, {1.0, 0.85, 0.30, 1.0})
-    UI.drawText(string.format("Niveau %d", talents.recovery or 0), t4x + 28, t4y + 20, {0.80, 0.85, 0.95, 1.0})
+    UI.drawText("RECOVERY (+50 HEAL)", t4x + 28, t4y + 6, {1.0, 0.85, 0.30, 1.0})
+    UI.drawText(string.format("Level %d", talents.recovery or 0), t4x + 28, t4y + 20, {0.80, 0.85, 0.95, 1.0})
     love.graphics.setFont(prevF)
 
-    -- 3. Bento Bas : Action d'Amélioration Runique (308x52)
+    -- 3. Bento Bottom: Upgrade action (308x52)
     local ax, ay, aw, ah = 6, 142, 308, 52
     UI.drawBentoCard(ax, ay, aw, ah, {
         r = 8,
@@ -1046,11 +1038,11 @@ function MenuState:drawTalentsTab()
         borderColor = {0.18, 0.23, 0.33, 0.85},
     })
 
-    local btnText = string.format("AMELIORER LE SCEAU  (%d OR)", cost)
+    local btnText = string.format("UPGRADE SEAL  (%d GOLD)", cost)
     UI.drawPillButton(24, 148, 272, 38, btnText, canUpgrade and "violet" or "gray", self.pressedBtn == "upgrade_talent", "rune")
 
     if self.talentUpgradeTimer and self.talentUpgradeTimer > 0 and self.lastUpgradedTalent then
-        UI.drawTextAligned(string.format("TALENT AMELIORE : +1 %s !", self.lastUpgradedTalent:upper()), 0, 188, botW, "center", {0.35, 0.95, 0.55, 1.0})
+        UI.drawTextAligned(string.format("TALENT UPGRADED: +1 %s!", self.lastUpgradedTalent:upper()), 0, 188, botW, "center", {0.35, 0.95, 0.55, 1.0})
     end
 end
 
@@ -1061,7 +1053,7 @@ function MenuState:drawChestsTab()
     local canGold = (self.saveData.gold >= Balance.COSTS.goldChest)
     local canObs = (self.saveData.gems >= Balance.COSTS.obsidianChest)
 
-    -- 1. MONOLITHE 1 : COFFRE DORÉ (150x190)
+    -- 1. MONOLITH 1 : GOLDEN CHEST (150x190)
     local c1x, c1y, c1w, c1h = 6, 6, 150, 190
     UI.drawBentoCard(c1x, c1y, c1w, c1h, {
         r = 8,
@@ -1071,27 +1063,27 @@ function MenuState:drawChestsTab()
         isElevated = true,
     })
 
-    -- Badge Rareté
-    UI.drawPillBadge(c1x + 14, c1y + 10, c1w - 28, 18, "COMMUN / RARE", {0.25, 0.16, 0.05, 0.9}, {0.85, 0.65, 0.15, 0.9}, {1.0, 0.90, 0.35, 1.0})
+    -- Rarity badge
+    UI.drawPillBadge(c1x + 14, c1y + 10, c1w - 28, 18, "COMMON / RARE", {0.25, 0.16, 0.05, 0.9}, {0.85, 0.65, 0.15, 0.9}, {1.0, 0.90, 0.35, 1.0})
 
-    -- Sprite du Coffre
+    -- Chest sprite
     self:drawChestSprite(c1x + c1w / 2, c1y + 56, "gold", 0)
 
-    -- Titres
-    UI.drawTextAligned("COFFRE DORE", c1x, c1y + 86, c1w, "center", {1.0, 0.88, 0.25, 1.0})
+    -- Titles
+    UI.drawTextAligned("GOLDEN CHEST", c1x, c1y + 86, c1w, "center", {1.0, 0.88, 0.25, 1.0})
     local prevF = love.graphics.getFont()
     love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawTextAligned("Armes & Équipements", c1x, c1y + 102, c1w, "center", {0.70, 0.75, 0.85, 1.0})
+    UI.drawTextAligned("Weapons & Equipment", c1x, c1y + 102, c1w, "center", {0.70, 0.75, 0.85, 1.0})
     love.graphics.setFont(prevF)
 
-    -- Bouton Pilule 150 OR
-    UI.drawPillButton(c1x + 12, c1y + 122, c1w - 24, 34, Balance.COSTS.goldChest .. " OR", canGold and "gold" or "gray", self.pressedBtn == "open_gold", "gold")
+    -- Pill button
+    UI.drawPillButton(c1x + 12, c1y + 122, c1w - 24, 34, Balance.COSTS.goldChest .. " GOLD", canGold and "gold" or "gray", self.pressedBtn == "open_gold", "gold")
 
     love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawTextAligned("Tirage immédiat", c1x, c1y + 164, c1w, "center", {0.50, 0.55, 0.65, 0.8})
+    UI.drawTextAligned("Instant open", c1x, c1y + 164, c1w, "center", {0.50, 0.55, 0.65, 0.8})
     love.graphics.setFont(prevF)
 
-    -- 2. MONOLITHE 2 : COFFRE D'OBSIDIENNE (150x190)
+    -- 2. MONOLITH 2 : OBSIDIAN CHEST (150x190)
     local c2x, c2y, c2w, c2h = 164, 6, 150, 190
     UI.drawBentoCard(c2x, c2y, c2w, c2h, {
         r = 8,
@@ -1101,23 +1093,23 @@ function MenuState:drawChestsTab()
         isElevated = true,
     })
 
-    -- Badge Rareté
-    UI.drawPillBadge(c2x + 14, c2y + 10, c2w - 28, 18, "EPIQUE GARANTI", {0.20, 0.08, 0.28, 0.9}, {0.75, 0.30, 0.95, 0.9}, {0.95, 0.80, 1.0, 1.0})
+    -- Rarity badge
+    UI.drawPillBadge(c2x + 14, c2y + 10, c2w - 28, 18, "EPIC GUARANTEED", {0.20, 0.08, 0.28, 0.9}, {0.75, 0.30, 0.95, 0.9}, {0.95, 0.80, 1.0, 1.0})
 
-    -- Sprite du Coffre
+    -- Chest sprite
     self:drawChestSprite(c2x + c2w / 2, c2y + 56, "obsidian", 0)
 
-    -- Titres
-    UI.drawTextAligned("OBSIDIENNE", c2x, c2y + 86, c2w, "center", {0.90, 0.45, 1.0, 1.0})
+    -- Titles
+    UI.drawTextAligned("OBSIDIAN CHEST", c2x, c2y + 86, c2w, "center", {0.90, 0.45, 1.0, 1.0})
     love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawTextAligned("Équipements Supérieurs", c2x, c2y + 102, c2w, "center", {0.70, 0.75, 0.85, 1.0})
+    UI.drawTextAligned("Superior Equipment", c2x, c2y + 102, c2w, "center", {0.70, 0.75, 0.85, 1.0})
     love.graphics.setFont(prevF)
 
-    -- Bouton Pilule 50 GEMMES
-    UI.drawPillButton(c2x + 12, c2y + 122, c2w - 24, 34, Balance.COSTS.obsidianChest .. " GEMMES", canObs and "violet" or "gray", self.pressedBtn == "open_obsidian", "gem")
+    -- Pill button 50 GEMS
+    UI.drawPillButton(c2x + 12, c2y + 122, c2w - 24, 34, Balance.COSTS.obsidianChest .. " GEMS", canObs and "violet" or "gray", self.pressedBtn == "open_obsidian", "gem")
 
     love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawTextAligned("Butin supérieur", c2x, c2y + 164, c2w, "center", {0.50, 0.55, 0.65, 0.8})
+    UI.drawTextAligned("High tier gear", c2x, c2y + 164, c2w, "center", {0.50, 0.55, 0.65, 0.8})
     love.graphics.setFont(prevF)
 end
 
@@ -1182,7 +1174,7 @@ function MenuState:drawGachaSequence()
     if self.chestTimer < 0.7 then
         local shake = math.sin(self.chestTimer * 45) * 5
         self:drawChestSprite(cx, cy, self.openingChest, shake)
-        UI.printfOutlined("OUVERTURE DU BUTIN...", 0, 126, botW, "center", {1.0, 0.85, 0.25, 1.0})
+        UI.printfOutlined("OPENING CHEST...", 0, 126, botW, "center", {1.0, 0.85, 0.25, 1.0})
     else
         local rData = self.rewardItem and Items.getRarityData(self.rewardItem.rarity) or Items.RARITIES.rare
         UI.drawGodRays(cx, cy, 140, 14, self.godRaysAngle, {rData.color[1], rData.color[2], rData.color[3], 0.32})
@@ -1204,7 +1196,7 @@ function MenuState:drawGachaSequence()
         end
 
         local isRecupPressed = (self.pressedBtn == "claim")
-        UI.drawPillButton(cx - 70, 154, 140, 36, "RECUPERER", "emerald", isRecupPressed, "check")
+        UI.drawPillButton(cx - 70, 154, 140, 36, "CLAIM", "emerald", isRecupPressed, "check")
     end
 end
 

@@ -272,7 +272,7 @@ function UI.drawItemCard(x, y, w, h, item, level, isEquipped, isSelected, rarity
         local by = y + h - bh - 3
         Skin.roundRect(C.pine, x + 3, by, w - 6, bh, 2)
         Skin.rect(C.leaf, x + 4, by + 1, w - 8, 1)
-        PixelFont.printf("ÉQUIPÉ", x + 3, by + 3, w - 6, "center", C.white, "tiny")
+        PixelFont.printf("EQUIPPED", x + 3, by + 3, w - 6, "center", C.white, "tiny")
     end
 end
 

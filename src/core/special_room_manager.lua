@@ -80,13 +80,13 @@ function SpecialRoomManager:setup(roomType, player, roomNumber, variant)
         -- 1. SANCTUAIRE DE L'ANGE (2 Choix Tactiles)
         local healAmount = math.floor((player.maxHp or 200) * 0.40)
 
-        -- Choix B : Bénédiction Divine Aléatoire
+        -- Choice B: Random Divine Blessing
         local divineBuffs = {
             {
                 id = "atk",
-                title = "Force Divine",
-                desc = "+18% Dégâts bruts",
-                statText = "+18% ATQ",
+                title = "Divine Strength",
+                desc = "+18% Raw Damage",
+                statText = "+18% ATK",
                 color = { 0.95, 0.40, 0.20 },
                 apply = function(p)
                     p.damageMult = (p.damageMult or 1.0) + 0.18
@@ -94,9 +94,9 @@ function SpecialRoomManager:setup(roomType, player, roomNumber, variant)
             },
             {
                 id = "speed",
-                title = "Célérité Divine",
-                desc = "+15% Vitesse de tir",
-                statText = "+15% VITESSE",
+                title = "Divine Celerity",
+                desc = "+15% Attack Speed",
+                statText = "+15% SPEED",
                 color = { 0.22, 0.72, 0.95 },
                 apply = function(p)
                     p.speed = (p.speed or 130) * 1.15
@@ -104,9 +104,9 @@ function SpecialRoomManager:setup(roomType, player, roomNumber, variant)
             },
             {
                 id = "maxhp",
-                title = "Vitalité Sacrée",
-                desc = "+25% PV Max & Soin",
-                statText = "+25% PV MAX",
+                title = "Sacred Vitality",
+                desc = "+25% Max HP & Heal",
+                statText = "+25% MAX HP",
                 color = { 0.88, 0.32, 0.75 },
                 apply = function(p)
                     local bonus = math.floor((p.maxHp or 200) * 0.25)
@@ -116,8 +116,8 @@ function SpecialRoomManager:setup(roomType, player, roomNumber, variant)
             },
             {
                 id = "crit",
-                title = "Oeil du Faucon",
-                desc = "+15% Coup Critique",
+                title = "Falcon Eye",
+                desc = "+15% Critical Chance",
                 statText = "+15% CRIT",
                 color = { 1.0, 0.82, 0.20 },
                 apply = function(p)
@@ -130,9 +130,9 @@ function SpecialRoomManager:setup(roomType, player, roomNumber, variant)
         self.angelChoices = {
             [1] = {
                 id = "heal",
-                title = "Soin Vital",
-                desc = string.format("+%d PV Immédiats", healAmount),
-                statText = "+40% PV",
+                title = "Vital Heal",
+                desc = string.format("+%d Instant HP", healAmount),
+                statText = "+40% HP",
                 healVal = healAmount,
                 color = { 0.18, 0.82, 0.40 },
                 icon = "heart",
@@ -152,32 +152,32 @@ function SpecialRoomManager:setup(roomType, player, roomNumber, variant)
         }
 
     elseif self.activeType == "devil" then
-        -- 2. PACTE AVEC LE DIABLE (Sacrifice de 20% PV Max contre Pouvoir Interdit)
+        -- 2. DEVIL'S PACT (Sacrifice 20% Max HP for Forbidden Power)
         local cost = math.max(15, math.floor((player.maxHp or 200) * 0.20))
 
         local devilSkills = {
             {
                 skillId = "devil_multishot",
-                title = "Tir Obscur +1",
-                desc = "Tire une flèche frontale supplémentaire permanente",
+                title = "Dark Multishot +1",
+                desc = "Permanently fire +1 front arrow",
                 icon = "multishot",
             },
             {
                 skillId = "devil_rage",
-                title = "Fureur Démoniaque",
-                desc = "+35% de Dégâts d'attaque permanents",
+                title = "Demonic Rage",
+                desc = "+35% permanent attack damage",
                 icon = "damage",
             },
             {
                 skillId = "devil_haste",
-                title = "Célérité Infernale",
-                desc = "+25% Vitesse de tir et d'esquive",
+                title = "Infernal Haste",
+                desc = "+25% attack speed and move speed",
                 icon = "speed",
             },
             {
                 skillId = "devil_ghost",
-                title = "Forme Spectrale",
-                desc = "Permet de traverser rochers et obstacles sans entrave",
+                title = "Spectral Form",
+                desc = "Walk through obstacles and walls freely",
                 icon = "shield",
             },
         }
@@ -192,7 +192,7 @@ function SpecialRoomManager:setup(roomType, player, roomNumber, variant)
         }
 
     elseif self.activeType == "wheel" then
-        -- 3. LA ROUE DE LA FORTUNE TACTILE (LUCKY WHEEL)
+        -- 3. LUCKY WHEEL
         self.wheelAngle = 0
         self.wheelSpeed = 0
         self.isSpinning = false
@@ -204,36 +204,36 @@ function SpecialRoomManager:setup(roomType, player, roomNumber, variant)
         self.winAnimTimer = 0
         self.winningIndex = nil
         self.wheelSegments = {
-            { type = "gold", val = 60, label = "+60 OR", short = "+60", color = {0.92, 0.70, 0.18}, icon = "gold" },
-            { type = "heal", val = 0.35, label = "+35% PV", short = "+35%", color = {0.20, 0.82, 0.35}, icon = "heart" },
-            { type = "gold", val = 120, label = "+120 OR", short = "+120", color = {0.95, 0.52, 0.15}, icon = "gold" },
+            { type = "gold", val = 60, label = "+60 GOLD", short = "+60", color = {0.92, 0.70, 0.18}, icon = "gold" },
+            { type = "heal", val = 0.35, label = "+35% HP", short = "+35%", color = {0.20, 0.82, 0.35}, icon = "heart" },
+            { type = "gold", val = 120, label = "+120 GOLD", short = "+120", color = {0.95, 0.52, 0.15}, icon = "gold" },
             { type = "skill", id = "attack_boost", label = "+30% ATK", short = "+30%", color = {0.90, 0.22, 0.25}, icon = "swords" },
-            { type = "gold", val = 80, label = "+80 OR", short = "+80", color = {0.92, 0.70, 0.18}, icon = "gold" },
+            { type = "gold", val = 80, label = "+80 GOLD", short = "+80", color = {0.92, 0.70, 0.18}, icon = "gold" },
             { type = "gems", val = 5, label = "+5 GEM", short = "+5", color = {0.22, 0.68, 0.95}, icon = "gem" },
-            { type = "skill", id = "speed_boost", label = "+20% VIT", short = "+20%", color = {0.85, 0.30, 0.85}, icon = "energy" },
+            { type = "skill", id = "speed_boost", label = "+20% SPD", short = "+20%", color = {0.85, 0.30, 0.85}, icon = "energy" },
             { type = "gold", val = 200, label = "JACKPOT", short = "MAX", color = {1.0, 0.88, 0.20}, icon = "star" },
         }
 
-        -- ROUE DE BOSS : récompenses exclusives après un grand boss
+        -- BOSS WHEEL: Exclusive rewards after a boss
         if variant == "boss" then
             self.wheelSegments = {
-                { type = "gold", val = 300, label = "+300 OR", short = "+300", color = {0.92, 0.70, 0.18}, icon = "gold" },
-                { type = "heal", val = 1.0, label = "SOIN TOTAL", short = "100%", color = {0.20, 0.82, 0.35}, icon = "heart" },
+                { type = "gold", val = 300, label = "+300 GOLD", short = "+300", color = {0.92, 0.70, 0.18}, icon = "gold" },
+                { type = "heal", val = 1.0, label = "FULL HEAL", short = "100%", color = {0.20, 0.82, 0.35}, icon = "heart" },
                 { type = "gems", val = 15, label = "+15 GEM", short = "+15", color = {0.22, 0.68, 0.95}, icon = "gem" },
                 { type = "skill", id = "attack_boost", label = "+50% ATK", short = "+50%", color = {0.90, 0.22, 0.25}, icon = "swords" },
                 { type = "gold", val = 500, label = "JACKPOT", short = "MAX", color = {1.0, 0.88, 0.20}, icon = "star" },
-                { type = "heal", val = 0.6, label = "+60% PV", short = "+60%", color = {0.20, 0.82, 0.35}, icon = "heart" },
+                { type = "heal", val = 0.6, label = "+60% HP", short = "+60%", color = {0.20, 0.82, 0.35}, icon = "heart" },
                 { type = "gems", val = 8, label = "+8 GEM", short = "+8", color = {0.22, 0.68, 0.95}, icon = "gem" },
-                { type = "skill", id = "speed_boost", label = "+35% VIT", short = "+35%", color = {0.85, 0.30, 0.85}, icon = "energy" },
+                { type = "skill", id = "speed_boost", label = "+35% SPD", short = "+35%", color = {0.85, 0.30, 0.85}, icon = "energy" },
             }
         end
 
     elseif self.activeType == "merchant" then
-        -- 4. LE MARCHAND MYSTÉRIEUX AMBULANT
+        -- 4. MYSTERIOUS MERCHANT
         self.merchantOffers = {
-            { id = "potion", name = "Potion de Soin", desc = "+50% PV immédiat", cost = 70, icon = "heal", bought = false, apply = function(p) p.hp = math.min(p.maxHp, p.hp + math.floor(p.maxHp * 0.5)) end },
-            { id = "scroll", name = "Lot de Parchemins", desc = "+3 Parchemins d'arme", cost = 90, icon = "scroll", bought = false, apply = function(p) local s = require("src.data.save"); s.addScrolls("weapon", 3) end },
-            { id = "strength", name = "Élixir de Force", desc = "+15% ATK permanente", cost = 120, icon = "damage", bought = false, apply = function(p) p.damageMult = (p.damageMult or 1.0) + 0.15 end },
+            { id = "potion", name = "Healing Potion", desc = "+50% Instant HP", cost = 70, icon = "heal", bought = false, apply = function(p) p.hp = math.min(p.maxHp, p.hp + math.floor(p.maxHp * 0.5)) end },
+            { id = "scroll", name = "Scroll Bundle", desc = "+3 Weapon Scrolls", cost = 90, icon = "scroll", bought = false, apply = function(p) local s = require("src.data.save"); s.addScrolls("weapon", 3) end },
+            { id = "strength", name = "Elixir of Might", desc = "+15% Permanent ATK", cost = 120, icon = "damage", bought = false, apply = function(p) p.damageMult = (p.damageMult or 1.0) + 0.15 end },
         }
     end
 end
@@ -325,10 +325,10 @@ function SpecialRoomManager:drawTop(mapW, mapH)
     local float = math.floor(math.sin(t * 2.2) * 3 + 0.5)
 
     local SETUP = {
-        angel = { sprite = "npc_angel", glow = C.yellow, label = "ANGE GARDIEN", labelColor = C.yellow, pedestal = true },
-        devil = { sprite = "npc_devil", glow = C.red, label = "DÉMON", labelColor = C.red, pedestal = false },
-        merchant = { sprite = "npc_merchant", glow = C.cyan, label = "MARCHAND MYSTÉRIEUX", labelColor = C.cyan, pedestal = false },
-        wheel = { sprite = nil, glow = C.amber, label = "ROUE DE LA FORTUNE", labelColor = C.amber, pedestal = true },
+        angel = { sprite = "npc_angel", glow = C.yellow, label = "GUARDIAN ANGEL", labelColor = C.yellow, pedestal = true },
+        devil = { sprite = "npc_devil", glow = C.red, label = "DEMON", labelColor = C.red, pedestal = false },
+        merchant = { sprite = "npc_merchant", glow = C.cyan, label = "MYSTERIOUS MERCHANT", labelColor = C.cyan, pedestal = false },
+        wheel = { sprite = nil, glow = C.amber, label = "LUCKY WHEEL", labelColor = C.amber, pedestal = true },
     }
     local setup = SETUP[self.activeType]
     if not setup then return end
@@ -398,9 +398,9 @@ function SpecialRoomManager:drawBottom()
 
         -- Bannière supérieure dorée
         love.graphics.setFont(UI.getFont("title"))
-        UI.drawTextAligned("SANCTUAIRE DE L'ANGE", 0, 12, 320, "center", {1.0, 0.92, 0.40, 1.0}, {0.04, 0.06, 0.10, 0.9})
+        UI.drawTextAligned("ANGEL SANCTUARY", 0, 12, 320, "center", {1.0, 0.92, 0.40, 1.0}, {0.04, 0.06, 0.10, 0.9})
         love.graphics.setFont(UI.getFont("small"))
-        UI.drawTextAligned("Choisis une grâce sacrée pour ta progression", 0, 32, 320, "center", {0.80, 0.88, 0.98, 1.0}, {0.04, 0.06, 0.10, 0.9})
+        UI.drawTextAligned("Choose a sacred blessing for your journey", 0, 32, 320, "center", {0.80, 0.88, 0.98, 1.0}, {0.04, 0.06, 0.10, 0.9})
 
         -- 2 Grandes Cartes Tactiles Gummy
         local cardW = 136
@@ -467,7 +467,7 @@ function SpecialRoomManager:drawBottom()
                 love.graphics.setColor(btnCol[1], btnCol[2], btnCol[3], 1.0)
                 love.graphics.rectangle("fill", cardX + 12, btnY, cardW - 24, 24, 6, 6)
                 love.graphics.setFont(UI.getFont("small"))
-                UI.drawTextAligned("RECEVOIR", cardX + 12, btnY + 5, cardW - 24, "center", {1, 1, 1, 1})
+                UI.drawTextAligned("CLAIM", cardX + 12, btnY + 5, cardW - 24, "center", {1, 1, 1, 1})
             end
         end
 
@@ -479,11 +479,11 @@ function SpecialRoomManager:drawBottom()
         love.graphics.setColor(0.12, 0.05, 0.06, 1.0)
         love.graphics.rectangle("fill", 0, 0, 320, 240)
 
-        -- En-tête ténébreux
+        -- Header
         love.graphics.setFont(UI.getFont("title"))
-        UI.drawTextAligned("PACTE AVEC LE DIABLE", 0, 10, 320, "center", {1.0, 0.28, 0.28, 1.0}, {0.15, 0.02, 0.02, 0.9})
+        UI.drawTextAligned("DEVIL'S PACT", 0, 10, 320, "center", {1.0, 0.28, 0.28, 1.0}, {0.15, 0.02, 0.02, 0.9})
         love.graphics.setFont(UI.getFont("small"))
-        UI.drawTextAligned("Le pouvoir exige un sacrifice mortel...", 0, 28, 320, "center", {0.95, 0.75, 0.75, 1.0}, {0.15, 0.02, 0.02, 0.9})
+        UI.drawTextAligned("Power demands a mortal sacrifice...", 0, 28, 320, "center", {0.95, 0.75, 0.75, 1.0}, {0.15, 0.02, 0.02, 0.9})
 
         local pact = self.devilPact
         if pact then
@@ -505,7 +505,7 @@ function SpecialRoomManager:drawBottom()
             love.graphics.setColor(0.70, 0.10, 0.15, 0.90)
             love.graphics.rectangle("fill", cardX + 8, cardY + 8, cardW - 16, 26, 6, 6)
             love.graphics.setFont(UI.getFont("small"))
-            local costStr = string.format("SACRIFICE : -20%% PV MAX (-%d PV)", pact.costHp)
+            local costStr = string.format("SACRIFICE: -20%% MAX HP (-%d HP)", pact.costHp)
             UI.drawTextAligned(costStr, cardX + 8, cardY + 14, cardW - 16, "center", {1.0, 0.95, 0.95, 1.0})
 
             -- Pouvoir Interdit Offert
@@ -529,7 +529,7 @@ function SpecialRoomManager:drawBottom()
             love.graphics.setColor(isP1 and {0.75, 0.12, 0.18} or {0.92, 0.18, 0.24})
             love.graphics.rectangle("fill", btn1X, btn1Y + dy1, btn1W, btn1H - 2, 8, 8)
             love.graphics.setFont(UI.getFont("normal"))
-            UI.drawTextAligned("SCELLER LE PACTE", btn1X, btn1Y + 14 + dy1, btn1W, "center", {1, 1, 1, 1})
+            UI.drawTextAligned("SEAL PACT", btn1X, btn1Y + 14 + dy1, btn1W, "center", {1, 1, 1, 1})
 
             -- Bouton 2 : REFUSER (Gris sobre)
             local btn2X = 212
@@ -544,7 +544,7 @@ function SpecialRoomManager:drawBottom()
             love.graphics.setColor(isP2 and {0.24, 0.28, 0.35} or {0.35, 0.40, 0.50})
             love.graphics.rectangle("fill", btn2X, btn2Y + dy2, btn2W, btn2H - 2, 8, 8)
             love.graphics.setFont(UI.getFont("small"))
-            UI.drawTextAligned("REFUSER", btn2X, btn2Y + 16 + dy2, btn2W, "center", {0.85, 0.90, 0.95, 1.0})
+            UI.drawTextAligned("DECLINE", btn2X, btn2Y + 16 + dy2, btn2W, "center", {0.85, 0.90, 0.95, 1.0})
         end
 
     elseif self.activeType == "wheel" then
@@ -555,9 +555,9 @@ function SpecialRoomManager:drawBottom()
         love.graphics.rectangle("fill", 0, 0, 320, 240)
 
         love.graphics.setFont(UI.getFont("title"))
-        UI.drawTextAligned("ROUE DE LA FORTUNE", 0, 7, 320, "center", {1.0, 0.88, 0.35, 1.0}, {0.1, 0.05, 0.02, 0.9})
+        UI.drawTextAligned("LUCKY WHEEL", 0, 7, 320, "center", {1.0, 0.88, 0.35, 1.0}, {0.1, 0.05, 0.02, 0.9})
         love.graphics.setFont(UI.getFont("small"))
-        UI.drawTextAligned("Tentez votre chance pour débuter la run !", 0, 24, 320, "center", {0.85, 0.90, 0.98, 1.0})
+        UI.drawTextAligned("Try your luck before entering the dungeon!", 0, 24, 320, "center", {0.85, 0.90, 0.98, 1.0})
 
         local cx, cy = 160, 106
         local rad = 66
@@ -697,13 +697,13 @@ function SpecialRoomManager:drawBottom()
             love.graphics.setColor(isP and {0.20, 0.75, 0.32} or {0.28, 0.90, 0.42})
             love.graphics.rectangle("fill", 60, 186 + dy, 200, 40, 8, 8)
             love.graphics.setFont(UI.getFont("normal"))
-            UI.drawTextAligned("TOURNER LA ROUE", 60, 196 + dy, 200, "center", {1, 1, 1, 1})
+            UI.drawTextAligned("SPIN WHEEL", 60, 196 + dy, 200, "center", {1, 1, 1, 1})
             love.graphics.setFont(UI.getFont("tiny"))
-            UI.drawTextAligned("(ou touchez directement la roue)", 0, 228, 320, "center", {0.65, 0.70, 0.80, 0.8})
+            UI.drawTextAligned("(or tap the wheel directly)", 0, 228, 320, "center", {0.65, 0.70, 0.80, 0.8})
         elseif self.isSpinning then
             love.graphics.setFont(UI.getFont("normal"))
             local dots = string.rep(".", math.floor(self.animTime * 4) % 4)
-            UI.drawTextAligned("La roue tourne" .. dots, 0, 196, 320, "center", {1.0, 0.85, 0.30, 1.0})
+            UI.drawTextAligned("Spinning" .. dots, 0, 196, 320, "center", {1.0, 0.85, 0.30, 1.0})
         elseif self.wheelStopped and self.spinReward then
             local isP = (self.pressedBtn == "wheel_claim")
             local dy = isP and 3 or 0
@@ -712,10 +712,10 @@ function SpecialRoomManager:drawBottom()
             love.graphics.setColor(isP and {0.90, 0.70, 0.18} or {1.0, 0.85, 0.25})
             love.graphics.rectangle("fill", 50, 186 + dy, 220, 40, 8, 8)
             love.graphics.setFont(UI.getFont("normal"))
-            local claimTxt = "OBTENU : " .. self.spinReward.label
+            local claimTxt = "CLAIMED: " .. self.spinReward.label
             UI.drawTextAligned(claimTxt, 50, 196 + dy, 220, "center", {0.12, 0.08, 0.02, 1})
             love.graphics.setFont(UI.getFont("tiny"))
-            UI.drawTextAligned("Touchez pour récupérer et combattre !", 0, 228, 320, "center", {0.85, 0.85, 0.60, 0.9})
+            UI.drawTextAligned("Tap to claim and fight!", 0, 228, 320, "center", {0.85, 0.85, 0.60, 0.9})
         end
 
     elseif self.activeType == "merchant" then
@@ -726,10 +726,10 @@ function SpecialRoomManager:drawBottom()
         love.graphics.rectangle("fill", 0, 0, 320, 240)
 
         love.graphics.setFont(UI.getFont("title"))
-        UI.drawTextAligned("MARCHAND MYSTÉRIEUX", 0, 8, 320, "center", {0.95, 0.85, 0.40, 1.0}, {0.1, 0.05, 0.02, 0.9})
+        UI.drawTextAligned("MYSTERIOUS MERCHANT", 0, 8, 320, "center", {0.95, 0.85, 0.40, 1.0}, {0.1, 0.05, 0.02, 0.9})
         love.graphics.setFont(UI.getFont("small"))
         local sData = require("src.data.save").get()
-        local gStr = string.format("Votre solde : %d Or", sData.gold)
+        local gStr = string.format("Your Gold: %d", sData.gold)
         UI.drawTextAligned(gStr, 0, 26, 320, "center", {1.0, 0.90, 0.50, 1.0})
 
         local cardW = 94
@@ -758,13 +758,13 @@ function SpecialRoomManager:drawBottom()
                 love.graphics.setColor(0.15, 0.15, 0.18, 1.0)
                 love.graphics.rectangle("fill", cx + 6, btnY, cardW - 12, btnH, 4, 4)
                 love.graphics.setFont(UI.getFont("small"))
-                UI.drawTextAligned("VENDU", cx + 6, btnY + 10, cardW - 12, "center", {0.5, 0.5, 0.5, 1})
+                UI.drawTextAligned("SOLD", cx + 6, btnY + 10, cardW - 12, "center", {0.5, 0.5, 0.5, 1})
             else
                 local canAfford = sData.gold >= offer.cost
                 love.graphics.setColor(canAfford and {0.75, 0.55, 0.15} or {0.35, 0.25, 0.25})
                 love.graphics.rectangle("fill", cx + 6, btnY + dy, cardW - 12, btnH - 2, 4, 4)
                 love.graphics.setFont(UI.getFont("small"))
-                UI.drawTextAligned(tostring(offer.cost) .. " OR", cx + 6, btnY + 8 + dy, cardW - 12, "center", {1, 1, 1, 1})
+                UI.drawTextAligned(tostring(offer.cost) .. " GOLD", cx + 6, btnY + 8 + dy, cardW - 12, "center", {1, 1, 1, 1})
             end
         end
 
@@ -773,7 +773,7 @@ function SpecialRoomManager:drawBottom()
         love.graphics.setColor(0.25, 0.28, 0.35, 1.0)
         love.graphics.rectangle("fill", 80, 186 + dyE, 160, 36, 6, 6)
         love.graphics.setFont(UI.getFont("small"))
-        UI.drawTextAligned("QUITTER LE MARCHAND", 80, 196 + dyE, 160, "center", {0.95, 0.95, 1, 1})
+        UI.drawTextAligned("LEAVE MERCHANT", 80, 196 + dyE, 160, "center", {0.95, 0.95, 1, 1})
     end
 end
 

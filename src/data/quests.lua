@@ -7,41 +7,40 @@ local Quests = {}
 -- Missions du jour : remises à zéro à chaque nouveau jour
 -- Réserve de missions : 4 sont tirées chaque jour, différentes d'un jour à l'autre.
 Quests.POOL = {
-    { id = "kills50",    kind = "kills",    goal = 50,   points = 20, name = "Éliminer 50 monstres",      reward = { gold = 150 } },
-    { id = "kills120",   kind = "kills",    goal = 120,  points = 30, name = "Éliminer 120 monstres",     reward = { gold = 320 } },
-    { id = "rooms10",    kind = "rooms",    goal = 10,   points = 20, name = "Terminer 10 salles",        reward = { gold = 200 } },
-    { id = "rooms25",    kind = "rooms",    goal = 25,   points = 30, name = "Terminer 25 salles",        reward = { gold = 420 } },
-    { id = "chest1",     kind = "chests",   goal = 1,    points = 20, name = "Ouvrir 1 coffre",           reward = { gems = 5 } },
-    { id = "chest3",     kind = "chests",   goal = 3,    points = 30, name = "Ouvrir 3 coffres",          reward = { gems = 12 } },
-    { id = "upgrade1",   kind = "upgrades", goal = 1,    points = 20, name = "Améliorer 1 équipement",    reward = { gold = 180 } },
-    { id = "upgrade3",   kind = "upgrades", goal = 3,    points = 30, name = "Améliorer 3 équipements",   reward = { gold = 460 } },
-    { id = "boss1",      kind = "bosses",   goal = 1,    points = 20, name = "Vaincre 1 boss",            reward = { gems = 8 } },
-    { id = "boss3",      kind = "bosses",   goal = 3,    points = 35, name = "Vaincre 3 boss",            reward = { gems = 18 } },
-    { id = "skills5",    kind = "skills",   goal = 5,    points = 20, name = "Choisir 5 améliorations",   reward = { gold = 160 } },
-    { id = "skills12",   kind = "skills",   goal = 12,   points = 30, name = "Choisir 12 améliorations",  reward = { gold = 380 } },
-    { id = "gold600",    kind = "gold",     goal = 600,  points = 20, name = "Ramasser 600 pièces d'or",  reward = { gold = 200 } },
-    { id = "gold1500",   kind = "gold",     goal = 1500, points = 30, name = "Ramasser 1500 pièces d'or", reward = { gems = 10 } },
-    { id = "pots10",     kind = "pots",     goal = 10,   points = 20, name = "Briser 10 urnes",           reward = { gold = 170 } },
-    { id = "pots25",     kind = "pots",     goal = 25,   points = 30, name = "Briser 25 urnes",           reward = { gold = 400 } },
-    { id = "runs2",      kind = "runs",     goal = 2,    points = 20, name = "Terminer 2 parties",        reward = { gold = 220 } },
-    { id = "runs5",      kind = "runs",     goal = 5,    points = 35, name = "Terminer 5 parties",        reward = { gems = 14 } },
+    { id = "kills50",    kind = "kills",    goal = 50,   points = 20, name = "Defeat 50 monsters",        reward = { gold = 150 } },
+    { id = "kills120",   kind = "kills",    goal = 120,  points = 30, name = "Defeat 120 monsters",       reward = { gold = 320 } },
+    { id = "rooms10",    kind = "rooms",    goal = 10,   points = 20, name = "Clear 10 rooms",            reward = { gold = 200 } },
+    { id = "rooms25",    kind = "rooms",    goal = 25,   points = 30, name = "Clear 25 rooms",            reward = { gold = 420 } },
+    { id = "chest1",     kind = "chests",   goal = 1,    points = 20, name = "Open 1 chest",              reward = { gems = 5 } },
+    { id = "chest3",     kind = "chests",   goal = 3,    points = 30, name = "Open 3 chests",             reward = { gems = 12 } },
+    { id = "upgrade1",   kind = "upgrades", goal = 1,    points = 20, name = "Upgrade 1 equipment",       reward = { gold = 180 } },
+    { id = "upgrade3",   kind = "upgrades", goal = 3,    points = 30, name = "Upgrade 3 equipment",       reward = { gold = 460 } },
+    { id = "boss1",      kind = "bosses",   goal = 1,    points = 20, name = "Defeat 1 boss",             reward = { gems = 8 } },
+    { id = "boss3",      kind = "bosses",   goal = 3,    points = 35, name = "Defeat 3 bosses",           reward = { gems = 18 } },
+    { id = "skills5",    kind = "skills",   goal = 5,    points = 20, name = "Pick 5 skills",             reward = { gold = 160 } },
+    { id = "skills12",   kind = "skills",   goal = 12,   points = 30, name = "Pick 12 skills",            reward = { gold = 380 } },
+    { id = "gold600",    kind = "gold",     goal = 600,  points = 20, name = "Collect 600 gold",          reward = { gold = 200 } },
+    { id = "gold1500",   kind = "gold",     goal = 1500, points = 30, name = "Collect 1,500 gold",        reward = { gems = 10 } },
+    { id = "pots10",     kind = "pots",     goal = 10,   points = 20, name = "Smash 10 pots",             reward = { gold = 170 } },
+    { id = "pots25",     kind = "pots",     goal = 25,   points = 30, name = "Smash 25 pots",             reward = { gold = 400 } },
+    { id = "runs2",      kind = "runs",     goal = 2,    points = 20, name = "Complete 2 runs",           reward = { gold = 220 } },
+    { id = "runs5",      kind = "runs",     goal = 5,    points = 35, name = "Complete 5 runs",           reward = { gems = 14 } },
 }
 
--- Missions hebdomadaires : objectifs longs, récompenses nettement plus grosses
+-- Weekly missions: longer objectives, significantly bigger rewards
 Quests.WEEKLY_POOL = {
-    { id = "w_kills600",  kind = "kills",    goal = 600,  points = 0, name = "Éliminer 600 monstres",      reward = { gems = 40 } },
-    { id = "w_rooms120",  kind = "rooms",    goal = 120,  points = 0, name = "Terminer 120 salles",        reward = { gold = 2500 } },
-    { id = "w_boss15",    kind = "bosses",   goal = 15,   points = 0, name = "Vaincre 15 boss",            reward = { gems = 50 } },
-    { id = "w_gold10k",   kind = "gold",     goal = 10000, points = 0, name = "Ramasser 10 000 pièces d'or", reward = { gold = 3000 } },
-    { id = "w_upgrade12", kind = "upgrades", goal = 12,   points = 0, name = "Améliorer 12 fois",          reward = { gems = 35 } },
-    { id = "w_runs15",    kind = "runs",     goal = 15,   points = 0, name = "Terminer 15 parties",        reward = { gold = 2200, gems = 15 } },
+    { id = "w_kills600",  kind = "kills",    goal = 600,  points = 0, name = "Defeat 600 monsters",       reward = { gems = 40 } },
+    { id = "w_rooms120",  kind = "rooms",    goal = 120,  points = 0, name = "Clear 120 rooms",           reward = { gold = 2500 } },
+    { id = "w_boss15",    kind = "bosses",   goal = 15,   points = 0, name = "Defeat 15 bosses",          reward = { gems = 50 } },
+    { id = "w_gold10k",   kind = "gold",     goal = 10000, points = 0, name = "Collect 10,000 gold",       reward = { gold = 3000 } },
+    { id = "w_upgrade12", kind = "upgrades", goal = 12,   points = 0, name = "Upgrade gear 12 times",      reward = { gems = 35 } },
+    { id = "w_runs15",    kind = "runs",     goal = 15,   points = 0, name = "Complete 15 runs",          reward = { gold = 2200, gems = 15 } },
 }
 
 Quests.DAILY_COUNT = 4
 Quests.WEEKLY_COUNT = 3
 
--- Tirage déterministe : la même clé (jour ou semaine) donne toujours la même sélection,
--- mais deux journées consécutives proposent des missions différentes.
+-- Deterministic pick
 local function pickFrom(pool, key, count)
     local seed = 0
     for i = 1, #key do seed = (seed * 31 + key:byte(i)) % 2147483647 end
@@ -65,13 +64,13 @@ function Quests.weeklySelection(weekKey)
     return pickFrom(Quests.WEEKLY_POOL, "W" .. tostring(weekKey or ""), Quests.WEEKLY_COUNT)
 end
 
--- Paliers de la jauge de points (coffres du passe)
+-- Battle pass point thresholds (chest tiers)
 Quests.TIERS = {
-    { points = 20,  reward = { gold = 200 },            label = "+200 OR" },
-    { points = 40,  reward = { gems = 10 },             label = "+10 GEMMES" },
-    { points = 60,  reward = { gold = 400 },            label = "+400 OR" },
-    { points = 80,  reward = { gems = 20 },             label = "+20 GEMMES" },
-    { points = 100, reward = { gold = 800, gems = 25 }, label = "COFFRE D'OR" },
+    { points = 20,  reward = { gold = 200 },            label = "+200 GOLD" },
+    { points = 40,  reward = { gems = 10 },             label = "+10 GEMS" },
+    { points = 60,  reward = { gold = 400 },            label = "+400 GOLD" },
+    { points = 80,  reward = { gems = 20 },             label = "+20 GEMS" },
+    { points = 100, reward = { gold = 800, gems = 25 }, label = "GOLDEN CHEST" },
 }
 
 Quests.MAX_POINTS = 100

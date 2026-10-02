@@ -18,7 +18,7 @@ end
 
 -- Bascule d'un état à un autre en écrasant l'état courant
 function StateMachine:switch(name, ...)
-    assert(self.states[name], "État inexistant : " .. tostring(name))
+    assert(self.states[name], "State does not exist: " .. tostring(name))
     
     if self.current and self.current.exit then
         self.current:exit()
@@ -34,7 +34,7 @@ end
 
 -- Empile un nouvel état par-dessus l'existant (ex: Écran de Draft / Pause)
 function StateMachine:push(name, ...)
-    assert(self.states[name], "État inexistant : " .. tostring(name))
+    assert(self.states[name], "State does not exist: " .. tostring(name))
     
     if self.current and self.current.pause then
         self.current:pause()
