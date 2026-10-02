@@ -135,7 +135,8 @@ end
 -- Lit un fichier de sauvegarde en sécurité : contenu complet (marqueur de fin) et exécuté
 -- dans un environnement vide (une sauvegarde modifiée ne peut appeler aucune fonction).
 local function readSaveFile(path)
-    if not love.filesystem.getInfo(path) then return nil end
+    -- Lecture directe (un fichier absent renvoie nil) : pas de getInfo préalable, chaque
+    -- recherche de fichier coûte cher sur la carte SD de la 3DS
     local okRead, content = pcall(love.filesystem.read, path)
     if not okRead or type(content) ~= "string" then return nil end
     -- Les anciennes sauvegardes (avant le marqueur) restent acceptées si elles se terminent par "}"
@@ -168,6 +169,9 @@ function Save.load()
     local loadedData = newestSave()
     if loadedData then
         Save.data = loadedData
+        -- Empreinte avant migrations : on ne réécrit la sauvegarde que si elles ont changé
+        -- quelque chose (une écriture sur carte SD coûte ~0,1 s au démarrage)
+        local loadedText = serializeTable(loadedData)
         -- Sécurité : injection des valeurs manquantes si mise à jour du schéma
         local defaultData = getDefaultData()
         for k, v in pairs(defaultData) do
@@ -215,7 +219,7 @@ function Save.load()
             Save.applyUnlockRework()
         end
         Save.sanitizeEquipment()
-        Save.save()
+        if serializeTable(Save.data) ~= loadedText then Save.save() end
         return Save.data
     end
 

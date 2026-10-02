@@ -1,9 +1,53 @@
 -- main.lua
 -- Point d'entrée d'Arch3ro pour Nintendo 3DS (LÖVEPotion) & PC Desktop (LÖVE2D)
 
+-- Paquet 3DS : tous les modules sont regroupés dans « modules.bin » (tools/build_all.py).
+-- Une seule lecture au démarrage au lieu d'une recherche de fichier par module dans
+-- l'archive (~50 ms chacune sur Old 3DS, soit ~3 s pour la soixantaine de modules).
+-- Absent sur PC : require charge alors les fichiers .lua normalement.
+local releaseModuleBundle
+local bundleReadTime = nil
+do
+    local t0 = love.timer.getTime()
+    local okRead, blob = pcall(love.filesystem.read, "modules.bin")
+    bundleReadTime = love.timer.getTime() - t0
+    if okRead and type(blob) == "string" and blob:sub(1, 4) == "A3MB" then
+        local index, pos, byte = {}, 5, string.byte
+        while pos <= #blob do
+            local nameLen = byte(blob, pos) * 256 + byte(blob, pos + 1)
+            local name = blob:sub(pos + 2, pos + 1 + nameLen)
+            pos = pos + 2 + nameLen
+            local b1, b2, b3, b4 = byte(blob, pos, pos + 3)
+            local len = ((b1 * 256 + b2) * 256 + b3) * 256 + b4
+            index[name] = { pos + 4, len }
+            pos = pos + 4 + len
+        end
+        local function bundleLoader(name)
+            local entry = index and index[name]
+            if not entry then return nil end
+            local chunk, err = loadstring(blob:sub(entry[1], entry[1] + entry[2] - 1),
+                "@" .. name:gsub("%.", "/") .. ".lua")
+            if not chunk then error(err, 2) end
+            return chunk
+        end
+        table.insert(package.loaders, 2, bundleLoader)
+        -- Après le démarrage : on rend la mémoire du paquet (~1,3 Mo) ; les rares require
+        -- tardifs repassent par les fichiers individuels, toujours présents dans l'archive
+        releaseModuleBundle = function()
+            index, blob = nil, nil
+            for i, loader in ipairs(package.loaders) do
+                if loader == bundleLoader then table.remove(package.loaders, i) break end
+            end
+        end
+    end
+end
+
 -- Chronométrage du démarrage (écrit dans boot_profile.txt du dossier de sauvegarde)
 local Boot = require("src.core.boot_profile")
 local bootMark = Boot.mark
+if bundleReadTime then
+    Boot.marks[#Boot.marks + 1] = string.format("%-28s %7.3f s  (avant le chrono)", "lecture de modules.bin", bundleReadTime)
+end
 
 local Config = require("src.data.config")
 local Screen = require("src.core.screen")
@@ -97,6 +141,7 @@ function love.load(arg)
     gameStateMachine:switch("menu")
     bootMark("menu prêt")
     Boot.save()
+    if releaseModuleBundle then releaseModuleBundle() end
 
     -- Sur console, pas d'arguments : le fichier "bench_roomload" du dossier de sauvegarde
     -- déclenche la mesure des temps de construction de salle (résultat dans bench_log.txt)

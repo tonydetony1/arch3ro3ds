@@ -33,6 +33,8 @@ os.chdir(ROOT_DIR)
 FAST = "--fast" in sys.argv
 # --with-bench : embarque src/dev/bench.lua (mesures sur console via le fichier bench_roomload)
 WITH_BENCH = "--with-bench" in sys.argv
+# --source : embarque les .lua en source au lieu du bytecode précompilé (débogage)
+KEEP_SOURCE = "--source" in sys.argv
 
 print("=" * 60)
 print(" ARCH3RO - COMPILATION UNIFIÉE 3DSX & CIA (NINTENDO 3DS)")
@@ -65,9 +67,45 @@ love_archive_path = os.path.join(TOOLS_DIR, "romfs_dir", "game.love")
 os.makedirs(os.path.dirname(love_archive_path), exist_ok=True)
 
 print("\n[1/5] Création de l'archive de jeu optimisée (game.love)...")
+# Bytecode Lua 5.1 au format de la console : la 3DS n'a plus à compiler ~70 000 lignes de
+# source à chaque démarrage (tools/lua_bytecode.py). conf.lua reste en source (lu par boot.lua).
+sys.path.insert(0, TOOLS_DIR)
+import lua_bytecode
+use_bytecode = not KEEP_SOURCE and shutil.which(lua_bytecode.LUAC) is not None
+if not KEEP_SOURCE and not use_bytecode:
+    print(f" -> Attention : {lua_bytecode.LUAC} introuvable, scripts embarqués en source (démarrage plus lent).")
+
+
+def add_script(zf, path, arcname):
+    zf.writestr(arcname, script_bytes(path))
+
+
+# Données générées (pas de numéros de ligne utiles dans une trace) : bytecode sans débogage
+STRIPPED_SCRIPTS = {os.path.join("src", "render", "atlas_data.lua")}
+
+
+def script_bytes(path):
+    if use_bytecode:
+        return lua_bytecode.compile_for_3ds(path, cwd=ROOT_DIR, strip=os.path.normpath(path) in STRIPPED_SCRIPTS)
+    with open(path, "rb") as f:
+        return f.read()
+
+
+# Paquet de modules (lu une seule fois par main.lua) : "A3MB", puis pour chaque module
+# nom (longueur sur 2 octets) et contenu (longueur sur 4 octets), gros-boutiste
+bundle = bytearray(b"A3MB")
+
+
+def bundle_module(path):
+    name = os.path.splitext(os.path.relpath(path, ROOT_DIR))[0].replace(os.sep, ".").encode()
+    data = script_bytes(path)
+    bundle.extend(struct.pack(">H", len(name)) + name + struct.pack(">I", len(data)) + data)
+    return data
+
+
 file_count = 0
 with zipfile.ZipFile(love_archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
-    zf.write("main.lua", "main.lua")
+    add_script(zf, "main.lua", "main.lua")
     zf.write("conf.lua", "conf.lua")
     file_count += 2
     for folder in ["src", "assets"]:
@@ -85,11 +123,17 @@ with zipfile.ZipFile(love_archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
                             continue
                     fp = os.path.join(root, f)
                     arcname = os.path.relpath(fp, ROOT_DIR)
-                    zf.write(fp, arcname)
+                    if f.endswith(".lua"):
+                        zf.writestr(arcname, bundle_module(fp))
+                    else:
+                        zf.write(fp, arcname)
                     file_count += 1
+    # Stocké sans compression : main.lua le lit d'un bloc au démarrage
+    zf.writestr(zipfile.ZipInfo("modules.bin"), bytes(bundle), compress_type=zipfile.ZIP_STORED)
+    print(f" -> modules.bin : {len(bundle) // 1024} Ko de modules regroupés.")
 
 love_size = os.path.getsize(love_archive_path)
-print(f" -> {file_count} fichiers inclus.")
+print(f" -> {file_count} fichiers inclus ({'bytecode Lua 5.1 32 bits' if use_bytecode else 'scripts en source'}).")
 print(f" -> Archive game.love : {love_size / (1024*1024):.2f} Mo ({love_size:,} octets)")
 
 # -------------------------------------------------------------

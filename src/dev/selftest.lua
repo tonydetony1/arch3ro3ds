@@ -1038,7 +1038,10 @@ function SelfTest.update(gameStateMachine, testFrames)
             Save.data = nil
             local reloaded = Save.load()
             assert(reloaded.gold == goldBefore, "Truncated save must fall back to the previous one")
-            assert(reloaded.saveSeq == seq, "Reload must continue the save sequence over the broken slot")
+            assert(reloaded.saveSeq == seq - 1, "Reload must pick the previous valid slot")
+            Save.save() -- la sauvegarde suivante réécrit l'emplacement abîmé
+            Save.data = nil
+            assert(Save.load().saveSeq == seq, "Next save must repair the broken slot")
             print("[TEST] Crash-safe Save VALIDATED: ping-pong slots, truncated write recovered.")
 
         elseif testFrames >= 118 then

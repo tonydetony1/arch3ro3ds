@@ -26,11 +26,42 @@ local SFX_LIST = {
 
 local MUSIC_LIST = { "hub", "battle", "boss" }
 
+-- Sons chargés dès le démarrage (interface du menu) ; les autres le sont un par image
+-- ensuite (Audio.update), ce qui avance l'affichage du menu de ~0,6 s sur Old 3DS
+local SFX_AT_BOOT = { ui_click = true, ui_confirm = true, ui_cancel = true }
+local pendingSfx = {}
+
 local function fileExists(path)
     if love.filesystem and love.filesystem.getInfo then
         return love.filesystem.getInfo(path) ~= nil
     end
     return true
+end
+
+-- Charge un effet et ses voix. Chargement direct (pas de getInfo préalable : chaque
+-- recherche de fichier coûte plusieurs dizaines de ms sur 3DS) ; .ogg seulement si le
+-- .wav n'a pas pu être lu
+function Audio.loadSfx(name)
+    if Audio.sources[name] ~= nil then return end
+    Audio.sources[name] = false -- tenté (même en cas d'échec : pas de nouvel essai)
+    local path = SFX_PATH .. name .. ".wav"
+    local okData, data = false, nil
+    if love.sound and love.sound.newSoundData then
+        okData, data = pcall(love.sound.newSoundData, path)
+        if not okData then
+            path = SFX_PATH .. name .. ".ogg"
+            okData, data = pcall(love.sound.newSoundData, path)
+        end
+    end
+    if not okData and not fileExists(path) then return end
+    local voices = { index = 1 }
+    for i = 1, VOICES do
+        local ok, src = pcall(love.audio.newSource, okData and data or path, "static")
+        if ok and src then
+            voices[i] = src
+        end
+    end
+    if voices[1] then Audio.sources[name] = voices end
 end
 
 function Audio.init()
@@ -43,22 +74,13 @@ function Audio.init()
 
     -- Effets en WAV (PCM brut : aucun décodage Vorbis sur le processeur 3DS). Chaque son est
     -- décodé une fois en SoundData ; ses voix partagent ces échantillons en mémoire.
+    -- Chargement direct (pas de getInfo préalable : chaque recherche de fichier coûte
+    -- plusieurs dizaines de ms sur 3DS) ; .ogg seulement si le .wav n'a pas pu être lu
     for _, name in ipairs(SFX_LIST) do
-        local path = SFX_PATH .. name .. ".wav"
-        if not fileExists(path) then path = SFX_PATH .. name .. ".ogg" end
-        if fileExists(path) then
-            local okData, data = false, nil
-            if love.sound and love.sound.newSoundData then
-                okData, data = pcall(love.sound.newSoundData, path)
-            end
-            local voices = { index = 1 }
-            for i = 1, VOICES do
-                local ok, src = pcall(love.audio.newSource, okData and data or path, "static")
-                if ok and src then
-                    voices[i] = src
-                end
-            end
-            if voices[1] then Audio.sources[name] = voices end
+        if SFX_AT_BOOT[name] then
+            Audio.loadSfx(name)
+        else
+            pendingSfx[#pendingSfx + 1] = name
         end
     end
 
@@ -82,6 +104,11 @@ function Audio.play(name, pitchVar, volumeScale)
     if not Audio.enabled then return end
     if not Audio.ready then Audio.init() end
     local voices = Audio.sources[name]
+    if voices == nil then
+        -- Pas encore chargé en arrière-plan : on le charge maintenant
+        Audio.loadSfx(name)
+        voices = Audio.sources[name]
+    end
     if not voices then return end
 
     local src = voices[voices.index]
@@ -127,6 +154,14 @@ function Audio.stopMusic()
 end
 
 function Audio.update(dt)
+    -- Effets restants : un par image après le démarrage
+    local n = #pendingSfx
+    if n > 0 then
+        local name = pendingSfx[n]
+        pendingSfx[n] = nil
+        Audio.loadSfx(name)
+    end
+
     local fade = Audio.fade
     if not fade then return end
     fade.t = fade.t + dt

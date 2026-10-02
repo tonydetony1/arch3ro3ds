@@ -6,7 +6,7 @@
 
 [![Platform](https://img.shields.io/badge/Platform-Nintendo%203DS%20%7C%202DS%20%7C%20PC-E60012?style=for-the-badge&logo=nintendo-3ds&logoColor=white)](https://github.com/tonydetony1/arch3ro3ds)
 [![Engine](https://img.shields.io/badge/Engine-L%C3%96VE--Potion%203.x-D83A56?style=for-the-badge&logo=lua&logoColor=white)](https://lovebrew.org/)
-[![Framerate](https://img.shields.io/badge/Performance-60%20FPS%20Constant-2ea44f?style=for-the-badge)](https://github.com/tonydetony1/arch3ro3ds)
+[![Framerate](https://img.shields.io/badge/Performance-60%20FPS%20target-2ea44f?style=for-the-badge)](#-3ds-technical-feats--optimizations)
 [![3D Stereoscopy](https://img.shields.io/badge/Stereoscopic%203D-Native%20Hardware%20Slider-0969da?style=for-the-badge)](https://github.com/tonydetony1/arch3ro3ds)
 [![Package Format](https://img.shields.io/badge/Releases-.CIA%20%7C%20.3DSX-ff9900?style=for-the-badge)](https://github.com/tonydetony1/arch3ro3ds/releases)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
@@ -25,7 +25,7 @@
 [3DS Technical Feats](#-3ds-technical-feats--optimizations) •
 [Controls](#-controls--gameplay) •
 [Building from Source](#-building-from-source) •
-[Modding & Contributing](docs/CONTRIBUTING.md)
+[Modding & Contributing](CONTRIBUTING.md)
 
 </div>
 
@@ -142,7 +142,7 @@ At each level up, draft 1 skill among 3 randomly selected upgrades:
 ### 🛡️ Playable Hero Roster
 Every hero has unique base stat bonuses, visual sprites, custom color palettes, and a **signature Ultimate ability**:
 
-| Hero | Title | Combat Passive | Signature Ultimate (`L` / `Y`) |
+| Hero | Title | Combat Passive | Signature Ultimate (`L` / `X` / `Y`) |
 | :--- | :--- | :--- | :--- |
 | **Atreus** | *Ranger Archer* | **Courage**: +10% Attack Speed, +5% Permanent Dodge | **Celestial Barrage** (Volley of 16 homing golden arrows) |
 | **Urasil** | *Poison Master* | **Deadly Venom**: All arrows inflict 35 acid DPS | **Deadly Miasma** (Asphyxiating acid blanket over the whole room) |
@@ -186,10 +186,11 @@ Arch3ro was built with surgical respect for the Nintendo 3DS hardware constraint
 ┌────────────────────────────────────────────────────────────────────────┐
 │                      ARCH3RO 3DS GRAPHICS PIPELINE                     │
 ├────────────────────────────────────────────────────────────────────────┤
-│  Native Binary Atlas (atlas.t3x) ──> Sub-100ms Instant Boot            │
+│  Bytecode Bundle + Native Atlas  ──> ~2 s Boot on Old 3DS              │
 │  PICA200 Hardware Guardrail      ──> Caps at 24,576 Vertices/Frame     │
-│  Zero-Allocation GC Engine       ──> Pre-allocated Entity & VFX Pools  │
-│  Intelligent Touch Refresh       ──> 1 frame in 3 = Locked 60 FPS      │
+│  Near-Zero-Allocation Loop       ──> Pre-allocated Entity & VFX Pools  │
+│  Background Room Preparation     ──> ~0.15 s Room Transitions          │
+│  Intelligent Touch Refresh       ──> Bottom Screen Every 3rd Frame     │
 │  8-Layer Stereoscopic 3D Depth   ──> Physical 3D Slider Parallax       │
 └────────────────────────────────────────────────────────────────────────┘
 ```
@@ -197,16 +198,24 @@ Arch3ro was built with surgical respect for the Nintendo 3DS hardware constraint
 1. **PICA200 Hardware Vertex Guardrail (`src/core/gpu.lua`)**:
    - The 3DS GPU hardware buffer is capped at $6 \times 0x1000 = 24\,576$ vertices per frame (both screens combined, with the top screen counting double in stereoscopic 3D mode).
    - Buffer overruns cause black screens or GPU lockups. Arch3ro uses real-time hardware vertex estimation to gracefully cull ambient particles during intense bullet-hell waves, guaranteeing absolute rock-solid stability.
-2. **Native GPU Texture Binary (`assets/atlas.t3x`)**:
-   - Custom `png2t3x.py` tooling converts the universal sprite atlas directly into native PICA200 tile format.
-   - Boot time is cut down to **less than 100 milliseconds**, eliminating runtime PNG decompression delays.
-3. **Zero Garbage Collector Allocations (Zero-GC Realtime Loop)**:
+2. **Fast Boot (`tools/build_all.py`, `tools/lua_bytecode.py`)**:
+   - Every Lua module is precompiled to Lua 5.1 bytecode in the console's 32-bit format and packed into a single `modules.bin`, read once at startup instead of ~60 separate file lookups.
+   - Game files are searched before the SD card save folder (`t.appendidentity`), UI sounds load first and the other effects stream in during the first frames.
+   - Custom `png2t3x.py` tooling converts the sprite atlas directly into native PICA200 tile format.
+   - Measured in Azahar at Old 3DS clock: **9.4 s → ~2 s** from launch to the main menu.
+3. **Near-Zero Garbage Collector Pressure**:
    - All 200 projectiles, 30 enemies, 100 particles, 40 floating combat texts, and 120 loot drops are sourced from pre-allocated memory pools.
-   - Zero table allocations during combat: **no micro-stutter** from the Lua garbage collector.
+   - About 0.3 KB of Lua memory allocated per frame in combat (measured on the console with `bench_alloc`): **no micro-stutter** from the Lua garbage collector.
 4. **Smart Touch Screen Refresh (`src/core/runloop.lua`)**:
    - The bottom touch screen only renders every 3 frames (`RunLoop.BOTTOM_EVERY = 3`) when idle, immediately boosting to full speed upon stylus touch.
-   - Frees up critical CPU/GPU cycles to lock the top screen combat at a silky smooth **60 FPS** on both Old 3DS and New 3DS.
-5. **Hardware Stereoscopic 3D Slider Support (`src/render/depth.lua`)**:
+   - Frees up CPU/GPU time for the top screen, where the action happens.
+5. **Background Room Preparation (`src/core/slice.lua`)**:
+   - Room layouts are deterministic, so the next room's stone blocks and hazard textures are generated *during* the current room, a few milliseconds per frame, inside the time the frame has left before 1/60 s.
+   - Measured in Azahar at Old 3DS clock: room transitions went from **2.1 s on average (up to 8.2 s)** to **~0.15 s**.
+6. **Measured Frame Rate**:
+   - New 3DS: 60 FPS.
+   - Old 3DS (Azahar at native clock): ~58 FPS in typical rooms, ~46 FPS in the busiest rooms (10 monsters on screen).
+7. **Hardware Stereoscopic 3D Slider Support (`src/render/depth.lua`)**:
    - 8 distinct depth layers mapped directly to the physical 3DS slider:
      - `SKY` (-10 px): Recessed deep behind the screen
      - `GROUND` (0 px): Neutral screen plane
@@ -221,13 +230,13 @@ Arch3ro was built with surgical respect for the Nintendo 3DS hardware constraint
 | :--- | :--- | :--- |
 | **Move Hero** | **Circle Pad** (analog) or **D-Pad** | **Arrow Keys** or **W, A, S, D** |
 | **Shoot / Attack** | *Automatic when standing still* | *Automatic when standing still* |
-| **Dash / Dodge Roll** | **R** or **B** Button | **Spacebar** or **Shift** |
-| **Signature Ultimate** | **L** or **X** Button | **E** or **Q** Key |
+| **Dash / Dodge Roll** | **R** or **B** Button | **Shift**, **J** or **B** Key |
+| **Signature Ultimate** | **L**, **X** or **Y** Button | **Spacebar**, **K** or **U** Key |
 | **Interact / Confirm** | **A** Button | **Enter** or **Left Click** |
 | **Back / Cancel** | **B** Button | **Escape** or **Right Click** |
 | **Navigate Menus** | **Touch Screen (Stylus)** or D-Pad | **Mouse (Click & Drag)** |
 | **Performance Overlay** | **SELECT** Button | **F3** Key |
-| **Pause** | **START** Button | **Escape** or **P** Key |
+| **Pause** | **START** Button | **Escape**, **P** or **Enter** Key |
 
 ---
 
@@ -244,12 +253,12 @@ arch3ro3ds/
 ├── run.sh                    # Portable PC launcher script
 ├── LICENSE                   # Open-source MIT License
 ├── README.md                 # Complete project documentation
+├── CONTRIBUTING.md           # Step-by-step modding and contribution guide
 ├── assets/                   # Textures, audio, icons, and binary t3x atlas
 │   ├── atlas.png / atlas.t3x # Universal packed spritesheet
 │   ├── banner.png / icon.png # Official CIA banner and icon artwork
 │   └── audio/                # Sound effects and music tracks
 ├── docs/                     # Additional documentation and assets
-│   ├── CONTRIBUTING.md       # Step-by-step modding and contribution guide
 │   └── screenshots/          # Dual-screen gameplay captures
 ├── src/                      # Modular Lua source codebase
 │   ├── audio/                # Adaptive music and sound effect managers
@@ -292,15 +301,21 @@ make bench
 ```
 
 ### Compiling `.CIA` & `.3DSX` for 3DS
-Building the 3DS package requires **devkitPro** with the `devkitARM` and `3ds-tools` toolchains:
+No devkitPro needed: `tools/build_all.py` packs the game into prebuilt LÖVE Potion runtimes, patches them and assembles the CIA with the bundled `tools/makerom`. Requirements:
+
+- **Python 3** and **LÖVE 11.4+** (used to bake the sprite atlas; `love` in `PATH` or `~/AppImages/löve.appimage`).
+- The **LÖVE Potion runtime templates** in `tools/.templates/` (not stored in git, ~100 MB). The build patches them at fixed offsets, so they must be these exact files:
+
+  | File | SHA-256 |
+  | :--- | :--- |
+  | `lovepotion.3dsx` | `58a10355c910497b73fafdd5d0426d8ed36c48a83e83db4c10779eec5505815c` |
+  | `lovepotion.elf` | `2bc4904aec0bee8125a8febd4a0e314aef2e38e87e442b67583421fa064b06be` |
+  | `lovepotion_cia.elf` | `49cc5008e7c2f5332ee94561959152f97f29d6104e74b47f480f32ac2f79b9e9` |
 
 ```bash
-# Generate 3DS binaries
-make 3ds
-
-# Or individually:
-make cia   # Builds Arch3ro.cia (HOME menu installable)
-make 3dsx  # Builds Arch3ro.3dsx (Homebrew Launcher)
+make build       # Bakes the atlas, builds Arch3ro.3dsx and Arch3ro.cia
+make build-fast  # Arch3ro.3dsx only, keeps the current atlas (quick iteration)
+make citra       # Builds and starts the game in Azahar / Citra
 ```
 
 ---
@@ -309,7 +324,7 @@ make 3dsx  # Builds Arch3ro.3dsx (Homebrew Launcher)
 
 Contributions, bug reports, and custom content are warmly encouraged! The game's modular data-driven architecture allows anyone to create new heroes, weapons, chapters, or skills without modifying engine internals.
 
-Check out our **[📖 Contribution & Modding Guide](docs/CONTRIBUTING.md)** to learn how to:
+Check out our **[📖 Contribution & Modding Guide](CONTRIBUTING.md)** to learn how to:
 - 🧙‍♂️ **Create a new Hero** with custom sprites, passives, and an ultimate ability.
 - 🗺️ **Add new Chapters & Worlds** with custom floor tiles and enemy pools.
 - 🧱 **Build new Room Layouts** with tactical water, cover, and barrel hazards.
