@@ -148,11 +148,24 @@ local function readSaveFile(path)
     return nil
 end
 
--- Chargement depuis le stockage persistant (fichier principal, sinon copie de secours)
+-- Des deux fichiers valides, celui qui porte le numéro de sauvegarde le plus élevé
+-- (anciennes sauvegardes sans numéro : 0, le fichier principal l'emporte à égalité)
+local function newestSave()
+    local main = readSaveFile(Save.SAVE_FILE)
+    local backup = readSaveFile(Save.BACKUP_FILE)
+    if main and backup then
+        local seqMain = tonumber(main.saveSeq) or 0
+        local seqBackup = tonumber(backup.saveSeq) or 0
+        return (seqBackup > seqMain) and backup or main
+    end
+    return main or backup
+end
+
+-- Chargement depuis le stockage persistant (le plus récent des deux fichiers valides)
 function Save.load()
     if Save.data then return Save.data end
 
-    local loadedData = readSaveFile(Save.SAVE_FILE) or readSaveFile(Save.BACKUP_FILE)
+    local loadedData = newestSave()
     if loadedData then
         Save.data = loadedData
         -- Sécurité : injection des valeurs manquantes si mise à jour du schéma
@@ -214,7 +227,10 @@ end
 
 -- Efface toute la progression et repart d'une sauvegarde neuve
 function Save.reset()
+    -- Le numéro continue : l'ancienne progression (numéro plus élevé) ne doit pas revenir
+    local seq = Save.data and Save.data.saveSeq
     Save.data = getDefaultData()
+    Save.data.saveSeq = seq
     Save.save()
     Save.applySettings()
     return Save.data
@@ -287,15 +303,18 @@ function Save.sanitizeEquipment()
     d.equipped.pet = d.equipped.pet1
 end
 
--- Écriture sur disque en deux temps : copie de secours puis fichier principal.
--- Une coupure (batterie, console éteinte) pendant l'une des deux écritures laisse
--- toujours l'autre fichier complet ; Save.load prend le premier fichier valide.
+-- Écriture en alternance (ping-pong) : chaque sauvegarde porte un numéro croissant et
+-- va dans le fichier qui contient la plus ancienne des deux. Une coupure (batterie,
+-- console éteinte) pendant l'écriture laisse donc toujours la précédente intacte, et
+-- Save.load reprend le fichier valide le plus récent. Une seule écriture par sauvegarde :
+-- sur la carte SD de la 3DS, chaque écriture coûte ~0,1 s quelle que soit sa taille.
 function Save.save()
     if not Save.data then return false end
+    local seq = (Save.data.saveSeq or 0) + 1
+    Save.data.saveSeq = seq
     local content = "return " .. serializeTable(Save.data) .. "\n" .. END_MARK .. "\n"
-    local okBackup = love.filesystem.write(Save.BACKUP_FILE, content)
-    local ok = love.filesystem.write(Save.SAVE_FILE, content)
-    return ok or okBackup
+    local target = (seq % 2 == 1) and Save.SAVE_FILE or Save.BACKUP_FILE
+    return love.filesystem.write(target, content)
 end
 
 -- ============================================================================

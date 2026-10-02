@@ -11,6 +11,25 @@ local PixelFont = require("src.ui.pixel_font")
 local HeroSprites = require("src.render.sprites.heroes")
 
 local Player = {}
+
+-- Manette principale mise en cache : love.joystick.getJoysticks() construit une table neuve
+-- à chaque appel ; on ne la relit que si le nombre de manettes change (aucune allocation par image)
+local cachedJoystick, cachedJoystickCount = nil, -1
+local function primaryJoystick()
+    local count = love.joystick.getJoystickCount()
+    local stale = cachedJoystick and cachedJoystick.isConnected and not cachedJoystick:isConnected()
+    if count ~= cachedJoystickCount or stale then
+        cachedJoystickCount = count
+        cachedJoystick = (count > 0) and love.joystick.getJoysticks()[1] or nil
+    end
+    return cachedJoystick
+end
+
+-- Touche clavier (PC) : pcall protège des noms de touches inconnus selon la disposition
+local function isDown(k)
+    local ok, down = pcall(love.keyboard.isDown, k)
+    return ok and down
+end
 Player.__index = Player
 
 function Player.new(startX, startY)
@@ -194,9 +213,8 @@ function Player:handleInput(dt)
     local inputY = 0
 
     -- 1. Circle Pad 3DS
-    local joysticks = love.joystick.getJoysticks()
-    if #joysticks > 0 then
-        local joy = joysticks[1]
+    local joy = primaryJoystick()
+    if joy then
         local rawX = joy:getAxis(1) or 0
         local rawY = joy:getAxis(2) or 0
         local mag = math.sqrt(rawX * rawX + rawY * rawY)
@@ -221,10 +239,6 @@ function Player:handleInput(dt)
 
     -- 2. Clavier PC (uniquement hors console 3DS)
     if inputX == 0 and inputY == 0 and not Screen.is3DS and love.keyboard and love.keyboard.isDown then
-        local isDown = function(k)
-            local ok, down = pcall(love.keyboard.isDown, k)
-            return ok and down
-        end
         if isDown("left") or isDown("q") or isDown("a") then
             inputX = inputX - 1
         end

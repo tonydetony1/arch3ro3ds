@@ -7,6 +7,7 @@
 -- Compatible LÖVE 11 et LÖVE Potion (Canvas + Quad uniquement, aucun shader).
 
 local Palette = require("src.render.palette")
+local Slice = require("src.core.slice")
 
 local SpriteAtlas = {}
 SpriteAtlas.__index = SpriteAtlas
@@ -41,6 +42,34 @@ local function intern(r, g, b)
         colorCache[key] = c
     end
     return c
+end
+
+-- Couleur ombrée par (couleur source, facteur postérisé) : le résultat ne dépend que de ces
+-- deux valeurs, on évite ainsi le mélange et les trois arrondis d'intern() à chaque pixel
+local shadeCache = setmetatable({}, { __mode = "k" })
+local function shadeColor(c, f)
+    local byF = shadeCache[c]
+    if not byF then
+        byF = {}
+        shadeCache[c] = byF
+    end
+    local out = byF[f]
+    if out then return out end
+    local r, g, b = c[1], c[2], c[3]
+    if f < 1 then
+        local k = 1 - f
+        r = r * f + k * 0.10
+        g = g * f + k * 0.04
+        b = b * f + k * 0.22
+    else
+        local k = (f - 1) * 0.9
+        r = r + (1.00 - r) * k
+        g = g + (0.96 - g) * k
+        b = b + (0.82 - b) * k
+    end
+    out = intern(r, g, b)
+    byF[f] = out
+    return out
 end
 
 local function shade3d(pix, gw, gh, opts)
@@ -92,19 +121,7 @@ local function shade3d(pix, gw, gh, opts)
                 local vy = (y - 1) / math.max(1, gh - 1)
                 local f = 1 + (lam - LZ) * 1.35 * strength - (vy - 0.35) * 0.22 * strength
                 f = math.floor(f / 0.08 + 0.5) * 0.08
-                local r, g, b = c[1], c[2], c[3]
-                if f < 1 then
-                    local k = 1 - f
-                    r = r * f + k * 0.10
-                    g = g * f + k * 0.04
-                    b = b * f + k * 0.22
-                else
-                    local k = (f - 1) * 0.9
-                    r = r + (1.00 - r) * k
-                    g = g + (0.96 - g) * k
-                    b = b + (0.82 - b) * k
-                end
-                out[y][x] = intern(r, g, b)
+                out[y][x] = shadeColor(c, f)
             else
                 out[y][x] = c
             end
@@ -375,6 +392,144 @@ function SpriteAtlas.gridToCanvas(grid, palette, outline, shadeOpts)
             if c then
                 imgData:setPixel(x - 1, y - 1, c[1], c[2], c[3], c[4] or 1)
             end
+        end
+    end
+    local img = love.graphics.newImage(imgData)
+    img:setFilter("nearest", "nearest")
+    return img, w, h
+end
+
+-- Variante rapide de gridToCanvas pour une grille plate (cells[(y - 1) * gw + x] = caractère).
+-- Pixels identiques, mais sans grille de chaînes, sans fermeture par pixel et avec la hauteur
+-- en dôme précalculée : les blocs de pierre des salles se construisaient en ~0,6 s chacun sur
+-- 3DS (Lua interprété), ce qui gelait chaque changement de salle.
+local floor, min, max, sqrt = math.floor, math.min, math.max, math.sqrt
+
+-- Distance (4-voisins) au bord de la silhouette, deux passes comme shade3d
+local function distanceMap(col, gw, gh)
+    local dist = {}
+    for i = 1, gw * gh do dist[i] = col[i] and 99 or 0 end
+    for y = 1, gh do
+        Slice.check()
+        local row = (y - 1) * gw
+        for x = 1, gw do
+            local i = row + x
+            local d = dist[i]
+            if d > 0 then
+                local up = (y > 1) and dist[i - gw] or 0
+                local left = (x > 1) and dist[i - 1] or 0
+                dist[i] = min(d, up + 1, left + 1)
+            end
+        end
+    end
+    for y = gh, 1, -1 do
+        Slice.check()
+        local row = (y - 1) * gw
+        for x = gw, 1, -1 do
+            local i = row + x
+            local d = dist[i]
+            if d > 0 then
+                local down = (y < gh) and dist[i + gw] or 0
+                local right = (x < gw) and dist[i + 1] or 0
+                dist[i] = min(d, down + 1, right + 1)
+            end
+        end
+    end
+    return dist
+end
+
+-- Ombrage de shade3d sur tableaux plats ; renvoie les couleurs ombrées (false = vide)
+local function shadeFlat(col, gw, gh, opts)
+    local D = opts.depth or 3
+    local strength = opts.strength or 1.0
+    local dist = distanceMap(col, gw, gh)
+    -- Hauteur en dôme sur une grille bordée de zéros : hm[y * W2 + x + 1], x et y de 0 à g+1
+    local W2 = gw + 2
+    local hm = {}
+    for i = 1, W2 * (gh + 2) do hm[i] = 0 end
+    for y = 1, gh do
+        local row = (y - 1) * gw
+        for x = 1, gw do
+            local d = dist[row + x]
+            if d ~= 0 then
+                local t = min(d, D) / D
+                hm[y * W2 + x + 1] = 1 - (1 - t) * (1 - t)
+            end
+        end
+    end
+    local out = {}
+    local vyDen = max(1, gh - 1)
+    for y = 1, gh do
+        Slice.check()
+        local vy = (y - 1) / vyDen
+        local rowTerm = (vy - 0.35) * 0.22 * strength
+        -- Normale verticale (gradient nul) : lam == LZ, le facteur ne dépend que de la ligne
+        local fFlat = floor((1 - rowTerm) / 0.08 + 0.5) * 0.08
+        local row = (y - 1) * gw
+        for x = 1, gw do
+            local i = row + x
+            local c = col[i]
+            if c and not c.flat then
+                local p = y * W2 + x + 1
+                local gx = (hm[p + 1] - hm[p - 1]) * 1.6
+                local gy = (hm[p + W2] - hm[p - W2]) * 1.6
+                local f
+                if gx == 0 and gy == 0 then
+                    f = fFlat
+                else
+                    local nx, ny = -gx, -gy
+                    local lam = (nx * LX + ny * LY + LZ) / sqrt(nx * nx + ny * ny + 1)
+                    f = 1 + (lam - LZ) * 1.35 * strength - rowTerm
+                    f = floor(f / 0.08 + 0.5) * 0.08
+                end
+                out[i] = shadeColor(c, f)
+            else
+                out[i] = c
+            end
+        end
+    end
+    return out
+end
+
+function SpriteAtlas.cellsToImage(cells, gw, gh, palette, outline, shadeOpts)
+    local pal = {}
+    for k, v in pairs(palette) do pal[k] = toColor(v) end
+    local col = {}
+    for i = 1, gw * gh do col[i] = pal[cells[i]] or false end
+    if shadeOpts then col = shadeFlat(col, gw, gh, shadeOpts) end
+
+    -- Grille finale avec marge de contour : px[y * w + x + 1], x de 0 à w-1
+    local pad = outline and 1 or 0
+    local w, h = gw + pad * 2, gh + pad * 2
+    local px = {}
+    for i = 1, w * h do px[i] = false end
+    for y = 1, gh do
+        local src, dst = (y - 1) * gw, (y - 1 + pad) * w + pad
+        for x = 1, gw do px[dst + x] = col[src + x] end
+    end
+    if outline then
+        local oc = toColor(outline)
+        local marks = {}
+        for y = 0, h - 1 do
+            Slice.check()
+            for x = 0, w - 1 do
+                local i = y * w + x + 1
+                if not px[i] and ((y > 0 and px[i - w]) or (y < h - 1 and px[i + w])
+                    or (x > 0 and px[i - 1]) or (x < w - 1 and px[i + 1])) then
+                    marks[#marks + 1] = i
+                end
+            end
+        end
+        for k = 1, #marks do px[marks[k]] = oc end
+    end
+
+    local imgData = love.image.newImageData(w, h)
+    for y = 0, h - 1 do
+        Slice.check()
+        local row = y * w
+        for x = 0, w - 1 do
+            local c = px[row + x + 1]
+            if c then imgData:setPixel(x, y, c[1], c[2], c[3], c[4] or 1) end
         end
     end
     local img = love.graphics.newImage(imgData)

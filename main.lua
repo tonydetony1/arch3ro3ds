@@ -20,6 +20,8 @@ local PauseState = require("src.states.pause")
 local GameOverState = require("src.states.gameover")
 local Gpu = require("src.core.gpu")
 local Perf = require("src.core.perf")
+local PixelFont = require("src.ui.pixel_font")
+local Palette = require("src.render.palette")
 
 -- Boucle 3DS : écran tactile redessiné une image sur deux (voir src/core/runloop.lua)
 if Gpu.is3DS and love.graphics.getScreens then
@@ -32,6 +34,9 @@ local gameStateMachine
 local isTestMode = false
 local testFrames = 0
 local showGpuStats = false
+local GPU_STATS_REFRESH = 0.25
+local gpuStatsNextRefresh = 0
+local gpuStatsText = ""
 local benchMode = false
 local Bench = nil
 
@@ -93,9 +98,18 @@ function love.load(arg)
     bootMark("menu prêt")
     Boot.save()
 
-    if benchMode then
-        Bench = require("src.dev.bench")
+    -- Sur console, pas d'arguments : le fichier "bench_roomload" du dossier de sauvegarde
+    -- déclenche la mesure des temps de construction de salle (résultat dans bench_log.txt)
+    local roomloadFlag = love.filesystem.getInfo and love.filesystem.getInfo("bench_roomload") ~= nil
+    if benchMode or roomloadFlag then
+        -- src/dev n'est embarqué dans le paquet 3DS qu'avec `build_all.py --with-bench`
+        local ok, mod = pcall(require, "src.dev.bench")
+        Bench = ok and mod or nil
+    end
+    if Bench then
         Bench.parse(arg)
+        if roomloadFlag then Bench.active, Bench.roomload = true, true end
+        if love.filesystem.getInfo("bench_lprof") then Bench.lprof = {} end
         Bench.start(gameStateMachine)
     end
 
@@ -146,12 +160,19 @@ function love.draw(screen)
     )
     if showGpuStats and (screen == nil or screen == "bottom") then
         local st = Gpu.stats
+        -- Texte reconstruit 4 fois par seconde : une chaîne neuve à chaque image allouait
+        -- une mise en page de police par image (pression GC visible sur la console)
+        local now = love.timer.getTime()
+        if now >= gpuStatsNextRefresh then
+            gpuStatsNextRefresh = now + GPU_STATS_REFRESH
+            gpuStatsText = string.format("%d FPS  %d sommets  %d appels  %d rejets",
+                love.timer.getFPS(), st.vertices, st.calls, st.skipped)
+        end
         love.graphics.origin()
         love.graphics.setColor(0, 0, 0, 0.7)
         love.graphics.rectangle("fill", 0, 0, 250, 12)
         love.graphics.setColor(st.skipped > 0 and 1 or 0.6, 1, 0.6, 1)
-        require("src.ui.pixel_font").print(string.format("%d FPS  %d sommets  %d appels  %d rejets",
-            love.timer.getFPS(), st.vertices, st.calls, st.skipped), 2, 2, require("src.render.palette").C.white, "tiny")
+        PixelFont.print(gpuStatsText, 2, 2, Palette.C.white, "tiny")
         love.graphics.setColor(1, 1, 1, 1)
     end
 end

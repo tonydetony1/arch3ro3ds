@@ -4,6 +4,7 @@
 -- chaque seconde et enregistre des captures dans le dossier de sauvegarde LÖVE.
 
 local Gpu = require("src.core.gpu")
+local ObstacleManager = require("src.core.obstacle_manager")
 
 local Bench = {
     active = false,
@@ -24,6 +25,8 @@ function Bench.parse(args)
         if a == "--profile" then Gpu.profile = {} end
         if a == "--lprof" then Bench.lprof = {} end
         if a == "--menu" then Bench.menu = true end
+        if a == "--alloc" then Bench.alloc = {} end
+        if a == "--roomload" then Bench.roomload = true end
         local r = a:match("^%-%-room=(%d+)$")
         if r then Bench.room = tonumber(r) end
         local d = a:match("^%-%-duration=(%d+)$")
@@ -47,6 +50,120 @@ local function startLuaProfiler()
     end, "", 1000)
 end
 
+-- Profil par fonction : chaque fonction des modules src.* est enveloppée et accumule une
+-- mesure (Ko alloués ou secondes) pendant son exécution. Inclusif : un appelant compte
+-- aussi ses appelés. measure() doit être monotone (GC arrêté pour les allocations).
+local function wrapModules(acc, measure)
+    local wrapped = {}
+    local function wrapTable(t, prefix)
+        if type(t) ~= "table" or wrapped[t] then return end
+        wrapped[t] = true
+        for k, fn in pairs(t) do
+            if type(fn) == "function" and type(k) == "string" and prefix ~= "src.dev.bench" then
+                local slot = { 0, 0 }
+                acc[prefix .. ":" .. k] = slot
+                t[k] = function(...)
+                    local before = measure()
+                    local a, b, c, d, e, f = fn(...)
+                    slot[1] = slot[1] + (measure() - before)
+                    slot[2] = slot[2] + 1
+                    return a, b, c, d, e, f
+                end
+            end
+        end
+        local mt = getmetatable(t)
+        if mt and type(mt.__index) == "table" then wrapTable(mt.__index, prefix) end
+    end
+    for name, mod in pairs(package.loaded) do
+        if type(name) == "string" and name:sub(1, 4) == "src." then wrapTable(mod, name) end
+    end
+end
+
+local function sortedRows(acc)
+    local rows = {}
+    for k, v in pairs(acc) do
+        if v[1] > 0 then rows[#rows + 1] = { k, v[1], v[2] } end
+    end
+    table.sort(rows, function(a, b) return a[2] > b[2] end)
+    return rows
+end
+
+local function startAllocProfiler()
+    wrapModules(Bench.alloc, function() return collectgarbage("count") end)
+    collectgarbage("collect")
+    collectgarbage("stop")
+    Bench.allocFrames = 0
+    Bench.allocStart = collectgarbage("count")
+end
+
+local function reportAlloc()
+    local frames = math.max(1, Bench.allocFrames)
+    local rows = sortedRows(Bench.alloc)
+    print(string.format("[ALLOC] total %.2f Ko/image sur %d images", (collectgarbage("count") - Bench.allocStart) / frames, frames))
+    for i = 1, math.min(40, #rows) do
+        print(string.format("[ALLOC] %8.3f Ko/image %7.1f appels/image  %s", rows[i][2] / frames, rows[i][3] / frames, rows[i][1]))
+    end
+end
+
+-- Affiche une ligne et la garde pour bench_log.txt (lisible sur console via la carte SD)
+Bench.lines = {}
+function Bench.log(line)
+    print(line)
+    Bench.lines[#Bench.lines + 1] = line
+end
+
+-- Temps de construction de chaque salle (JIT coupé : proche du Lua interprété de la 3DS)
+-- `love . --bench --sim3ds --roomload [--chapter=N]`
+function Bench.reportLuaProfile()
+    debug.sethook()
+    local rows, total = {}, 0
+    for k, v in pairs(Bench.lprof) do
+        rows[#rows + 1] = { k, v }
+        if k:sub(1, 3) ~= "FN " then total = total + v end
+    end
+    table.sort(rows, function(a, b) return a[2] > b[2] end)
+    local shown, shownLines = 0, 0
+    for _, r in ipairs(rows) do
+        if r[1]:sub(1, 3) ~= "FN " and shownLines < 25 then
+            Bench.log(string.format("[LPROF-L] %5.1f %%  %s", r[2] / total * 100, r[1]))
+            shownLines = shownLines + 1
+        end
+        if r[1]:sub(1, 3) == "FN " and shown < 30 then
+            Bench.log(string.format("[LPROF] %5.1f %%  %s", r[2] / total * 100, r[1]))
+            shown = shown + 1
+        end
+    end
+end
+
+function Bench.measureRoomLoads(g)
+    if jit then jit.off() end
+    local timing = {}
+    if not Bench.lprof then wrapModules(timing, love.timer.getTime) end
+    local worst, total, bgTotal = 0, 0, 0
+    local rooms = (g.chapter and g.chapter.roomCount) or 50
+    for room = 1, rooms do
+        collectgarbage("collect")
+        local t0 = love.timer.getTime()
+        g:setupRoom(room)
+        local ms = (love.timer.getTime() - t0) * 1000
+        total = total + ms
+        if ms > worst then worst = ms end
+        -- Ce que le jeu prépare en fond pendant la salle (hors gel au changement de salle)
+        local t1 = love.timer.getTime()
+        ObstacleManager.stepPrefetch(math.huge)
+        local bg = (love.timer.getTime() - t1) * 1000
+        bgTotal = bgTotal + bg
+        Bench.log(string.format("[ROOMLOAD] salle %2d : %6.1f ms  (préparé en fond : %6.1f ms)", room, ms, bg))
+    end
+    if Bench.lprof then Bench.reportLuaProfile() end
+    local rows = sortedRows(timing)
+    for i = 1, math.min(30, #rows) do
+        Bench.log(string.format("[ROOMLOAD] %8.1f ms/salle %6.1f appels/salle  %s", rows[i][2] * 1000 / rooms, rows[i][3] / rooms, rows[i][1]))
+    end
+    Bench.log(string.format("[ROOMLOAD] moyenne %.1f ms, pire %.1f ms, fond %.1f ms/salle", total / rooms, worst, bgTotal / rooms))
+    pcall(love.filesystem.write, "bench_log.txt", table.concat(Bench.lines, "\n") .. "\n")
+end
+
 function Bench.start(sm)
     Bench.sm = sm
     if Bench.lprof then startLuaProfiler() end
@@ -56,6 +173,11 @@ function Bench.start(sm)
     end
     sm:switch("game", { mode = "ascension" })
     local g = sm.current
+    if Bench.roomload then
+        Bench.measureRoomLoads(g)
+        love.event.quit()
+        return
+    end
     g.hasSpunStartWheel = true -- saute la roue de départ
     g:setupRoom(Bench.room)
     g.isDrafting = false
@@ -90,6 +212,10 @@ function Bench.update(dt)
     if not Bench.active or not Bench.sm then return end
     Bench.t = Bench.t + dt
     Bench.frames = (Bench.frames or 0) + 1
+    if Bench.alloc then
+        if not Bench.allocStart and Bench.t >= 2 then startAllocProfiler()
+        elseif Bench.allocStart then Bench.allocFrames = Bench.allocFrames + 1 end
+    end
     local g = Bench.sm.current
     if g and g.player and not Bench.menu then autopilot(g, Bench.t) end
 
@@ -123,22 +249,8 @@ function Bench.update(dt)
                 print(string.format("[PROF] %6.1f appels %7.0f sommets  %s", rows[i][2] / frames, rows[i][3] / frames, rows[i][1]))
             end
         end
-        if Bench.lprof then
-            debug.sethook()
-            local rows, total = {}, 0
-            for k, v in pairs(Bench.lprof) do
-                rows[#rows + 1] = { k, v }
-                if k:sub(1, 3) ~= "FN " then total = total + v end
-            end
-            table.sort(rows, function(a, b) return a[2] > b[2] end)
-            local shown = 0
-            for _, r in ipairs(rows) do
-                if r[1]:sub(1, 3) == "FN " and shown < 30 then
-                    print(string.format("[LPROF] %5.1f %%  %s", r[2] / total * 100, r[1]))
-                    shown = shown + 1
-                end
-            end
-        end
+        if Bench.lprof then Bench.reportLuaProfile() end
+        if Bench.alloc and Bench.allocStart then reportAlloc() end
         print(string.format("[BENCH] FIN pic=%d/%d rejets cumulés=%d", Bench.peakVertices, Gpu.VERTEX_CAPACITY, Bench.skippedTotal))
         love.event.quit()
     end

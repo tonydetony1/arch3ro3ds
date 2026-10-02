@@ -31,6 +31,8 @@ os.chdir(ROOT_DIR)
 
 # --fast : itération rapide (pas de précompilation d'atlas, pas de CIA, pas d'installation)
 FAST = "--fast" in sys.argv
+# --with-bench : embarque src/dev/bench.lua (mesures sur console via le fichier bench_roomload)
+WITH_BENCH = "--with-bench" in sys.argv
 
 print("=" * 60)
 print(" ARCH3RO - COMPILATION UNIFIÉE 3DSX & CIA (NINTENDO 3DS)")
@@ -41,10 +43,12 @@ print("=" * 60)
 # -------------------------------------------------------------
 print("\n[0/5] Précompilation de l'atlas de sprites (boot instantané)...")
 bake_tool = os.path.join(TOOLS_DIR, "bake")
-love_bin = "/home/tonydetony/AppImages/löve.appimage"
+love_bin = next((p for p in (os.path.expanduser("~/AppImages/löve.appimage"),
+                             os.path.expanduser("~/AppImages/love.appimage"),
+                             shutil.which("love")) if p and os.path.exists(p)), None)
 if FAST:
     print(" -> --fast : atlas existant conservé.")
-elif os.path.exists(love_bin):
+elif love_bin:
     subprocess.run([love_bin, bake_tool], check=True)
 else:
     print(" -> Attention: AppImage löve introuvable, utilisation de l'atlas existant.")
@@ -77,7 +81,8 @@ with zipfile.ZipFile(love_archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
                         continue
                     # Outils de développement : jamais embarqués
                     if root.startswith(os.path.join("src", "dev")):
-                        continue
+                        if not (WITH_BENCH and f == "bench.lua"):
+                            continue
                     fp = os.path.join(root, f)
                     arcname = os.path.relpath(fp, ROOT_DIR)
                     zf.write(fp, arcname)

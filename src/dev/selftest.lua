@@ -1028,6 +1028,19 @@ function SelfTest.update(gameStateMachine, testFrames)
             assert(Save.getRun() == nil, "Abandon must clear the saved run")
             print("[TEST] Run Resume VALIDATED: autosave snapshot, restore at room 7, abandon clears it.")
 
+            -- Sauvegarde en alternance : une écriture interrompue laisse la précédente valide
+            local goldBefore = Save.get().gold
+            Save.save()
+            Save.save()
+            local seq = Save.get().saveSeq
+            local newest = (seq % 2 == 1) and Save.SAVE_FILE or Save.BACKUP_FILE
+            love.filesystem.write(newest, "return { gold = 1,") -- coupure en pleine écriture
+            Save.data = nil
+            local reloaded = Save.load()
+            assert(reloaded.gold == goldBefore, "Truncated save must fall back to the previous one")
+            assert(reloaded.saveSeq == seq, "Reload must continue the save sequence over the broken slot")
+            print("[TEST] Crash-safe Save VALIDATED: ping-pong slots, truncated write recovered.")
+
         elseif testFrames >= 118 then
             collectgarbage("collect")
             local mem = collectgarbage("count")

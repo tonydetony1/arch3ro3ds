@@ -29,6 +29,10 @@ local Perf = require("src.core.perf")
 local Bestiary = require("src.data.bestiary")
 local Balance = require("src.data.balance")
 
+-- Temps processeur par image accordé à la préparation de la salle suivante (secondes)
+local PREFETCH_BUDGET_COMBAT = 0.002
+local PREFETCH_BUDGET_CALM = 0.008
+
 local GameState = {}
 GameState.__index = GameState
 
@@ -206,36 +210,58 @@ function GameState:triggerShake(duration, intensity)
 end
 
 -- Préparation et génération de la salle avec dimensions étendues dynamiques
+-- Description déterministe d'une salle (type, grille, taille, décor) : partagée par
+-- setupRoom et par la préparation anticipée de la salle suivante
+function GameState:roomSpec(roomNum)
+    local roomType = WorldManager.getRoomType(roomNum)
+    if self.gameMode == "boss_rush" then
+        roomType = "boss"
+    elseif self.gameMode == "survival" then
+        roomType = "combat"
+    end
+    -- Grille de la salle : centre dégagé pour boss / roue / survie, vide pour l'ange
+    local kind = "combat"
+    if roomType == "boss" or self.gameMode == "survival"
+        or (roomNum == 1 and not self.hasSpunStartWheel) then
+        kind = "arena"
+    elseif roomType == "angel" then
+        kind = "sanctuary"
+    end
+    local chapterIndex = math.min(6, math.floor((roomNum - 1) / 10) + 1)
+    local theme = WorldManager.getTheme(chapterIndex)
+    -- Dimensions taillées sur la grille de la salle (629x463 à 694x508)
+    local mapW, mapH = Rooms.roomSize(roomNum)
+    return {
+        room = roomNum, roomType = roomType, kind = kind, chapterIndex = chapterIndex,
+        mapW = mapW, mapH = mapH, variant = theme.variant, hazard = theme.hazard,
+        key = table.concat({ roomNum, kind, mapW, mapH, tostring(theme.variant), tostring(theme.hazard) }, ":"),
+    }
+end
+
+-- Lance la préparation de la salle suivante (voir ObstacleManager.prefetch)
+function GameState:prefetchNextRoom()
+    if self.gameMode == "survival" or self.isGameOver then return end
+    ObstacleManager.prefetch(self:roomSpec(self.roomNumber + 1))
+end
+
 function GameState:setupRoom(roomNum)
     if roomNum > 1 then Save.addQuestProgress("rooms", 1) end
     Audio.playMusic((WorldManager.getRoomType(roomNum) == "boss" or self.gameMode == "boss_rush") and "boss" or "battle", 0.5)
+    local spec = self:roomSpec(roomNum)
+    -- Salle préparée pendant la précédente : on termine ce qui reste (souvent rien)
+    ObstacleManager.settlePrefetch(spec.key)
     self.roomNumber = roomNum
-    self.chapterIndex = math.min(6, math.floor((roomNum - 1) / 10) + 1)
-    self.roomType = WorldManager.getRoomType(roomNum)
-    if self.gameMode == "boss_rush" then
-        self.roomType = "boss"
-    elseif self.gameMode == "survival" then
-        self.roomType = "combat"
-    end
+    self.chapterIndex = spec.chapterIndex
+    self.roomType = spec.roomType
     self.devilEncountered = false
     self.bossWheelDone = false
 
-    -- Dimensions taillées sur la grille de la salle (629x463 à 694x508)
-    self.mapW, self.mapH = Rooms.roomSize(roomNum)
+    self.mapW, self.mapH = spec.mapW, spec.mapH
 
     self.camera:setBounds(self.mapW, self.mapH)
     self.player:setBounds(self.mapW, self.mapH)
-    local theme = WorldManager.getTheme(self.chapterIndex)
-    self.obstacleManager:setTheme(theme.variant, theme.hazard)
-    -- Grille de la salle : centre dégagé pour boss / roue / survie, vide pour l'ange
-    local layoutKind = "combat"
-    if self.roomType == "boss" or self.gameMode == "survival"
-        or (roomNum == 1 and not self.hasSpunStartWheel) then
-        layoutKind = "arena"
-    elseif self.roomType == "angel" then
-        layoutKind = "sanctuary"
-    end
-    self.obstacleManager:generate(self.mapW, self.mapH, roomNum, layoutKind)
+    self.obstacleManager:setTheme(spec.variant, spec.hazard)
+    self.obstacleManager:generate(self.mapW, self.mapH, roomNum, spec.kind)
 
     local spawns, chap
     if self.gameMode == "boss_rush" then
@@ -306,6 +332,8 @@ function GameState:setupRoom(roomNum)
     if roomNum > 1 and not self.isGameOver then
         Save.saveRun(self)
     end
+
+    self:prefetchNextRoom()
 end
 
 function GameState:spawnMonstersNow()
@@ -503,6 +531,10 @@ function GameState:update(dt)
     -- Bannières et flash : temps réel (non affectés par le ralenti ni l'arrêt sur image)
     Banner.update(dt)
     if self.flashTimer > 0 then self.flashTimer = self.flashTimer - dt end
+
+    -- Préparation de la salle suivante : petite tranche en plein combat, plus large au calme
+    local busy = self.phase == "combat" and self.dummyPool.activeCount > 0
+    ObstacleManager.stepPrefetch(busy and PREFETCH_BUDGET_COMBAT or PREFETCH_BUDGET_CALM)
 
     -- 1. Moteur VFX : Screen Shake, FCT, Particules & Hit-Stop micro-pause (0.05s sur crit / mort)
     if VFX.update(dt) then

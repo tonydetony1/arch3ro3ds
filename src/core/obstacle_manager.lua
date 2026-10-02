@@ -428,7 +428,7 @@ end
 local Art = require("src.render.art")
 local Palette = require("src.render.palette")
 local SpriteAtlas = require("src.render.sprite_atlas")
-local PixGen = require("src.render.sprites.pixgen")
+local Slice = require("src.core.slice")
 local C = Palette.C
 
 local BLOCK_HEIGHT = 14
@@ -448,11 +448,26 @@ local SPIKE_CELL = 14
 local Painter = {}
 Painter.__index = Painter
 
+-- Tampons partagés : un seul peintre est actif à la fois (bakeRegion) et toImage() les lit
+-- avant le suivant. Seul l'alpha est remis à zéro : là où l'alpha est nul, les anciennes
+-- valeurs RVB sont multipliées par 0 (k = 0) et ne changent donc pas le résultat.
+-- Libérés à la fin de chaque bakeStatic (plusieurs Mo en Lua 5.1 pour une grande zone).
+local bufR, bufG, bufB, bufA = {}, {}, {}, {}
+
+local function releasePainterBuffers()
+    bufR, bufG, bufB, bufA = {}, {}, {}, {}
+end
+
 function Painter.new(x, y, w, h)
     local self = setmetatable({ ox = math.floor(x), oy = math.floor(y), w = math.floor(w), h = math.floor(h) }, Painter)
     local n = self.w * self.h
-    self.r, self.g, self.b, self.a = {}, {}, {}, {}
-    for i = 1, n do self.r[i], self.g[i], self.b[i], self.a[i] = 0, 0, 0, 0 end
+    local R, G, B, A = bufR, bufG, bufB, bufA
+    for i = #A + 1, n do R[i], G[i], B[i] = 0, 0, 0 end
+    for py = 0, self.h - 1 do
+        Slice.check()
+        for i = py * self.w + 1, (py + 1) * self.w do A[i] = 0 end
+    end
+    self.r, self.g, self.b, self.a = R, G, B, A
     return self
 end
 
@@ -466,14 +481,27 @@ function Painter:rect(c, x, y, w, h, alpha)
     local y1 = math.min(self.h, math.floor(y + h) - self.oy)
     local cr, cg, cb = c[1], c[2], c[3]
     local R, G, B, A = self.r, self.g, self.b, self.a
+    local stride = self.w
+    if sa == 1 then
+        -- Opaque : oa = 1 et k = 0, le mélange se réduit à une copie (résultat identique)
+        for py = y0, y1 - 1 do
+            Slice.check()
+            local row = py * stride + 1
+            for i = row + x0, row + x1 - 1 do
+                R[i], G[i], B[i], A[i] = cr, cg, cb, 1
+            end
+        end
+        return
+    end
+    local inv = 1 - sa
     for py = y0, y1 - 1 do
-        local row = py * self.w
-        for px = x0, x1 - 1 do
-            local i = row + px + 1
+        Slice.check()
+        local row = py * stride + 1
+        for i = row + x0, row + x1 - 1 do
             local da = A[i]
-            local oa = sa + da * (1 - sa)
+            local oa = sa + da * inv
             if oa > 0 then
-                local k = da * (1 - sa)
+                local k = da * inv
                 R[i] = (cr * sa + R[i] * k) / oa
                 G[i] = (cg * sa + G[i] * k) / oa
                 B[i] = (cb * sa + B[i] * k) / oa
@@ -487,6 +515,7 @@ function Painter:toImage()
     local data = love.image.newImageData(self.w, self.h)
     local R, G, B, A = self.r, self.g, self.b, self.a
     for py = 0, self.h - 1 do
+        Slice.check()
         local row = py * self.w
         for px = 0, self.w - 1 do
             local i = row + px + 1
@@ -569,33 +598,79 @@ function ObstacleManager:setTheme(variant, hazardKind)
     self.waterTheme = variant and WATER_THEMES[variant] or nil
 end
 
-local function blockGrid(w, h, H, seed)
-    local g = PixGen.new(w, h + H, seed)
-    g:rect(0, h, w, H, "F")
-    g:rect(0, h, w, 1, "f")
-    g:rect(0, h + H - 3, w, 3, "B")
-    for x = 5 + math.floor(g:rand() * 6), w - 5, 12 do
-        g:rect(x, h + 2, 1, H - 5, "j")
+-- Grille du bloc en tableau plat (cells[y * w + x + 1], y de 0 à h + H - 1) : mêmes tirages
+-- et mêmes opérations que l'ancienne version PixGen, sans table par ligne ni chaînes
+local function blockCells(w, h, H, seed)
+    local W, HH = w, h + H
+    local floor, ceil = math.floor, math.ceil
+    local m = {}
+    for i = 1, W * HH do m[i] = "." end
+    local s = seed or 1
+    local function rand()
+        s = (s * 1664525 + 1013904223) % 4294967296
+        return s / 4294967296
     end
-    g:rect(0, 0, w, h, "T")
-    g:sprinkle("t", 0.10, "T")
-    g:rect(1, 0, w - 2, 1, "L")
-    g:rect(0, 1, 1, h - 2, "L")
-    g:rect(1, h - 1, w - 2, 1, "e")
+    local function set(x, y, ch)
+        x, y = floor(x), floor(y)
+        if x >= 0 and y >= 0 and x < W and y < HH then m[y * W + x + 1] = ch end
+    end
+    local function get(x, y)
+        if x < 0 or y < 0 or x >= W or y >= HH then return "." end
+        return m[y * W + x + 1]
+    end
+    -- only : ensemble des caractères sur lesquels on peut peindre (nil = partout)
+    local function rect(x, y, rw, rh, ch, only)
+        for yy = y, y + rh - 1 do
+            Slice.check()
+            for xx = x, x + rw - 1 do
+                if not only or only[get(xx, yy)] then set(xx, yy, ch) end
+            end
+        end
+    end
+    local function ellipse(cx, cy, rx, ry, ch, only)
+        for y = floor(cy - ry), ceil(cy + ry) do
+            for x = floor(cx - rx), ceil(cx + rx) do
+                local dx = (x + 0.5 - cx) / rx
+                local dy = (y + 0.5 - cy) / ry
+                if dx * dx + dy * dy <= 1.0 and only[get(x, y)] then set(x, y, ch) end
+            end
+        end
+    end
+    local function sprinkle(ch, density, on)
+        for y = 0, HH - 1 do
+            Slice.check()
+            for i = y * W + 1, y * W + W do
+                if m[i] == on and rand() < density then m[i] = ch end
+            end
+        end
+    end
+    local TOP = { T = true, t = true, L = true, e = true }
+    local TOP_FRONT = { T = true, t = true, e = true, F = true }
+    local FRONT = { F = true, f = true }
+
+    rect(0, h, w, H, "F")
+    rect(0, h, w, 1, "f")
+    rect(0, h + H - 3, w, 3, "B")
+    for x = 5 + floor(rand() * 6), w - 5, 12 do
+        rect(x, h + 2, 1, H - 5, "j")
+    end
+    rect(0, 0, w, h, "T")
+    sprinkle("t", 0.10, "T")
+    rect(1, 0, w - 2, 1, "L")
+    rect(0, 1, 1, h - 2, "L")
+    rect(1, h - 1, w - 2, 1, "e")
     for _ = 1, 2 do
-        local x = 6 + math.floor(g:rand() * (w - 14))
-        local y = 4 + math.floor(g:rand() * math.max(1, h - 12))
-        g:set(x, y, "c"); g:set(x + 1, y + 1, "c"); g:set(x + 1, y + 2, "c"); g:set(x + 2, y + 3, "c")
+        local x = 6 + floor(rand() * (w - 14))
+        local y = 4 + floor(rand() * math.max(1, h - 12))
+        set(x, y, "c"); set(x + 1, y + 1, "c"); set(x + 1, y + 2, "c"); set(x + 2, y + 3, "c")
     end
-    g:ellipse(5, 3, 6, 4, "M", "TtLe")
-    g:ellipse(w - 7, h - 2, 6, 3, "M", "TteF")
-    g:rect(w - 9, h, 2, 4, "M", "Ff")
-    g:rect(3, h, 2, 3, "M", "Ff")
-    g:sprinkle("m", 0.35, "M")
-    for _, p in ipairs({ { 0, 0 }, { w - 1, 0 }, { 0, h + H - 1 }, { w - 1, h + H - 1 } }) do
-        g:set(p[1], p[2], ".")
-    end
-    return g:toGrid()
+    ellipse(5, 3, 6, 4, "M", TOP)
+    ellipse(w - 7, h - 2, 6, 3, "M", TOP_FRONT)
+    rect(w - 9, h, 2, 4, "M", FRONT)
+    rect(3, h, 2, 3, "M", FRONT)
+    sprinkle("m", 0.35, "M")
+    set(0, 0, "."); set(w - 1, 0, "."); set(0, HH - 1, "."); set(w - 1, HH - 1, ".")
+    return m, W, HH
 end
 
 -- Eau en autotile : chaque case de la grille reçoit sa berge côté terre et ses coins
@@ -780,6 +855,8 @@ function ObstacleManager:bakeStatic()
         add(e, sp.x, sp.y)
     end
 
+    releasePainterBuffers()
+
     -- Ombres portées des rochers et souches (polygones rejoués à chaque image)
     self.rockShadows = {}
     for i, r in ipairs(self.rocks) do
@@ -856,8 +933,8 @@ function ObstacleManager:blockImage(w, h, seed)
     local key = w .. "x" .. h .. ":" .. seed .. ":" .. tostring(pal)
     local img = blockCache[key]
     if img then return img end
-    local grid = blockGrid(w, h, BLOCK_HEIGHT, seed)
-    img = SpriteAtlas.gridToCanvas(grid, pal, "262b44", { depth = 6, strength = 0.75 })
+    local cells, gw, gh = blockCells(w, h, BLOCK_HEIGHT, seed)
+    img = SpriteAtlas.cellsToImage(cells, gw, gh, pal, "262b44", { depth = 6, strength = 0.75 })
     blockCache[key] = img
     blockCacheOrder[#blockCacheOrder + 1] = key
     if #blockCacheOrder > BLOCK_CACHE_MAX then
@@ -953,6 +1030,58 @@ function ObstacleManager:draw()
         end
     end
     love.graphics.setColor(1, 1, 1, 1)
+end
+
+-- ============================================================================
+-- Préparation de la salle suivante pendant la salle courante. Le choix des salles est
+-- déterministe : on construit la prochaine dans un gestionnaire jetable, par tranches de
+-- quelques millisecondes par image (src/core/slice.lua). Ses blocs et fonds statiques
+-- remplissent les caches partagés (blockImage, bakeRegion) : au changement de salle, la
+-- construction réelle ne fait plus que des lectures de cache au lieu de geler l'écran.
+-- spec = { key, mapW, mapH, room, kind, variant, hazard }
+-- ============================================================================
+local prefetchTask = nil
+
+function ObstacleManager.prefetch(spec)
+    if prefetchTask and prefetchTask.key == spec.key then return end
+    local om = ObstacleManager.new()
+    om:setTheme(spec.variant, spec.hazard)
+    prefetchTask = {
+        key = spec.key,
+        paint = nil,
+        co = coroutine.create(function()
+            om:generate(spec.mapW, spec.mapH, spec.room, spec.kind)
+            om:bakeStatic()
+            om:buildProps()
+        end),
+    }
+end
+
+-- Avance la préparation de `budget` secondes ; renvoie true quand il n'y a plus rien à faire
+function ObstacleManager.stepPrefetch(budget)
+    local task = prefetchTask
+    if not task then return true end
+    -- `paint` redirige fill() vers le tampon du peintre : il ne doit être actif que pendant
+    -- l'exécution de la tâche, jamais pendant le dessin direct de l'image en cours
+    local screenPaint = paint
+    paint = task.paint
+    local done, err = Slice.resume(task.co, budget)
+    task.paint = paint
+    paint = screenPaint
+    if err then print("[PREFETCH] abandon : " .. tostring(err)) end
+    if done then prefetchTask = nil end
+    return done
+end
+
+-- Avant de construire la salle `key` : termine sa préparation, ou abandonne celle d'une
+-- autre salle (partie relancée, mode changé…)
+function ObstacleManager.settlePrefetch(key)
+    if not prefetchTask then return end
+    if prefetchTask.key == key then
+        ObstacleManager.stepPrefetch(math.huge)
+    else
+        prefetchTask = nil
+    end
 end
 
 return ObstacleManager
