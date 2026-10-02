@@ -11,6 +11,7 @@ local Rooms = require("src.data.rooms")
 local Pool = require("src.core.pool")
 local Camera = require("src.core.camera")
 local ObstacleManager = require("src.core.obstacle_manager")
+local RunLoop = require("src.core.runloop")
 local Player = require("src.entities.player")
 local Projectile = require("src.entities.projectile")
 local Dummy = require("src.entities.dummy")
@@ -29,9 +30,21 @@ local Perf = require("src.core.perf")
 local Bestiary = require("src.data.bestiary")
 local Balance = require("src.data.balance")
 
--- Temps processeur par image accordé à la préparation de la salle suivante (secondes)
+-- Temps processeur par image accordé à la préparation de la salle suivante (secondes).
+-- Sur console, le budget est la marge laissée par l'image précédente avant 1/60 s ; hors
+-- console (pas de mesure), budgets fixes.
 local PREFETCH_BUDGET_COMBAT = 0.002
 local PREFETCH_BUDGET_CALM = 0.008
+local PREFETCH_MIN_COMBAT = 0.0005 -- avance garantie même quand l'image est pleine
+local PREFETCH_MIN_CALM = 0.002
+local FRAME_TARGET = 0.0155        -- 1/60 s moins une marge pour le present()
+
+local function prefetchBudget(busy)
+    local work = RunLoop.lastWork
+    if not work then return busy and PREFETCH_BUDGET_COMBAT or PREFETCH_BUDGET_CALM end
+    local slack = FRAME_TARGET - (work - ObstacleManager.lastPrefetchTime)
+    return math.max(busy and PREFETCH_MIN_COMBAT or PREFETCH_MIN_CALM, math.min(PREFETCH_BUDGET_CALM, slack))
+end
 
 local GameState = {}
 GameState.__index = GameState
@@ -534,7 +547,7 @@ function GameState:update(dt)
 
     -- Préparation de la salle suivante : petite tranche en plein combat, plus large au calme
     local busy = self.phase == "combat" and self.dummyPool.activeCount > 0
-    ObstacleManager.stepPrefetch(busy and PREFETCH_BUDGET_COMBAT or PREFETCH_BUDGET_CALM)
+    ObstacleManager.stepPrefetch(prefetchBudget(busy))
 
     -- 1. Moteur VFX : Screen Shake, FCT, Particules & Hit-Stop micro-pause (0.05s sur crit / mort)
     if VFX.update(dt) then

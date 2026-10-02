@@ -22,6 +22,9 @@ function Physics.checkAABB(x1, y1, w1, h1, x2, y2, w2, h2)
            y1 + h1 > y2
 end
 
+local LOS_RADIUS = 2       -- rayon de l'échantillon de visée
+local losCandidates = {}   -- rochers proches du segment (réutilisé : aucune allocation)
+
 -- Raycasting optimisé pour la Ligne de Vue (Line of Sight)
 -- Vérifie si un tir direct est obstrué par des rochers ou des parois
 function Physics.checkLineOfSight(x1, y1, x2, y2, obstacleManager)
@@ -38,14 +41,33 @@ function Physics.checkLineOfSight(x1, y1, x2, y2, obstacleManager)
     local steps = math.floor(dist / 14)
     if steps <= 1 then return true end
 
+    -- Seuls les rochers qui touchent la boîte englobante du segment (élargie du rayon de
+    -- l'échantillon) peuvent bloquer : on ne teste qu'eux à chaque pas (souvent aucun)
+    local rocks = obstacleManager.rocks
+    local minX, maxX = math.min(x1, x2) - LOS_RADIUS, math.max(x1, x2) + LOS_RADIUS
+    local minY, maxY = math.min(y1, y2) - LOS_RADIUS, math.max(y1, y2) + LOS_RADIUS
+    local n = 0
+    for i = 1, #rocks do
+        local r = rocks[i]
+        if r.x < maxX and r.x + r.w > minX and r.y < maxY and r.y + r.h > minY then
+            n = n + 1
+            losCandidates[n] = r
+        end
+    end
+    if n == 0 then return true end
+
     local stepX = dx / steps
     local stepY = dy / steps
+    local hit = obstacleManager.circleIntersectsRect
 
     for s = 1, steps - 1 do
         local sx = x1 + stepX * s
         local sy = y1 + stepY * s
-        if obstacleManager:blocksProjectile(sx, sy, 2) then
-            return false
+        for k = 1, n do
+            local r = losCandidates[k]
+            if hit(sx, sy, LOS_RADIUS, r.x, r.y, r.w, r.h) then
+                return false
+            end
         end
     end
 

@@ -89,6 +89,7 @@ local function sortedRows(acc)
 end
 
 local function startAllocProfiler()
+    if jit then jit.off() end -- Lua 5.1 interprété comme sur 3DS (LuaJIT supprime des allocations)
     wrapModules(Bench.alloc, function() return collectgarbage("count") end)
     collectgarbage("collect")
     collectgarbage("stop")
@@ -99,9 +100,9 @@ end
 local function reportAlloc()
     local frames = math.max(1, Bench.allocFrames)
     local rows = sortedRows(Bench.alloc)
-    print(string.format("[ALLOC] total %.2f Ko/image sur %d images", (collectgarbage("count") - Bench.allocStart) / frames, frames))
+    Bench.log(string.format("[ALLOC] total %.2f Ko/image sur %d images", (collectgarbage("count") - Bench.allocStart) / frames, frames))
     for i = 1, math.min(40, #rows) do
-        print(string.format("[ALLOC] %8.3f Ko/image %7.1f appels/image  %s", rows[i][2] / frames, rows[i][3] / frames, rows[i][1]))
+        Bench.log(string.format("[ALLOC] %8.3f Ko/image %7.1f appels/image  %s", rows[i][2] / frames, rows[i][3] / frames, rows[i][1]))
     end
 end
 
@@ -227,12 +228,13 @@ function Bench.update(dt)
         Bench.nextReport = Bench.nextReport + 1
         local mobs = g and g.dummyPool and g.dummyPool.activeCount or 0
         local projs = g and g.projectilePool and g.projectilePool.activeCount or 0
-        print(string.format("[BENCH] t=%2ds sommets=%5d appels=%4d rejets=%d monstres=%d projectiles=%d RAM=%.0fKo",
+        Bench.log(string.format("[BENCH] t=%2ds sommets=%5d appels=%4d rejets=%d monstres=%d projectiles=%d RAM=%.0fKo",
             math.floor(Bench.t), st.vertices, st.calls, st.skipped, mobs, projs, collectgarbage("count")))
     end
 
     local shotAt = Bench.shots[Bench.shotIndex]
-    if shotAt and Bench.t >= shotAt then
+    -- Captures sur PC uniquement (LÖVE Potion n'a pas captureScreenshot)
+    if shotAt and Bench.t >= shotAt and love.graphics.captureScreenshot and not love.graphics.getScreens then
         local name = string.format("bench_%d.png", Bench.shotIndex)
         love.graphics.captureScreenshot(name)
         print("[BENCH] capture " .. love.filesystem.getSaveDirectory() .. "/" .. name)
@@ -251,7 +253,9 @@ function Bench.update(dt)
         end
         if Bench.lprof then Bench.reportLuaProfile() end
         if Bench.alloc and Bench.allocStart then reportAlloc() end
-        print(string.format("[BENCH] FIN pic=%d/%d rejets cumulés=%d", Bench.peakVertices, Gpu.VERTEX_CAPACITY, Bench.skippedTotal))
+        Bench.log(string.format("[BENCH] FIN pic=%d/%d rejets cumulés=%d, %d images en %.1f s (%.1f FPS)",
+            Bench.peakVertices, Gpu.VERTEX_CAPACITY, Bench.skippedTotal, Bench.frames, Bench.t, Bench.frames / Bench.t))
+        pcall(love.filesystem.write, "bench_log.txt", table.concat(Bench.lines, "\n") .. "\n")
         love.event.quit()
     end
 end

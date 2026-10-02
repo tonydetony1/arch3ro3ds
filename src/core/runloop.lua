@@ -25,6 +25,7 @@ end
 
 local RunLoop = {
     BOTTOM_EVERY = 3,
+    lastWork = nil, -- secondes de calcul de la dernière image (nil hors boucle 3DS)
 }
 
 function RunLoop.run()
@@ -45,6 +46,7 @@ function RunLoop.run()
         if love.window and g_windowShown then
             return
         end
+        local frameStart = love.timer.getTime()
 
         if love.event and love.event.pump then
             love.event.pump()
@@ -78,6 +80,9 @@ function RunLoop.run()
             end
             if drawBottom then Screen.bottomDirty = false end
             local tp = love.timer.getTime()
+            -- Temps de calcul de l'image (sans l'attente de synchro) : sert à doser le travail
+            -- de fond (préparation de la salle suivante) dans la marge restante
+            RunLoop.lastWork = tp - frameStart
             love.graphics.present()
             Perf.add("present", love.timer.getTime() - tp)
         end

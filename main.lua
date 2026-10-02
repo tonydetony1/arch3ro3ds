@@ -101,7 +101,8 @@ function love.load(arg)
     -- Sur console, pas d'arguments : le fichier "bench_roomload" du dossier de sauvegarde
     -- déclenche la mesure des temps de construction de salle (résultat dans bench_log.txt)
     local roomloadFlag = love.filesystem.getInfo and love.filesystem.getInfo("bench_roomload") ~= nil
-    if benchMode or roomloadFlag then
+    local playFlag = love.filesystem.getInfo and love.filesystem.getInfo("bench_play") ~= nil
+    if benchMode or roomloadFlag or playFlag then
         -- src/dev n'est embarqué dans le paquet 3DS qu'avec `build_all.py --with-bench`
         local ok, mod = pcall(require, "src.dev.bench")
         Bench = ok and mod or nil
@@ -109,7 +110,13 @@ function love.load(arg)
     if Bench then
         Bench.parse(arg)
         if roomloadFlag then Bench.active, Bench.roomload = true, true end
+        if playFlag then
+            -- Contenu du fichier (facultatif) : numéro de la salle à jouer
+            Bench.active, Bench.duration = true, 30
+            Bench.room = tonumber((love.filesystem.read("bench_play") or ""):match("%d+")) or Bench.room
+        end
         if love.filesystem.getInfo("bench_lprof") then Bench.lprof = {} end
+        if love.filesystem.getInfo("bench_alloc") then Bench.alloc = {} end
         Bench.start(gameStateMachine)
     end
 

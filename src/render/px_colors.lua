@@ -20,6 +20,7 @@ PxColors.EXTRA = {
 PxColors.ALL_ALPHAS = {
     ink = true, night = true, slate = true, abyss = true, white = true, red = true,
     amber = true, cyan = true, yellow = true, navy = true, leaf = true, black = true,
+    orange = true, sand = true, -- animations des zones dangereuses (lave, sable)
 }
 
 -- nom -> couleur, et couleur (identité de table) -> nom

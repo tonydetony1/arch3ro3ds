@@ -155,14 +155,20 @@ function ObstacleManager:placeSpawns(spawns)
     return placed
 end
 
--- Test de collision cercle vs boîte AABB
+-- Test de collision cercle vs boîte AABB. Rejet immédiat si les boîtes englobantes ne se
+-- touchent pas (le cas courant : appelé pour chaque rocher, chaque projectile, chaque image) ;
+-- sinon distance au point le plus proche. Même résultat que le seul calcul de distance.
 local function circleIntersectsRect(cx, cy, radius, rx, ry, rw, rh)
-    local closestX = math.max(rx, math.min(cx, rx + rw))
-    local closestY = math.max(ry, math.min(cy, ry + rh))
-    local dx = cx - closestX
-    local dy = cy - closestY
+    local rx2, ry2 = rx + rw, ry + rh
+    if cx + radius <= rx or cx - radius >= rx2 or cy + radius <= ry or cy - radius >= ry2 then
+        return false
+    end
+    local px = (cx < rx) and rx or ((cx > rx2) and rx2 or cx)
+    local py = (cy < ry) and ry or ((cy > ry2) and ry2 or cy)
+    local dx, dy = cx - px, cy - py
     return (dx * dx + dy * dy) < (radius * radius)
 end
+ObstacleManager.circleIntersectsRect = circleIntersectsRect
 
 -- Test si un point/cercle est bloqué dans le décor
 function ObstacleManager:isBlocked(x, y, radius, allowFlight, allowGhost)
@@ -203,7 +209,9 @@ end
 -- Test si un projectile est arrêté (SEULS les rochers détruisent les projectiles, pas l'eau !)
 function ObstacleManager:blocksProjectile(x, y, radius)
     radius = radius or 3
-    for _, r in ipairs(self.rocks) do
+    local rocks = self.rocks
+    for i = 1, #rocks do
+        local r = rocks[i]
         if circleIntersectsRect(x, y, radius, r.x, r.y, r.w, r.h) then
             return true
         end
@@ -976,27 +984,29 @@ end
 function ObstacleManager:draw()
     local t = love.timer.getTime()
 
-    -- Dangers animés : bulles de lave, reflets de glace, tourbillons de sable
+    -- Dangers animés : bulles de lave, reflets de glace, tourbillons de sable. Aplats
+    -- précolorés de l'atlas (Art.px) : ils restent dans le lot de sprites au lieu d'un
+    -- appel GPU par rectangle semi-transparent
     for i, hz in ipairs(self.hazards) do
         if hz.kind == "lava" then
             for b = 0, 3 do
                 local phase = (t * 0.7 + b * 0.27 + i * 0.13) % 1
                 local bx = hz.x + 8 + ((b * 37 + i * 19) % math.max(1, hz.w - 16))
                 local by = hz.y + hz.h - 6 - phase * (hz.h - 12)
-                local r = 2 + phase * 2
-                fill(Palette.hex("ffb03a"), math.floor(bx), math.floor(by), math.floor(r), math.floor(r), 0.85 * (1 - phase))
+                local r = math.floor(2 + phase * 2)
+                Art.px("amber", math.floor(bx), math.floor(by), r, r, 0.85 * (1 - phase))
             end
-            fill(Palette.hex("f77622"), hz.x + 2, hz.y + 2, hz.w - 4, hz.h - 4, 0.10 + 0.06 * math.sin(t * 3 + i))
+            Art.px("orange", hz.x + 2, hz.y + 2, hz.w - 4, hz.h - 4, 0.10 + 0.06 * math.sin(t * 3 + i))
         elseif hz.kind == "ice" then
-            local shift = (t * 14 + i * 20) % (hz.w + 30) - 30
-            fill(Palette.hex("ffffff"), hz.x + math.floor(shift), hz.y + 4, 12, 1, 0.5)
-            fill(Palette.hex("ffffff"), hz.x + math.floor(shift) + 6, hz.y + hz.h - 8, 8, 1, 0.35)
+            local shift = math.floor((t * 14 + i * 20) % (hz.w + 30) - 30)
+            Art.px("white", hz.x + shift, hz.y + 4, 12, 1, 0.5)
+            Art.px("white", hz.x + shift + 6, hz.y + hz.h - 8, 8, 1, 0.35)
         else
             for b = 0, 2 do
                 local phase = (t * 0.5 + b * 0.33 + i * 0.2) % 1
                 local sx = hz.x + 6 + phase * (hz.w - 12)
                 local sy = hz.y + 6 + ((b * 23 + i * 11) % math.max(1, hz.h - 12))
-                fill(Palette.hex("ead4aa"), math.floor(sx), math.floor(sy), 2, 1, 0.5 * (1 - phase))
+                Art.px("sand", math.floor(sx), math.floor(sy), 2, 1, 0.5 * (1 - phase))
             end
         end
     end
@@ -1017,7 +1027,7 @@ function ObstacleManager:draw()
         local warning = (s.timer or 0) >= 0.7 and (s.timer or 0) < 1.0
         if warning then
             local pulse = (math.sin(t * 30) + 1) * 0.5
-            fill(C.red, s.x, s.y, s.w, s.h, 0.15 + pulse * 0.2)
+            Art.px("red", s.x, s.y, s.w, s.h, 0.15 + pulse * 0.2)
         end
         if s.isArmed or warning then
             love.graphics.setColor(1, 1, 1, 1)
@@ -1041,6 +1051,7 @@ end
 -- spec = { key, mapW, mapH, room, kind, variant, hazard }
 -- ============================================================================
 local prefetchTask = nil
+ObstacleManager.lastPrefetchTime = 0 -- secondes passées dans la dernière tranche
 
 function ObstacleManager.prefetch(spec)
     if prefetchTask and prefetchTask.key == spec.key then return end
@@ -1060,12 +1071,15 @@ end
 -- Avance la préparation de `budget` secondes ; renvoie true quand il n'y a plus rien à faire
 function ObstacleManager.stepPrefetch(budget)
     local task = prefetchTask
+    ObstacleManager.lastPrefetchTime = 0
     if not task then return true end
     -- `paint` redirige fill() vers le tampon du peintre : il ne doit être actif que pendant
     -- l'exécution de la tâche, jamais pendant le dessin direct de l'image en cours
     local screenPaint = paint
     paint = task.paint
+    local t0 = love.timer.getTime()
     local done, err = Slice.resume(task.co, budget)
+    ObstacleManager.lastPrefetchTime = love.timer.getTime() - t0
     task.paint = paint
     paint = screenPaint
     if err then print("[PREFETCH] abandon : " .. tostring(err)) end
