@@ -29,6 +29,15 @@ SDMC_LP_DIR = os.path.expanduser("~/.var/app/org.azahar_emu.Azahar/data/azahar-e
 
 os.chdir(ROOT_DIR)
 
+# Runtimes LÖVE Potion (non versionnés, ~100 Mo) : patchés à des offsets fixes plus bas,
+# il faut exactement les fichiers dont les empreintes figurent dans le README
+TEMPLATES_DIR = os.path.join(TOOLS_DIR, ".templates")
+_missing = [n for n in ("lovepotion.3dsx", "lovepotion.elf", "lovepotion_cia.elf")
+            if not os.path.exists(os.path.join(TEMPLATES_DIR, n))]
+if _missing:
+    sys.exit("ERREUR : runtimes LÖVE Potion absents de tools/.templates/ : " + ", ".join(_missing)
+             + "\n  Voir la section « Compiling .CIA & .3DSX » du README (fichiers et empreintes SHA-256).")
+
 # --fast : itération rapide (pas de précompilation d'atlas, pas de CIA, pas d'installation)
 FAST = "--fast" in sys.argv
 # --with-bench : embarque src/dev/bench.lua (mesures sur console via le fichier bench_roomload)

@@ -229,7 +229,8 @@ function SpriteAtlas:define(name, def)
     self.sprites[name] = sprite
 
     if def.draw then
-        local item = { w = def.w, h = def.h, drawFn = def.draw, target = sprite.frames, index = 1, anchor = def.anchor }
+        local item = { w = def.w, h = def.h, drawFn = def.draw, target = sprite.frames, index = 1, anchor = def.anchor,
+            key = name }
         self.items[#self.items + 1] = item
         return sprite
     end
@@ -247,22 +248,24 @@ function SpriteAtlas:define(name, def)
     local basePal = {}
     for k, v in pairs(def.palette) do basePal[k] = toColor(v) end
 
-    local function addSet(pal, target, isFlash)
+    -- setName : identifie le jeu de cadres dans la clé de tri (placement reproductible)
+    local function addSet(pal, target, isFlash, setName)
         for i, grid in ipairs(def.frames) do
             local pix, w, h = rasterize(grid, pal, outline, (not isFlash) and def.shade or nil)
             local runs = toRuns(pix, w, h, isFlash and Palette.C.white or nil)
             self.items[#self.items + 1] = {
                 w = w, h = h, runs = runs, target = target, index = i,
                 anchor = def.anchor, pad = outline and 1 or 0,
+                key = name .. "|" .. setName .. "|" .. i,
             }
         end
     end
 
-    addSet(basePal, sprite.frames, false)
+    addSet(basePal, sprite.frames, false, "f")
 
     if def.flash then
         sprite.flash = {}
-        addSet(basePal, sprite.flash, true)
+        addSet(basePal, sprite.flash, true, "flash")
     end
 
     if def.variants then
@@ -271,7 +274,7 @@ function SpriteAtlas:define(name, def)
             for k, v in pairs(basePal) do pal[k] = v end
             for k, v in pairs(overrides) do pal[k] = toColor(v) end
             sprite.variants[vName] = {}
-            addSet(pal, sprite.variants[vName], false)
+            addSet(pal, sprite.variants[vName], false, "v:" .. vName)
         end
     end
 
@@ -295,9 +298,13 @@ end
 function SpriteAtlas:bake()
     local order = {}
     for i, it in ipairs(self.items) do order[i] = it end
+    -- Ordre total (hauteur, largeur, puis clé unique) : table.sort n'est pas stable et
+    -- l'ordre de définition varie (pairs) ; sans clé, chaque précompilation déplaçait des
+    -- milliers de sprites et produisait un atlas différent
     table.sort(order, function(a, b)
         if a.h ~= b.h then return a.h > b.h end
-        return a.w > b.w
+        if a.w ~= b.w then return a.w > b.w end
+        return (a.key or "") < (b.key or "")
     end)
 
     local x, y, shelfH = GAP, GAP, 0

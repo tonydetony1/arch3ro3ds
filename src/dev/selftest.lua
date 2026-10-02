@@ -710,7 +710,13 @@ function SelfTest.update(gameStateMachine, testFrames)
             assert(Save.get().selectedChapter == 3, "Chapter 3 must be selected")
             Save.setChapter(1)
             assert(Save.get().selectedChapter == 1, "Chapter 1 must be active")
-            print("[TEST] Chapter Carousel VALIDATED: 4 distinct world chapters with progressive floor limits.")
+            local WorldManager = require("src.core.world_manager")
+            local chapterCount = #WorldManager.CHAPTERS
+            assert(chapterCount == 6, "The six chapters must be defined")
+            for ci = 1, chapterCount do
+                assert(WorldManager.getChapter(ci).boss, "Each chapter must have a boss")
+            end
+            print(string.format("[TEST] Chapter Carousel VALIDATED: %d distinct world chapters with progressive floor limits.", chapterCount))
 
             -- 8. VALIDATION DE LA PATROUILLE AFK (IDLE CHEST)
             Save.get().patrolGold = 320

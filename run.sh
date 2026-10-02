@@ -17,9 +17,7 @@ cd "$DIR"
 # Détection de l'exécutable LÖVE
 LOVE_BIN=""
 
-if [ -x "/home/tonydetony/AppImages/löve.appimage" ]; then
-    LOVE_BIN="/home/tonydetony/AppImages/löve.appimage"
-elif [ -x "$HOME/AppImages/löve.appimage" ]; then
+if [ -x "$HOME/AppImages/löve.appimage" ]; then
     LOVE_BIN="$HOME/AppImages/löve.appimage"
 elif [ -x "$HOME/AppImages/love.appimage" ]; then
     LOVE_BIN="$HOME/AppImages/love.appimage"
