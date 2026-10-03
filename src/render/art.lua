@@ -42,6 +42,7 @@ function Art.init()
         local atlas = SpriteAtlas.loadPrebaked(prebakedData, img)
         Boot.mark("  atlas: quads")
         PixelFont.loadPrebaked(prebakedData.fonts, atlas)
+        prebakedData.fonts = nil -- copiées dans PixelFont : les données brutes ne servent plus
         Boot.mark("  atlas: police")
         Art.atlas = atlas
         Art.image = img

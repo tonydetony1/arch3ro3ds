@@ -111,6 +111,11 @@ function Banner.drawBossBar(boss, name)
     Depth.push(Depth.TEXT)
     local x, y, w = 70, 6, TW - 140
     Skin.bar(x, y, w, 10, ratio, "red", 10)
+    -- Repères des changements de phase (boss à 3 phases, src/data/bosses.lua)
+    if boss.brain then
+        Skin.rect(C.white, x + floor(w * 0.66), y, 1, 10, 0.8)
+        Skin.rect(C.white, x + floor(w * 0.33), y, 1, 10, 0.8)
+    end
     PixelFont.printf(name or "BOSS", x, y + 11, w, "center", C.white, "tiny")
     Depth.pop()
 end

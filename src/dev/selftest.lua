@@ -1094,6 +1094,40 @@ function SelfTest.update(gameStateMachine, testFrames)
             assert(champion, "Room 17 must hold a champion with two affixes")
             print(string.format("[TEST] Encounters VALIDATED: 3 waves, %d elites, max %d alive, gate after last wave, champion in room 17.", elites, maxAlive))
 
+            -- Boss : chacun combattu jusqu'à la mort (vrais dégâts), les 3 phases atteintes
+            local BossBrain = require("src.core.boss_brain")
+            local fought = {}
+            for chapter = 1, 6 do
+                gameStateMachine:switch("game", { mode = "ascension", startRoom = chapter * 10 })
+                local bg = gameStateMachine.current
+                bg.player.maxHp, bg.player.hp = 1e9, 1e9
+                local boss, maxPhase, hitTimer = nil, 0, 0
+                for _ = 1, 9000 do
+                    bg.isDrafting = false
+                    bg:update(1 / 30)
+                    if not boss then
+                        for i = 1, bg.dummyPool.activeCount do
+                            local d = bg.dummyPool.items[bg.dummyPool.activeList[i]]
+                            if d and d.alive and d.isBoss then boss = d end
+                        end
+                    end
+                    if boss then
+                        assert(BossBrain.has(boss.type), "Boss " .. boss.type .. " must have a brain")
+                        if boss.brain then maxPhase = math.max(maxPhase, boss.brain.phase) end
+                        hitTimer = hitTimer + 1 / 30
+                        if hitTimer >= 0.25 and boss.alive then
+                            hitTimer = 0
+                            if boss:takeDamage(math.ceil(boss.maxHp * 0.03), 0, 1) then bg:handleMonsterDeath(boss) end
+                        end
+                        if not boss.alive then break end
+                    end
+                end
+                assert(boss and not boss.alive, "Chapter " .. chapter .. " boss must die")
+                assert(maxPhase == 3, "Chapter " .. chapter .. " boss must reach phase 3 (got " .. maxPhase .. ")")
+                fought[#fought + 1] = boss.type
+            end
+            print("[TEST] Bosses VALIDATED: " .. table.concat(fought, ", ") .. " fought through 3 phases.")
+
         elseif testFrames == 117 then
             -- Réglages : 7 touchers sur le titre débloquent l'admin ; TEST BOSS lance la salle 10
             local Admin = require("src.data.admin")
@@ -1128,6 +1162,12 @@ function SelfTest.update(gameStateMachine, testFrames)
             print("[TEST] Settings + Admin VALIDATED: 7-tap unlock, 4 pages drawn, tuning via D-pad, TEST BOSS launches room 20.")
 
         elseif testFrames >= 118 then
+            -- Deux passes : les objets LÖVE (images, quads) ne sont libérés que par leur
+            -- finaliseur, exécuté pendant la première ; la seconde reprend leur mémoire
+            -- Sur PC, LuaJIT compte aussi la mémoire de ses traces compilées (variable d'un passage
+            -- à l'autre) ; la 3DS n'a pas de JIT : on les vide pour mesurer les seules données du jeu
+            if jit then jit.flush() end
+            collectgarbage("collect")
             collectgarbage("collect")
             local mem = collectgarbage("count")
             print(string.format("[TEST] %d frames executed cleanly. RAM Lua: %.2f Ko.", testFrames, mem))

@@ -396,6 +396,7 @@ function GameState:spawnMonstersNow()
         if d then
             d:spawn(sp.x, sp.y, sp.hp, sp.type)
             d.isBoss = sp.isBoss or false
+            d.chapterIndex = self.chapterIndex -- dégâts des boss selon le chapitre
             if d.isBoss then bossType = sp.type end
             if sp.affixes then
                 EliteAffixes.apply(d, sp.affixes, sp.champion)

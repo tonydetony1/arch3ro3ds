@@ -13,11 +13,15 @@
 local Physics = require("src.core.physics")
 local VFX = require("src.render.vfx_manager")
 local Audio = require("src.audio.audio")
+local BossBrain = require("src.core.boss_brain")
+local Banner = require("src.ui.banner")
+local Art = require("src.render.art")
 
 local AIController = {}
 
 -- Vérifie si l'entité est vulnérable aux dégâts
 function AIController.canTakeDamage(dummy)
+    if dummy.bossInvuln then return false end -- étourdissement de changement de phase
     if dummy.isBurrowed then
         return false -- Invincible lorsqu'il est sous terre
     end
@@ -27,7 +31,141 @@ end
 -- ============================================================================
 -- 1. MISE À JOUR PRINCIPALE DE L'IA SELON L'ARCHÉTYPE
 -- ============================================================================
+
+-- ============================================================================
+-- CONTEXTE DES BOSS (src/core/boss_brain.lua) : un seul, réutilisé à chaque image
+-- ============================================================================
+local FLYING_BOSSES = { storm_drake = true, void_watcher = true, witch = true }
+local SHOT_RANGE = 520
+local PHASE_PUSH = 320     -- impulsion de l'onde de choc de changement de phase
+local bossCtx = { player = nil, mapW = 640, mapH = 480 }
+local bound = { projectilePool = nil, dummyPool = nil, obstacleManager = nil }
+local shotSpec = { projectile_speed = 0, damage = 0, range = SHOT_RANGE, radius = 4 }
+local VFX_FADE = { 1.0, 1.0, 1.0, 1.0 }
+local VFX_PHASE = { 1.0, 0.45, 0.15, 1.0 }
+local VFX_TELEPORT = { 0.65, 0.35, 1.0, 1.0 }
+
+
+bossCtx.rng = math.random
+
+function bossCtx.fire(x, y, angle, speed, damage, radius, color)
+    local p = bound.projectilePool and bound.projectilePool:obtain()
+    if not p then return false end
+    shotSpec.projectile_speed, shotSpec.damage, shotSpec.radius = speed, math.floor(damage + 0.5), radius
+    p:spawn(x, y, math.cos(angle), math.sin(angle), shotSpec, false, 0, true)
+    if color then p.color = color end
+    return true
+end
+
+function bossCtx.lob(x, y, tx, ty, flight, damage, aoe, color)
+    local p = bound.projectilePool and bound.projectilePool:obtain()
+    if p then p:spawnLobbed(x, y, tx, ty, flight, math.floor(damage + 0.5), aoe, color, true) end
+end
+
+function bossCtx.summon(monsterType, x, y, hp)
+    local m = bound.dummyPool and bound.dummyPool:obtain()
+    if not m then return end
+    if bound.obstacleManager then x, y = bound.obstacleManager:findFreeSpot(x, y, 14) end
+    m:spawn(x, y, hp, monsterType)
+end
+
+function bossCtx.minionCount()
+    local pool, n = bound.dummyPool, 0
+    if not pool then return 0 end
+    for i = 1, pool.activeCount do
+        local d = pool.items[pool.activeList[i]]
+        if d and d.alive and not d.isBoss then n = n + 1 end
+    end
+    return n
+end
+
+function bossCtx.shotCount()
+    local pool, n = bound.projectilePool, 0
+    if not pool then return 0 end
+    for i = 1, pool.activeCount do
+        local p = pool.items[pool.activeList[i]]
+        if p and p.alive and p.isEnemy then n = n + 1 end
+    end
+    return n
+end
+
+function bossCtx.clearShots()
+    local pool = bound.projectilePool
+    if not pool then return end
+    for i = pool.activeCount, 1, -1 do
+        local p = pool.items[pool.activeList[i]]
+        if p and p.alive and p.isEnemy then
+            VFX.addSparks(p.x, p.y, 1, VFX_FADE)
+            pool:free(p)
+        end
+    end
+end
+
+function bossCtx.steer(d, tx, ty, speed, dt)
+    Physics.steerAroundObstacle(d, tx, ty, speed, dt, d.radius, bound.obstacleManager, FLYING_BOSSES[d.type] or false,
+        bossCtx.mapW, bossCtx.mapH)
+end
+
+function bossCtx.move(d, vx, vy, dt)
+    Physics.moveAndSlide(d, vx, vy, dt, d.radius, bound.obstacleManager, FLYING_BOSSES[d.type] or false,
+        bossCtx.mapW, bossCtx.mapH)
+end
+
+function bossCtx.freeSpot(x, y, radius)
+    if bound.obstacleManager then return bound.obstacleManager:findFreeSpot(x, y, radius) end
+    return x, y
+end
+
+-- Dégâts de contact d'une ruée (une fois par ruée, géré par le cerveau)
+function bossCtx.contact(d, damage)
+    local player = bossCtx.player
+    local dx, dy = player.x - d.x, player.y - d.y
+    local r = (d.radius or 16) + (player.radius or 9)
+    if dx * dx + dy * dy > r * r then return false end
+    if player.isDashing or player.isInvulnerable then return false end
+    local dmg = math.floor(damage + 0.5)
+    player.hp = math.max(0, player.hp - dmg)
+    VFX.triggerHitFlash(player, 3)
+    VFX.shakeMedium()
+    VFX.addFCT(player.x, player.y - 12, dmg, false)
+    Audio.play("player_hurt", 0.08, 0.8)
+    return true
+end
+
+function bossCtx.fx(event, d, a, b)
+    if event == "phase" then
+        Banner.show("room", "PHASE " .. a)
+        Audio.play("boss_roar", 0, 1.0)
+        VFX.shakeHeavy()
+        VFX.triggerHitFlash(d, 6)
+        VFX.addSparks(d.x, d.y, 18, VFX_PHASE)
+        -- Onde de choc : repousse le héros pour lui laisser de l'air
+        local player = bossCtx.player
+        local dx, dy = player.x - d.x, player.y - d.y
+        local len = math.max(1, math.sqrt(dx * dx + dy * dy))
+        player.vx, player.vy = dx / len * PHASE_PUSH, dy / len * PHASE_PUSH
+    elseif event == "summon" then
+        VFX.addSparks(d.x, d.y, 10, VFX_PHASE)
+        VFX.shakeMedium()
+    elseif event == "teleport" then
+        VFX.addSparks(a, b, 8, VFX_TELEPORT)
+        VFX.addSparks(d.x, d.y, 10, VFX_TELEPORT)
+    end
+end
+
+local function bindBossCtx(player, projectilePool, dummyPool, obstacleManager, mapW, mapH)
+    bossCtx.player, bossCtx.mapW, bossCtx.mapH = player, mapW or 640, mapH or 480
+    bound.projectilePool, bound.dummyPool, bound.obstacleManager = projectilePool, dummyPool, obstacleManager
+end
+
 function AIController.update(dummy, dt, player, projectilePool, obstacleManager, dummyPool, fctPool, mapW, mapH)
+    -- Boss à fiche (src/data/bosses.lua) : pilotés par leur cerveau
+    if dummy.isBoss and BossBrain.has(dummy.type) then
+        if not player or player.hp <= 0 then return true end
+        bindBossCtx(player, projectilePool, dummyPool, obstacleManager, mapW, mapH)
+        return BossBrain.update(dummy, dt, bossCtx)
+    end
+
     -- PHASE 2 : rage du boss sous 50 % de PV (vitesse +30 %, cadence d'attaque +40 %)
     if dummy.isBoss and not dummy.isEnraged and dummy.maxHp and dummy.hp <= dummy.maxHp * 0.5 then
         dummy.isEnraged = true
@@ -629,6 +767,21 @@ end
 function AIController.drawTelegraph(dummy, playerX, playerY)
     local t = love.timer.getTime()
     local mType = dummy.type or "slime"
+
+    -- Boss à fiche : télégraphe de l'attaque en préparation
+    if dummy.isBoss and BossBrain.has(mType) then
+        local tg = BossBrain.telegraph(dummy)
+        if not tg then return end
+        if tg.kind == "line" then
+            VFX.drawSniperLine(tg.x, tg.y, tg.x + tg.dirX * tg.length, tg.y + tg.dirY * tg.length, tg.locked)
+        else
+            local pulse = 0.5 + 0.5 * math.sin(t * 18)
+            local s = (tg.kind == "circle") and (2 + tg.progress * 4 + pulse) or (2 + pulse)
+            love.graphics.setColor(1, 1, 1, 1)
+            Art.drawEx(tg.kind == "circle" and "fx_ring_red" or "fx_ring_magenta", 1, tg.x, tg.y, 0, s, s)
+        end
+        return
+    end
 
     -- 1. SQUELETTE ARCHER : LIGNE ROUGE DE VISÉE LASER (PULSANTE 0.3-0.8 -> VERROUILLÉE 1.0)
     if mType == "skeleton" and (dummy.aiState == "aim" or dummy.telegraphActive) then

@@ -215,15 +215,14 @@ function PixelFont.loadPrebaked(fontsData, atlas)
             glyphs = {},
         }
         for cp, g in pairs(fData.glyphs) do
+            -- Les noms de sprites (nameO/P/C) ne servent qu'à l'outil de précompilation : en jeu
+            -- on ne garde que les cadres (quelques centaines de Ko de RAM Lua en moins)
             font.glyphs[cp] = {
                 w = g.w,
                 yoff = g.yoff,
                 o = atlas:getFrame(g.nameO, 1),
                 p = atlas:getFrame(g.nameP, 1),
                 c = {},
-                nameO = g.nameO,
-                nameP = g.nameP,
-                nameC = g.nameC,
             }
             for key, name in pairs(g.nameC or {}) do
                 font.glyphs[cp].c[key] = atlas:getFrame(name, 1)
@@ -399,8 +398,12 @@ function PixelFont.print(text, x, y, color, id, scale, style)
     return pen - x
 end
 
--- Cache de retour à la ligne : cache[id][scale][limit][text] = lignes
+-- Cache de retour à la ligne : cache[id][scale][limit][text] = lignes. Borné comme le cache
+-- de mise en page : les textes dynamiques (compteurs, pourcentages) l'auraient fait grossir
+-- sans fin au fil d'une longue session
 local wrapCache = {}
+local wrapCount = 0
+local WRAP_CACHE_MAX = 300
 
 local function cacheSlot(id, s, limit)
     local a = wrapCache[id]
@@ -419,6 +422,11 @@ function PixelFont.wrap(text, limit, id, scale)
     local slot = cacheSlot(id, s, limit)
     local lines = slot[text]
     if lines then return lines end
+    if wrapCount >= WRAP_CACHE_MAX then
+        wrapCache, wrapCount = {}, 0
+        slot = cacheSlot(id, s, limit)
+    end
+    wrapCount = wrapCount + 1
 
     lines = {}
     for paragraph in (text .. "\n"):gmatch("(.-)\n") do
@@ -438,8 +446,9 @@ function PixelFont.wrap(text, limit, id, scale)
     return lines
 end
 
--- Tronque une ligne pour qu'elle tienne (ajoute "…")
+-- Tronque une ligne pour qu'elle tienne (ajoute "…") ; cache borné
 local truncCache = {}
+local truncCount = 0
 local function truncate(line, limit, id, s)
     local key = truncCache[line]
     if key and key.limit == limit and key.id == id and key.s == s then return key.out end
@@ -455,6 +464,8 @@ local function truncate(line, limit, id, s)
         if b and b >= 0xC0 then out = out:sub(1, -2) end
     end
     out = out .. "…"
+    if truncCount >= WRAP_CACHE_MAX then truncCache, truncCount = {}, 0 end
+    truncCount = truncCount + 1
     truncCache[line] = { limit = limit, id = id, s = s, out = out }
     return out
 end
