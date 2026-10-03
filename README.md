@@ -127,6 +127,17 @@ Difficulty comes from smarter fights, not from flooding the screen (the Old 3DS 
 - **Champions**: room 7 of every chapter ends with a champion carrying two affixes.
 - Fully deterministic per room: a resumed run replays the exact same fights.
 
+### 👑 Bosses With Three Phases
+Each of the six bosses has its own move set and changes at 66 % and 33 % HP (1 s invulnerable stagger, shockwave, bullets cleared, `PHASE 2` banner, phase marks on the boss bar). Every attack is telegraphed (aim line, pulsing ring or impact circles) before it fires:
+- **Granite Golem**: radial stars, then rock rain, then alternating stars and a charge.
+- **Skeleton King**: locked aimed volleys, skeleton reinforcements, arrow rain and a ring with a gap to slip through.
+- **Crystal Witch**: teleports, orb fans, spirals and bat swarms.
+- **Lava Titan**: charges, lava stars and dense lava rain.
+- **Storm Drake**: keeps its distance, lightning fans, dashes and spirals.
+- **Void Eye**: anchored in the centre, ever faster spirals, tight fans and gap rings.
+
+Boss damage scales with the chapter (+25 % per chapter).
+
 ### 🎲 Dynamic Special Rooms
 - 👼 **Angel Sanctuary** (Stages 5, 15, 25, 35, 45): Choose between divine healing or permanent offensive/defensive blessings.
 - 🎡 **Lucky Wheel**: Spin for gold rewards, gems, restoration hearts, or bonus combat skills.
@@ -231,6 +242,17 @@ Arch3ro was built with surgical respect for the Nintendo 3DS hardware constraint
      - `FX & HUD` (+4 px): Floating damage and particles popping toward the player!
 
 ---
+
+## ⚙️ Settings & Production Admin Panel
+
+The **SETTINGS** tab (gear icon, last tab of the touch-screen dock, or `Y`) holds music, sound, 3D depth, damage numbers, battery saver and save reset.
+
+**Admin panel** (for tuning on real hardware, hidden from players): tap the **SETTINGS** title 7 times within 4 seconds. Four pages then appear (switch with the page buttons or `L`/`R`):
+- **TUNE**: monster HP, threat budget, elite rate, boss damage, hero damage and gold gain multipliers (saved, applied live).
+- **CHEAT**: god mode, one-hit kills, infinite ultimate, +10K gold, +1K gems, unlock all heroes.
+- **TOOLS**: start a run at any room, test any boss, hitboxes, performance overlay, reset tuning, lock the panel again.
+
+While any admin value differs from its default, a red **ADMIN** tag is shown during runs.
 
 ## 🎮 Controls & Gameplay
 
