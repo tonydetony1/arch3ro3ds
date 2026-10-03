@@ -286,8 +286,7 @@ function MenuState:drawTop()
     Art.drawEx("hero_body", 1, heroX, heroBottom - 9, 0, 3, 3, false, variant)
     local acc = HeroSprites.ACCESSORY_BY_HERO[curHeroId]
     if acc then
-        local offs = { feather = { 3, -14 }, mask = { -2, -8 }, crest = { 0, -15 }, horns = { 0, -13 }, tiara = { 0, -15 } }
-        local o = offs[acc]
+        local o = HeroSprites.ACCESSORY_OFFSETS[acc]
         Art.drawEx("hero_acc_" .. acc, 1, heroX + o[1] * 3, heroBottom - 9 + o[2] * 3, 0, 3, 3)
     end
     Art.drawEx("bow", 1, heroX + 26, heroBottom - 34, 0.35, 2, 2)
@@ -824,8 +823,7 @@ function MenuState:drawHeroesTab()
         Art.drawEx("hero_body", 1, ax + aw / 2, ay + 32, 0, 2, 2, false, variant)
         local acc = HeroSprites.ACCESSORY_BY_HERO[h.id]
         if acc and isUnl then
-            local offs = { feather = { 3, -14 }, mask = { -2, -8 }, crest = { 0, -15 }, horns = { 0, -13 }, tiara = { 0, -15 } }
-            local o = offs[acc]
+            local o = HeroSprites.ACCESSORY_OFFSETS[acc]
             Art.drawEx("hero_acc_" .. acc, 1, ax + aw / 2 + o[1] * 2, ay + 32 + o[2] * 2, 0, 2, 2)
         end
         love.graphics.setColor(1, 1, 1, 1)

@@ -70,15 +70,12 @@ subprocess.run([sys.executable, png2t3x_bin,
                 os.path.join(ROOT_DIR, "assets", "atlas.png"),
                 os.path.join(ROOT_DIR, "assets", "atlas.t3x")], check=True)
 
-logo_png_path = os.path.join(ROOT_DIR, "assets", "logo_3ds.png")
-if os.path.exists(logo_png_path):
-    subprocess.run([sys.executable, png2t3x_bin, logo_png_path,
-                    os.path.join(ROOT_DIR, "assets", "logo_3ds.t3x")], check=True)
-
-banner_png_path = os.path.join(ROOT_DIR, "assets", "banner.png")
-if os.path.exists(banner_png_path):
-    subprocess.run([sys.executable, png2t3x_bin, banner_png_path,
-                    os.path.join(ROOT_DIR, "assets", "banner.t3x")], check=True)
+# Écran titre : décor, titre détouré et autel (générés par tools/make_title_assets.py)
+for name in ("logo_3ds", "banner", "title_top", "title_fx", "title_bottom"):
+    png_path = os.path.join(ROOT_DIR, "assets", name + ".png")
+    if os.path.exists(png_path):
+        subprocess.run([sys.executable, png2t3x_bin, png_path,
+                        os.path.join(ROOT_DIR, "assets", name + ".t3x")], check=True)
 
 # -------------------------------------------------------------
 # 1. Vérification / Création de l'archive .love optimisée
@@ -174,7 +171,10 @@ with open(smdh_path, "rb") as f:
 # 2.5. Génération de la bannière HOME Menu (Photo & Jingle sonore)
 # -------------------------------------------------------------
 banner_path = os.path.join(ROOT_DIR, "Arch3ro.bnr")
-banner_png = os.path.join(ROOT_DIR, "assets", "banner.png")
+# Visuel de l'écran titre (tools/make_title_assets.py) ; à défaut, la bannière d'origine
+banner_png = os.path.join(ROOT_DIR, "assets", "banner_home.png")
+if not os.path.exists(banner_png):
+    banner_png = os.path.join(ROOT_DIR, "assets", "banner.png")
 banner_audio = os.path.join(ROOT_DIR, "assets", "audio", "sfx", "gate_open.wav")
 bannertool_bin = os.path.join(TOOLS_DIR, "bannertool")
 
