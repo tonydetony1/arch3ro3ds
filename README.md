@@ -104,53 +104,6 @@ Arch3ro runs natively on PC through the **LÖVE 2D** engine:
 
 ---
 
-
-## 🚀 3DS Technical Feats & Optimizations
-
-Arch3ro was built with surgical respect for the Nintendo 3DS hardware constraints (ARM11 CPU & DMP PICA200 GPU):
-
-```text
-┌────────────────────────────────────────────────────────────────────────┐
-│                      ARCH3RO 3DS GRAPHICS PIPELINE                     │
-├────────────────────────────────────────────────────────────────────────┤
-│  Bytecode Bundle + Native Atlas  ──> ~2 s Boot on Old 3DS              │
-│  PICA200 Hardware Guardrail      ──> Caps at 24,576 Vertices/Frame     │
-│  Near-Zero-Allocation Loop       ──> Pre-allocated Entity & VFX Pools  │
-│  Background Room Preparation     ──> ~0.15 s Room Transitions          │
-│  Intelligent Touch Refresh       ──> Bottom Screen Every 3rd Frame     │
-│  8-Layer Stereoscopic 3D Depth   ──> Physical 3D Slider Parallax       │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-1. **PICA200 Hardware Vertex Guardrail (`src/core/gpu.lua`)**:
-   - The 3DS GPU hardware buffer is capped at $6 \times 0x1000 = 24\,576$ vertices per frame (both screens combined, with the top screen counting double in stereoscopic 3D mode).
-   - Buffer overruns cause black screens or GPU lockups. Arch3ro uses real-time hardware vertex estimation to gracefully cull ambient particles during intense bullet-hell waves, guaranteeing absolute rock-solid stability.
-2. **Fast Boot (`tools/build_all.py`, `tools/lua_bytecode.py`)**:
-   - Every Lua module is precompiled to Lua 5.1 bytecode in the console's 32-bit format and packed into a single `modules.bin`, read once at startup instead of ~60 separate file lookups.
-   - Game files are searched before the SD card save folder (`t.appendidentity`), UI sounds load first and the other effects stream in during the first frames.
-   - Custom `png2t3x.py` tooling converts the sprite atlas directly into native PICA200 tile format.
-   - Measured in Azahar at Old 3DS clock: **9.4 s → ~2 s** from launch to the main menu.
-3. **Near-Zero Garbage Collector Pressure**:
-   - All 200 projectiles, 30 enemies, 100 particles, 40 floating combat texts, and 120 loot drops are sourced from pre-allocated memory pools.
-   - About 0.3 KB of Lua memory allocated per frame in combat (measured on the console with `bench_alloc`): **no micro-stutter** from the Lua garbage collector.
-4. **Smart Touch Screen Refresh (`src/core/runloop.lua`)**:
-   - The bottom touch screen only renders every 3 frames (`RunLoop.BOTTOM_EVERY = 3`) when idle, immediately boosting to full speed upon stylus touch.
-   - Frees up CPU/GPU time for the top screen, where the action happens.
-5. **Background Room Preparation (`src/core/slice.lua`)**:
-   - Room layouts are deterministic, so the next room's stone blocks and hazard textures are generated *during* the current room, a few milliseconds per frame, inside the time the frame has left before 1/60 s.
-   - Measured in Azahar at Old 3DS clock: room transitions went from **2.1 s on average (up to 8.2 s)** to **~0.15 s**.
-6. **Measured Frame Rate**:
-   - New 3DS: 60 FPS.
-   - Old 3DS (Azahar at native clock): ~56-58 FPS in typical rooms, ~53 FPS in the busiest rooms (late-game waves with elites).
-7. **Hardware Stereoscopic 3D Slider Support (`src/render/depth.lua`)**:
-   - 8 distinct depth layers mapped directly to the physical 3DS slider:
-     - `SKY` (-10 px): Recessed deep behind the screen
-     - `GROUND` (0 px): Neutral screen plane
-     - `ACTORS` (+2 px): Heroes and monsters standing off the ground
-     - `FX & HUD` (+4 px): Floating damage and particles popping toward the player!
-
----
-
 ## 🎮 Controls & Gameplay
 
 | Action | Nintendo 3DS Console | PC Desktop (Keyboard / Mouse) |
