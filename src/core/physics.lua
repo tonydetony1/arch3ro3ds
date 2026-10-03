@@ -120,6 +120,14 @@ function Physics.moveAndSlide(entity, vx, vy, dt, radius, obstacleManager, allow
     entity.x = nextX
     entity.y = nextY
 
+    -- Filet de sécurité : bloqué sur les deux axes parce qu'il est DANS un obstacle (sbire
+    -- invoqué sur un rocher, ancien glissement…), l'entité ne pourrait plus jamais bouger et
+    -- les flèches s'arrêteraient sur le rocher : on la replace sur la place libre la plus proche
+    if blockedX and blockedY and obstacleManager and obstacleManager.findFreeSpot
+        and obstacleManager:isBlocked(entity.x, entity.y, radius, allowFlight, entity.canGhostWalk) then
+        entity.x, entity.y = obstacleManager:findFreeSpot(entity.x, entity.y, radius)
+    end
+
     -- 4. Retourne les axes bloqués pour la gestion de l'accélération
     return blockedX, blockedY
 end
@@ -139,11 +147,13 @@ function Physics.steerAroundObstacle(entity, targetX, targetY, speed, dt, radius
 
     local blockedX, blockedY = Physics.moveAndSlide(entity, vx, vy, dt, radius, obstacleManager, allowFlight, mapW, mapH)
 
-    -- Si bloqué dans la direction directe, glisse tangentiellement (steering)
+    -- Si bloqué dans la direction directe, glisse tangentiellement (steering). Le glissement
+    -- passe lui aussi par les collisions : sans cela, un monstre longeant un bloc entrait dans
+    -- l'obstacle voisin (souche collée au bloc) et y restait coincé, intouchable
     if blockedX and not blockedY then
-        entity.y = entity.y + (dirY >= 0 and 1 or -1) * speed * dt * 0.6
+        Physics.moveAndSlide(entity, 0, (dirY >= 0 and 1 or -1) * speed * 0.6, dt, radius, obstacleManager, allowFlight, mapW, mapH)
     elseif blockedY and not blockedX then
-        entity.x = entity.x + (dirX >= 0 and 1 or -1) * speed * dt * 0.6
+        Physics.moveAndSlide(entity, (dirX >= 0 and 1 or -1) * speed * 0.6, 0, dt, radius, obstacleManager, allowFlight, mapW, mapH)
     end
 
     return dirX, dirY

@@ -174,7 +174,7 @@ function SplashState:drawBottom()
 
     -- Footer d'auteur
     UI.setFont("tiny")
-    UI.drawTextAligned("Développé par TonyDeTony • v1.0.5", 0, 222, w, "center", { 0.55, 0.65, 0.80, 0.75 })
+    UI.drawTextAligned("Développé par TonyDeTony • v1.0.6", 0, 222, w, "center", { 0.55, 0.65, 0.80, 0.75 })
     UI.setFont("main")
 end
 
