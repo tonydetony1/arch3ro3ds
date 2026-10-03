@@ -19,12 +19,33 @@
   <b>Arch3ro 3DS</b> runs on the <b>Nintendo 3DS family</b> (Old 3DS, 2DS, New 3DS, New 2DS XL) and on <b>Desktop PC</b> (Linux, Windows, macOS via LÖVE 11.x).
 </p>
 
+[Screenshots](#-screenshots) •
 [Installation Guide](#-installation-guide-3ds--pc) •
 [3DS Technical Feats](#-3ds-technical-feats--optimizations) •
 [Controls](#-controls--gameplay) •
 [Building from Source](#-building-from-source) •
 [Modding & Contributing](CONTRIBUTING.md)
 
+</div>
+
+---
+
+## 📸 Screenshots
+
+<div align="center">
+  <img src="docs/screenshots/menu_play.png" alt="Play menu" width="30%" />
+  <img src="docs/screenshots/boss_lava_titan.png" alt="Boss fight" width="30%" />
+  <img src="docs/screenshots/level_up.png" alt="Level up" width="30%" />
+  <br/>
+  <img src="docs/screenshots/menu_heroes.png" alt="Heroes" width="30%" />
+  <img src="docs/screenshots/menu_forge.png" alt="Forge" width="30%" />
+  <img src="docs/screenshots/menu_talents.png" alt="Talents" width="30%" />
+  <br/>
+  <img src="docs/screenshots/menu_quests.png" alt="Quests" width="30%" />
+  <img src="docs/screenshots/menu_chests.png" alt="Chests" width="30%" />
+  <img src="docs/screenshots/lucky_wheel.png" alt="Lucky wheel" width="30%" />
+  <br/>
+  <sub><i>Captured in Azahar at Old 3DS clock — top screen above, touch screen below.</i></sub>
 </div>
 
 ---
@@ -164,7 +185,7 @@ arch3ro3ds/
 │   ├── atlas.png / atlas.t3x # Universal packed spritesheet
 │   ├── banner.png / icon.png # Official CIA banner and icon artwork
 │   └── audio/                # Sound effects and music tracks
-├── docs/                     # Design specs and plans
+├── docs/                     # Design specs, plans and screenshots
 ├── src/                      # Modular Lua source codebase
 │   ├── audio/                # Adaptive music and sound effect managers
 │   ├── core/                 # Engine loop, camera, GPU guardrails, memory pools
