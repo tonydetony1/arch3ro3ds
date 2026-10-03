@@ -22,6 +22,9 @@ jobs:
       - name: Lua 5.1 compile check and 3DS bytecode round trip
         run: python3 tools/lua_bytecode.py --selftest
 
+      - name: Unit tests (Lua 5.1)
+        run: lua5.1 tests/run.lua
+
       - name: Self-test suite
         env:
           SDL_AUDIODRIVER: dummy

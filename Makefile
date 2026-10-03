@@ -3,7 +3,7 @@
 # Commandes pratiques pour exécuter, tester et compiler le jeu
 # ==============================================================================
 
-.PHONY: all run sim stats bench test build build-fast citra clean help
+.PHONY: all run sim stats bench test unit build build-fast citra clean help
 
 # Cible par défaut : lancer le jeu
 all: run
@@ -27,6 +27,10 @@ bench:
 ## Exécute la suite d'autotests
 test:
 	@./run.sh --test
+
+## Tests unitaires Lua 5.1 (sans fenêtre)
+unit:
+	@lua5.1 tests/run.lua
 
 ## Compile les packages Nintendo 3DS (.3dsx et .cia)
 build:
@@ -55,6 +59,7 @@ help:
 	@echo "  stats       Lancer avec télémétrie FPS et sommets GPU"
 	@echo "  bench       Exécuter le banc de test de performance"
 	@echo "  test        Exécuter la suite d'autotests"
+	@echo "  unit        Tests unitaires Lua 5.1 (rapides, sans fenêtre)"
 	@echo "  build       Compiler Arch3ro.3dsx et Arch3ro.cia"
 	@echo "  build-fast  Compilation rapide itérative (.3dsx)"
 	@echo "  citra       Lancer le jeu dans l'émulateur Citra / Azahar"

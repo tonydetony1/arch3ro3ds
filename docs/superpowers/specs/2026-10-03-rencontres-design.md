@@ -53,9 +53,11 @@ où `spawn = { type, hpWeight, affixes?, champion? }` (positions et PV calculés
   1. chaque vague commence par un monstre de pression (tank ou harasser) ;
   2. au plus 1 invocateur par vague ; au plus 2 tireurs par vague aux chapitres 1-2, 3 ensuite ;
   3. **signature** : chaque salle a un rôle dominant (poids ×3), différent de la salle
-     précédente ;
-  4. **première apparition** d'un type dans le chapitre : budget de la salle × 0.8, et ce type
-     ne peut pas être élite dans cette salle.
+     précédente (calculé sur les rôles de tout le groupe du chapitre) ;
+  4. au plus 3 exemplaires du même type par vague (variété) ;
+  5. **première apparition** d'un type dans le chapitre : budget de la salle × 0.8, et ce type
+     ne peut pas être élite dans cette salle ; il est ajouté même au-delà du budget de la vague,
+     et l'ancre de la vague est choisie parmi les autres types.
 - **Déterminisme** : générateur LCG local initialisé par (chapitre, salle) ; aucun
   `math.random`. Même salle → mêmes rencontres (reprise de partie, préparation en fond).
 
