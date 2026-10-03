@@ -56,6 +56,7 @@ local Save = require("src.data.save")
 bootMark("src.data.save")
 local Audio = require("src.audio.audio")
 bootMark("src.audio.audio")
+local SplashState = require("src.states.splash")
 local MenuState = require("src.states.menu")
 bootMark("src.states.menu")
 local GameState = require("src.states.game")
@@ -131,13 +132,14 @@ function love.load(arg)
 
     -- Initialisation de la Machine d'États
     gameStateMachine = StateMachine.new()
+    gameStateMachine:add("splash", SplashState.new(gameStateMachine))
     gameStateMachine:add("menu", MenuState.new(gameStateMachine))
     gameStateMachine:add("game", GameState.new(gameStateMachine))
     gameStateMachine:add("pause", PauseState.new(gameStateMachine))
     gameStateMachine:add("gameover", GameOverState.new(gameStateMachine))
 
-    -- Par défaut : Lancement sur le Hub / Menu Principal
-    gameStateMachine:switch("menu")
+    -- Par défaut : Écran titre officiel avec logo (ou direct menu si mode test)
+    gameStateMachine:switch(isTestMode and "menu" or "splash")
     bootMark("menu prêt")
     Boot.save()
     if releaseModuleBundle then releaseModuleBundle() end

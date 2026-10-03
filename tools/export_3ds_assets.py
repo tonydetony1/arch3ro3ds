@@ -201,9 +201,9 @@ for lang in range(16):
     smdh[base + 0x40 : base + 0x40 + len(long_desc)] = long_desc
     smdh[base + 0xC0 : base + 0xC0 + len(publisher)] = publisher
 
-# Paramètres SMDH (Ratings, flags, region lock, etc.) à 0x2008
-# Flags : 0x00000000 (Visible, pas d'auto-save spécial, etc.)
-struct.pack_into("<I", smdh, 0x2020, 0x7FFFFFFF) # Region-free (toutes régions)
+# Paramètres SMDH (Ratings, flags, region lock, etc.)
+struct.pack_into("<I", smdh, 0x2018, 0x7FFFFFFF) # Region-free (toutes régions)
+struct.pack_into("<I", smdh, 0x2028, 0x00001005) # Flags: Visible (0x1) | Allow3D (0x4) | New3DS (0x1000)
 
 # Icônes à l'offset 0x2040 (8256)
 # 1. Icône 24x24 (1152 octets)

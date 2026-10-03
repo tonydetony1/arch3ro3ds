@@ -10,7 +10,7 @@
 tools/romfs_dir/game.love
 
 # Textures GPU précompilées (générées par build_all.py / png2t3x.py)
-assets/atlas.t3x
+assets/*.t3x
 
 # Bases de données & verrous d'outils / agents IA
 *.db

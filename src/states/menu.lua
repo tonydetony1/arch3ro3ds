@@ -333,6 +333,10 @@ function MenuState:drawTop()
     UI.drawText("HEALTH", w - 76, 46, { 0.45, 1.0, 0.65, 1.0 })
     UI.drawTextAligned(string.format("%d", totalHp), w - 98, 60, 92, "center", Palette.C.white)
 
+    -- Badge Titre Officiel "ARCH3RO" au centre supérieur
+    UI.drawPillBadge(w / 2 - 45, 36, 90, 18, "ARCH3RO",
+        { 0.10, 0.14, 0.22, 0.95 }, { 1.0, 0.82, 0.20, 0.95 }, { 1.0, 0.88, 0.30, 1.0 })
+
     -- ------------------------------------------------------------------
     -- Banners: hero and passive
     -- ------------------------------------------------------------------

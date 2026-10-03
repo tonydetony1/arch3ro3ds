@@ -162,6 +162,6 @@ AccessControlInfo:
 
 SystemControlInfo:
   SaveDataSize: 0K
-  RemasterVersion: 0
+  RemasterVersion: 2
   StackSize: 0x40000
   JumpId: 0

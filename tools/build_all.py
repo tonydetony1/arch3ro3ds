@@ -64,10 +64,21 @@ elif love_bin:
 else:
     print(" -> Attention: AppImage löve introuvable, utilisation de l'atlas existant.")
 
-# Texture native 3DS : LÖVE Potion charge assets/atlas.t3x à la place de assets/atlas.png
-subprocess.run([sys.executable, os.path.join(TOOLS_DIR, "png2t3x.py"),
+# Textures natives 3DS GPU : atlas, logo officiel et bannière
+png2t3x_bin = os.path.join(TOOLS_DIR, "png2t3x.py")
+subprocess.run([sys.executable, png2t3x_bin,
                 os.path.join(ROOT_DIR, "assets", "atlas.png"),
                 os.path.join(ROOT_DIR, "assets", "atlas.t3x")], check=True)
+
+logo_png_path = os.path.join(ROOT_DIR, "assets", "logo_3ds.png")
+if os.path.exists(logo_png_path):
+    subprocess.run([sys.executable, png2t3x_bin, logo_png_path,
+                    os.path.join(ROOT_DIR, "assets", "logo_3ds.t3x")], check=True)
+
+banner_png_path = os.path.join(ROOT_DIR, "assets", "banner.png")
+if os.path.exists(banner_png_path):
+    subprocess.run([sys.executable, png2t3x_bin, banner_png_path,
+                    os.path.join(ROOT_DIR, "assets", "banner.t3x")], check=True)
 
 # -------------------------------------------------------------
 # 1. Vérification / Création de l'archive .love optimisée
@@ -122,9 +133,6 @@ with zipfile.ZipFile(love_archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for root, _, files in os.walk(folder):
                 for f in sorted(files):
                     if f.endswith(("_hd.png", ".DS_Store", ".tmp")):
-                        continue
-                    # Images du menu HOME (icône, bannière, logo) : inutiles dans le jeu
-                    if root == "assets" and f.endswith(".png") and f != "atlas.png":
                         continue
                     # Outils de développement : jamais embarqués
                     if root.startswith(os.path.join("src", "dev")):
