@@ -8,6 +8,7 @@ local Monsters = require("src.render.monsters")
 local AIController = require("src.core.ai_controller")
 local VFX = require("src.render.vfx_manager")
 local EliteAffixes = require("src.core.elite_affixes")
+local Admin = require("src.data.admin")
 
 local Dummy = {}
 Dummy.__index = Dummy
@@ -230,6 +231,9 @@ function Dummy:takeDamage(dmg, hitDirX, hitDirY, elements)
         dmg = EliteAffixes.absorb(self, dmg)
         EliteAffixes.onHit(self)
     end
+    -- Panneau admin : HERO DAMAGE et ONE-HIT KILLS
+    dmg = dmg * Admin.get("playerDmgMult")
+    if Admin.get("oneHit") and dmg > 0 then dmg = math.max(dmg, self.hp) end
 
     self.hp = self.hp - dmg
     self.hitFlash = 1.0 -- Flash blanc

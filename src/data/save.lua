@@ -3,6 +3,7 @@
 -- Compatible 100% LÖVEPotion 3DS et LÖVE2D PC via love.filesystem
 
 local Balance = require("src.data.balance")
+local Admin = require("src.data.admin")
 
 local Save = {
     SAVE_FILE = "arch3ro_save.lua",
@@ -219,12 +220,14 @@ function Save.load()
             Save.applyUnlockRework()
         end
         Save.sanitizeEquipment()
+        Admin.load(Save.data.admin)
         if serializeTable(Save.data) ~= loadedText then Save.save() end
         return Save.data
     end
 
     -- Première partie ou fichier corrompu : initialisation par défaut
     Save.data = getDefaultData()
+    Admin.load(nil)
     Save.save()
     return Save.data
 end
@@ -235,6 +238,7 @@ function Save.reset()
     local seq = Save.data and Save.data.saveSeq
     Save.data = getDefaultData()
     Save.data.saveSeq = seq
+    Admin.load(nil)
     Save.save()
     Save.applySettings()
     return Save.data

@@ -15,6 +15,9 @@ local RunLoop = require("src.core.runloop")
 local WaveRunner = require("src.core.wave_runner")
 local EliteAffixes = require("src.core.elite_affixes")
 local Encounters = require("src.data.encounters")
+local Admin = require("src.data.admin")
+local Palette = require("src.render.palette")
+local PixelFont = require("src.ui.pixel_font")
 local Player = require("src.entities.player")
 local Projectile = require("src.entities.projectile")
 local Dummy = require("src.entities.dummy")
@@ -48,6 +51,7 @@ local REINFORCE_WARNING = 1.0
 local REINFORCE_MIN_DIST = 110
 local REINFORCE_CLEARANCE = 16
 local VOLATILE_COLOR = { 1.0, 0.45, 0.1, 1.0 }
+local C_ADMIN = Palette.C.red
 
 local function prefetchBudget(busy)
     local work = RunLoop.lastWork
@@ -194,6 +198,12 @@ function GameState:enter(params)
     -- Reprise d'une course interrompue (console éteinte en pleine partie)
     if params.resume then
         self:applyResume(params.resume)
+    end
+
+    -- Panneau admin : départ direct à une salle (roue de départ sautée)
+    if params.startRoom and not params.resume then
+        self.roomNumber = math.max(1, math.floor(params.startRoom))
+        self.hasSpunStartWheel = self.roomNumber > 1
     end
 
     -- Lancement de la première salle
@@ -588,6 +598,13 @@ end
 -- BOUCLE DE MISE À JOUR PRINCIPALE
 -- ============================================================================
 function GameState:update(dt)
+    -- Panneau admin : invincibilité et ultime infini
+    if Admin.get("god") then
+        self.player.hp = self.player.maxHp
+        self.isGameOver = false
+    end
+    if Admin.get("infUlt") then self.ultimateCharge = 1.0 end
+
     -- Bannières et flash : temps réel (non affectés par le ralenti ni l'arrêt sur image)
     Banner.update(dt)
     if self.flashTimer > 0 then self.flashTimer = self.flashTimer - dt end
@@ -776,7 +793,7 @@ function GameState:update(dt)
         if not keepAlive then
             -- Butin collecté par le joueur !
             if lType == "coin" then
-                self.goldEarnedRun = self.goldEarnedRun + lVal
+                self.goldEarnedRun = self.goldEarnedRun + math.floor(lVal * Admin.get("goldMult") + 0.5)
                 Audio.play("pickup_coin", 0.12, 0.5)
             elseif lType == "xp" then
                 Audio.play("pickup_gem", 0.1, 0.5)
@@ -1273,6 +1290,10 @@ function GameState:drawTop(eye)
     local boss = self.hud:findBoss(self)
     if boss then Banner.drawBossBar(boss, self.bossName) end
     Banner.draw()
+    -- Partie modifiée par le panneau admin : toujours signalée
+    if Admin.isModified() then
+        PixelFont.print("ADMIN", 3, 3, C_ADMIN, "tiny")
+    end
     if self.flashTimer > 0 then
         love.graphics.setColor(1, 1, 1, math.min(1, self.flashTimer / 0.22) * 0.8)
         love.graphics.rectangle("fill", 0, 0, Config.TOP_WIDTH, Config.TOP_HEIGHT)

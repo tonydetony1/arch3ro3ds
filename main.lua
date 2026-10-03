@@ -77,7 +77,6 @@ bootMark("modules chargés")
 local gameStateMachine
 local isTestMode = false
 local testFrames = 0
-local showGpuStats = false
 local GPU_STATS_REFRESH = 0.25
 local gpuStatsNextRefresh = 0
 local gpuStatsText = ""
@@ -98,8 +97,8 @@ function love.load(arg)
         for _, a in ipairs(arg) do
             if a == "--test" then isTestMode = true end
             -- Banc d'essai PC avec les contraintes GPU de la 3DS (budget de sommets, lots ordonnés)
-            if a == "--sim3ds" then Gpu.simulate3DS(); showGpuStats = true end
-            if a == "--gpustats" then showGpuStats = true end
+            if a == "--sim3ds" then Gpu.simulate3DS(); Config.SHOW_GPU_STATS = true end
+            if a == "--gpustats" then Config.SHOW_GPU_STATS = true end
             if a == "--profile" then Gpu.profile = {} end
             if a == "--bench" then benchMode = true end
         end
@@ -212,7 +211,7 @@ function love.draw(screen)
         end,
         screen
     )
-    if showGpuStats and (screen == nil or screen == "bottom") then
+    if Config.SHOW_GPU_STATS and (screen == nil or screen == "bottom") then
         local st = Gpu.stats
         -- Texte reconstruit 4 fois par seconde : une chaîne neuve à chaque image allouait
         -- une mise en page de police par image (pression GC visible sur la console)
@@ -232,7 +231,7 @@ function love.draw(screen)
 end
 
 function love.keypressed(key)
-    if key == "f3" then showGpuStats = not showGpuStats return end
+    if key == "f3" then Config.SHOW_GPU_STATS = not Config.SHOW_GPU_STATS return end
     if key == "escape" then
         if gameStateMachine.current == gameStateMachine.states["menu"] then
             love.event.quit()
@@ -302,7 +301,7 @@ end
 function love.gamepadpressed(joystick, button)
     -- SELECT : affiche / masque les performances (FPS, sommets, appels GPU) sur la console
     if button == "back" then
-        showGpuStats = not showGpuStats
+        Config.SHOW_GPU_STATS = not Config.SHOW_GPU_STATS
         return
     end
     gameStateMachine:gamepadpressed(joystick, button)

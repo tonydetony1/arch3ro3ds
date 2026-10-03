@@ -10,6 +10,7 @@ local Config = {
 
     -- Mode Développeur (Requis dès l'itération 1)
     DEBUG_MODE = false,
+    SHOW_GPU_STATS = false, -- overlay FPS / sommets (F3, SELECT, panneau admin)
 
     -- Capacités maximales des pools (Zéro allocation pendant le gameplay)
     POOL = {
