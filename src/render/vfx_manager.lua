@@ -351,37 +351,26 @@ function VFX.drawSniperLine(startX, startY, targetX, targetY, isLocked, progress
 end
 
 -- Cercle de mortier / bombe avec cercle intérieur qui grandit jusqu'à l'explosion
-function VFX.drawBombTelegraph(cx, cy, maxRadius, currentProgress, friendly)
+local TG_RING = { red = "fx_tg_ring_red", amber = "fx_tg_ring_amber" }
+local TG_DISC = { red = "fx_tg_disc_red", amber = "fx_tg_disc_amber" }
 
+function VFX.drawBombTelegraph(cx, cy, maxRadius, currentProgress, friendly)
+    -- Sprites pré-colorés étirés (src/render/sprites/overlays.lua) : tout reste dans le lot
+    -- de sprites, sans primitive ni changement de couleur (6 appels GPU par bombe avant)
     maxRadius = maxRadius or 30
     local progress = math.min(1.0, math.max(0, currentProgress or 0))
-    local pulse = (math.sin(love.timer.getTime() * 14) + 1) * 0.5
-
-    -- Rouge pour les tirs ennemis, ambre pour les météores du héros
-    local r, g, b = 1.0, 0.15, 0.15
-    if friendly then r, g, b = 1.0, 0.62, 0.12 end
-
-    love.graphics.setColor(r, g, b, 0.38 + pulse * 0.22)
-    love.graphics.setLineWidth(1.8)
-    love.graphics.circle("line", cx, cy, maxRadius)
-    love.graphics.setLineWidth(1)
-
-    love.graphics.setColor(r, g, b, 0.10)
-    love.graphics.circle("fill", cx, cy, maxRadius)
-
-    local innerRadius = maxRadius * progress
-    love.graphics.setColor(r, g, b, 0.28 + progress * 0.35)
-    love.graphics.circle("fill", cx, cy, innerRadius)
-
-    love.graphics.setColor(1.0, 0.85, 0.25, 0.8)
-    love.graphics.setLineWidth(1.2)
-    love.graphics.circle("line", cx, cy, innerRadius)
-    love.graphics.setLineWidth(1)
-
+    local tint = friendly and "amber" or "red"
+    local fx, fy = math.floor(cx + 0.5), math.floor(cy + 0.5)
+    love.graphics.setColor(1, 1, 1, 1)
+    local ringScale = maxRadius / 15
+    Art.drawEx(TG_RING[tint], 1, fx, fy, 0, ringScale, ringScale)
+    local discScale = maxRadius / 7 * progress
+    if discScale > 0.15 then
+        Art.drawEx(TG_DISC[tint], 1, fx, fy, 0, discScale, discScale)
+    end
     -- Réticule d'impact
-    love.graphics.setColor(1.0, 0.92, 0.35, 0.9)
-    love.graphics.rectangle("fill", math.floor(cx) - 4, math.floor(cy), 9, 1)
-    love.graphics.rectangle("fill", math.floor(cx), math.floor(cy) - 4, 1, 9)
+    Art.px("yellow", fx - 4, fy, 9, 1)
+    Art.px("yellow", fx, fy - 4, 1, 9)
 end
 
 -- ============================================================================

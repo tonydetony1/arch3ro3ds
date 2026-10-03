@@ -60,6 +60,24 @@ local function mul(hexOrC, t)
     return { c[1] * t[1], c[2] * t[2], c[3] * t[3], 1 }
 end
 
+-- Télégraphe des bombes : anneau fin (rayon 15) et disque translucide (rayon 7), étirés au
+-- rayon d'impact. Sprites dessinés en blanc dans le lot du décor au lieu de 6 primitives
+-- (cercles à nombreux sommets) par bombe.
+local function circleGrid(size, inside)
+    local grid, c = {}, (size - 1) / 2
+    for y = 0, size - 1 do
+        local row = {}
+        for x = 0, size - 1 do
+            local d = math.sqrt((x - c) ^ 2 + (y - c) ^ 2)
+            row[#row + 1] = inside(d, c) and "W" or "."
+        end
+        grid[#grid + 1] = table.concat(row)
+    end
+    return grid
+end
+local TELEGRAPH_RING = circleGrid(31, function(d, c) return math.abs(d - (c - 0.5)) < 0.75 end)
+local TELEGRAPH_DISC = circleGrid(15, function(d, c) return d <= c + 0.2 end)
+
 function Overlays.define(atlas)
     for _, name in ipairs(Overlays.TINTS) do
         local t = C[name]
@@ -73,6 +91,10 @@ function Overlays.define(atlas)
         })
         atlas:define("fx_spark_" .. name, { frames = { SPARK }, palette = { W = mul("ffffff", t) }, anchor = "center" })
         atlas:define("fx_ring_" .. name, { frames = { RING }, palette = { W = mul("ffffff", t) }, anchor = "center" })
+    end
+    for _, t in ipairs({ { "red", C.red }, { "amber", C.amber } }) do
+        atlas:define("fx_tg_ring_" .. t[1], { frames = { TELEGRAPH_RING }, palette = { W = rgba(t[2], 0.85) }, anchor = "center" })
+        atlas:define("fx_tg_disc_" .. t[1], { frames = { TELEGRAPH_DISC }, palette = { W = rgba(t[2], 0.40) }, anchor = "center" })
     end
     -- Pixels pré-colorés de l'interface (src/render/px_colors.lua)
     require("src.render.px_colors").define(atlas)
