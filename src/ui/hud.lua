@@ -456,6 +456,10 @@ function HUD:drawLive(game, boss)
     else
         PixelFont.printf(string.format("%d/%d", math.max(0, floor(player.hp)), player.maxHp), x + 4, y + 19, SIDE.w - 8, "center", C.white, "tiny")
         PixelFont.printf("KILLS " .. (game.kills or 0), x + 52, y + 84, SIDE.w - 56, "right", C.white, "tiny")
+        local waves = game.waveRunner
+        if waves and waves:total() > 1 then
+            PixelFont.printf(waves:label(), x + 4, y + 84, 60, "left", C.amber, "tiny")
+        end
     end
 end
 

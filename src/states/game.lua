@@ -391,7 +391,7 @@ function GameState:spawnMonstersNow()
                 EliteAffixes.apply(d, sp.affixes, sp.champion)
                 VFX.addFCT(d.x, d.y - 22, sp.champion and "CHAMPION" or Encounters.AFFIXES[sp.affixes[1]].label, true)
                 if sp.champion then
-                    Banner.show("boss", "CHAMPION", Bestiary.nameOf(sp.type):upper())
+                    Banner.show("boss", Bestiary.nameOf(sp.type):upper(), nil, "CHAMPION")
                     Audio.play("boss_roar", 0.1, 0.7)
                 end
             end

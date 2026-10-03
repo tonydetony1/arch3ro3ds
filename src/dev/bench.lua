@@ -31,6 +31,7 @@ function Bench.parse(args)
         if a == "--menu" then Bench.menu = true end
         if a == "--alloc" then Bench.alloc = {} end
         if a == "--roomload" then Bench.roomload = true end
+        if a == "--showcase" then Bench.showcase = true end
         local r = a:match("^%-%-room=(%d+)$")
         if r then Bench.room = tonumber(r) end
         local d = a:match("^%-%-duration=(%d+)$")
@@ -169,6 +170,31 @@ function Bench.measureRoomLoads(g)
     pcall(love.filesystem.write, "bench_log.txt", table.concat(Bench.lines, "\n") .. "\n")
 end
 
+-- Vitrine (`--showcase`) : une élite par affixe et un champion autour du héros, pour
+-- vérifier leur rendu sur une capture (la salle est vidée de ses vagues)
+function Bench.spawnShowcase(g)
+    local p = g.player
+    p.y = g.mapH / 2 + 40
+    g.waveRunner = nil
+    g.pendingSpawns = {}
+    g.spawnWarningTimer = 0
+    local spawns = {
+        { type = "golem", affixes = { "shielded", "enraged" }, champion = true, dx = 0, dy = -70 },
+        { type = "wolf", affixes = { "swift" }, dx = -110, dy = -30 },
+        { type = "slime", affixes = { "shielded" }, dx = -60, dy = -40 },
+        { type = "bomber", affixes = { "volatile" }, dx = 60, dy = -40 },
+        { type = "plant", affixes = { "regenerating" }, dx = 110, dy = -30 },
+        { type = "skeleton", affixes = { "enraged" }, dx = -90, dy = 20 },
+        { type = "mage", affixes = { "frost" }, dx = 90, dy = 20 },
+    }
+    for _, sp in ipairs(spawns) do
+        sp.x, sp.y, sp.hp = p.x + sp.dx, p.y + sp.dy, 400
+    end
+    g.pendingSpawns = spawns
+    g:spawnMonstersNow()
+    g.camera:setPosition(p.x, p.y)
+end
+
 function Bench.start(sm)
     Bench.sm = sm
     if Bench.lprof then startLuaProfiler() end
@@ -186,6 +212,7 @@ function Bench.start(sm)
     g.hasSpunStartWheel = true -- saute la roue de départ
     g:setupRoom(Bench.room)
     g.isDrafting = false
+    if Bench.showcase then Bench.spawnShowcase(g) end
     if g.arena and g.arena.groundBatch then
         print(string.format("[BENCH] sol : %d sprites, murs : %d sprites, carte %dx%d",
             g.arena.groundBatch:getCount(), g.arena.wallBatch and g.arena.wallBatch:getCount() or 0, g.mapW, g.mapH))

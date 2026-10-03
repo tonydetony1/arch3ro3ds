@@ -120,6 +120,30 @@ local ICONS = {
         grid = { "SSSSS", "S.S.S", "S.S.S", "SSSSS" },
         pal = { S = "8b9bb4" },
     },
+    affix_swift = {
+        grid = { "....YY.", "...YY..", "..YYYY.", ".YYYY..", "...YY..", "..YY...", ".YY...." },
+        pal = { Y = "fee761" },
+    },
+    affix_shielded = {
+        grid = { ".BBBBB.", "BWBBBBB", "BWBBBBB", "BBBBBBB", ".BBBBB.", "..BBB..", "...B..." },
+        pal = { B = "0099db", W = "2ce8f5" },
+    },
+    affix_volatile = {
+        grid = { "....F..", "...F...", "..OOO..", ".OOOOO.", ".OWOOO.", ".OOOOO.", "..OOO.." },
+        pal = { O = "f77622", W = "fee761", F = "feae34" },
+    },
+    affix_regenerating = {
+        grid = { "..GGG..", "..GWG..", "GGGWGGG", "GWWWWWG", "GGGWGGG", "..GWG..", "..GGG.." },
+        pal = { G = "3e8948", W = "63c74d" },
+    },
+    affix_enraged = {
+        grid = { "R.....R", ".R...R.", "..RRR..", ".RRRRR.", "RWRRRWR", "RRRRRRR", ".R.R.R." },
+        pal = { R = "e43b44", W = "fee761" },
+    },
+    affix_frost = {
+        grid = { "...C...", ".C.C.C.", "..CWC..", "CCWWWCC", "..CWC..", ".C.C.C.", "...C..." },
+        pal = { C = "2ce8f5", W = "ffffff" },
+    },
     skill_shield = {
         grid = { "GGGGGGGGG", "GBBBBBBBG", "GBWBBBBBG", "GBWBBBBBG", "GBBBBBBBG", ".GBBBBBG.", ".GBBBBBG.", "..GBBBG..", "...GBG...", "....G...." },
         pal = { G = "feae34", B = "0099db", W = "2ce8f5" },

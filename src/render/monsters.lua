@@ -290,9 +290,9 @@ local DRAWERS = {
     void_watcher = Monsters.drawVoidWatcher,
 }
 
--- Barre de vie pixel (n'apparaît que si le monstre est blessé)
+-- Barre de vie pixel (monstre blessé, ou élite : toujours visible, avec bouclier et affixes)
 local function drawHealthBar(m, mType)
-    local big = (mType == "golem" or mType == "splitter" or mType == "skeleton_king"
+    local big = m.champion or (mType == "golem" or mType == "splitter" or mType == "skeleton_king"
         or mType == "witch" or mType == "lava_titan"
         or mType == "storm_drake" or mType == "void_watcher")
     local barW = big and 30 or 18
@@ -304,7 +304,15 @@ local function drawHealthBar(m, mType)
     Art.px("ink", x - 1, y - 1, barW + 2, 5)
     local fillW = floor(barW * ratio + 0.5)
     if fillW > 0 then
-        Art.px(m.isBoss and "orange" or "red", x, y, fillW, 3)
+        Art.px((m.isBoss or m.champion) and "orange" or (m.elite and "amber" or "red"), x, y, fillW, 3)
+    end
+    if (m.shieldMax or 0) > 0 and m.shieldHp > 0 then
+        Art.px("cyan", x, y - 2, floor(barW * m.shieldHp / m.shieldMax + 0.5), 1)
+    end
+    if m.affixIcons then
+        for i, icon in ipairs(m.affixIcons) do
+            Art.draw(icon, 1, x - 6 - (i - 1) * 9, y + 1)
+        end
     end
 end
 
@@ -313,11 +321,17 @@ function Monsters.draw(m, px, py, debugMode)
     local t = love.timer.getTime()
     love.graphics.setColor(1, 1, 1, 1)
 
+    -- Élite : anneau pré-teinté aplati sous le monstre (même lot que les sprites)
+    if m.elite and m.ringSprite and not m.isBurrowed then
+        local pulse = 0.25 * math.sin(t * 6 + (m.id or 0))
+        local s = m.champion and 6.2 or 3.4
+        Art.drawEx(m.ringSprite, 1, floor(m.x), floor(m.y + (m.radius or 10) * 0.7), 0, s + pulse, (s + pulse) * 0.45)
+    end
     local drawer = DRAWERS[mType] or Monsters.drawSlime
     drawer(m, px, py, t)
     love.graphics.setColor(1, 1, 1, 1)
 
-    if m.hp and m.maxHp and m.hp < m.maxHp and m.alive and not m.isBurrowed then
+    if m.hp and m.maxHp and (m.hp < m.maxHp or m.elite) and m.alive and not m.isBurrowed then
         drawHealthBar(m, mType)
     end
 

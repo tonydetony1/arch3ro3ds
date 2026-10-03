@@ -2,6 +2,7 @@
 -- Bannières de l'écran du haut, façon Archero :
 --   * "chapter" : grand ruban doré à l'entrée d'un nouveau chapitre
 --   * "boss"    : bandeau rouge "BOSS" + nom du monstre, à l'apparition d'un boss
+--                 (titre remplaçable : "CHAMPION" en ambre pour les champions des salles x7)
 --   * "clear"   : "SALLE TERMINÉE !" + or gagné dans la salle
 --   * "room"    : petit rappel "SALLE 7 / 50" au début de chaque salle
 -- Une seule bannière à la fois (la plus récente remplace l'autre). Aucune allocation par image.
@@ -26,10 +27,11 @@ local Banner = {
 
 local DURATION = { chapter = 2.4, boss = 2.2, clear = 1.6, room = 1.3 }
 
-function Banner.show(kind, title, subtitle)
+function Banner.show(kind, title, subtitle, header)
     Banner.kind = kind
     Banner.title = title or ""
     Banner.subtitle = subtitle or ""
+    Banner.header = header
     Banner.t = 0
     Banner.duration = DURATION[kind] or 1.5
 end
@@ -88,7 +90,7 @@ function Banner.draw()
         Skin.rect(C.wine, off, y + 3, TW, 3)
         Skin.rect(C.wine, off, y + 50, TW, 3)
         Skin.rect(C.red, off, y + 6, TW, 1)
-        PixelFont.printf("BOSS", off, y + 9, TW, "center", C.red, "main", 2, "shadow")
+        PixelFont.printf(Banner.header or "BOSS", off, y + 9, TW, "center", Banner.header and C.amber or C.red, "main", 2, "shadow")
         PixelFont.printf(Banner.title, off, y + 32, TW, "center", C.yellow, "main", 1, "shadow")
     else -- chapter
         local y = 62
