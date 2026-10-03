@@ -69,6 +69,11 @@ AccessControlInfo:
   EnableL2Cache                 : true
   CanAccessCore2                : false
 
+  IORegisterMapping:
+   - 1ff00000-1ff7ffff
+  MemoryMapping:
+   - 1f000000-1f5fffff:r
+
   SystemCallAccess:
     ArbitrateAddress: 34
     Break: 60
