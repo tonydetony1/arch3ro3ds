@@ -5,6 +5,7 @@
 
 local Encounters = require("src.data.encounters")
 local WorldManager = require("src.core.world_manager")
+local Admin = require("src.data.admin")
 
 local Director = {}
 
@@ -151,7 +152,8 @@ function Director.compose(chapterIndex, roomNumber, opts)
     local signature = Director.signature(chap.monsterPool or pool, roomNumber)
     local shooterCap = Encounters.shooterCap(chapterIndex)
 
-    local raw = Encounters.budget(roomNumber, opts.difficulty)
+    -- Budget : difficulté du mode (chantier 4) sinon réglage admin THREAT BUDGET
+    local raw = Encounters.budget(roomNumber, opts.difficulty or Admin.get("budgetMult"))
     if newType then raw = raw * Encounters.NEW_TYPE_BUDGET_MULT end
     local budget = math.min(raw, Encounters.BUDGET_CAP)
     local hpMult = (raw > Encounters.BUDGET_CAP) and (1 + (raw - Encounters.BUDGET_CAP) / Encounters.BUDGET_CAP) or 1
@@ -173,7 +175,7 @@ function Director.compose(chapterIndex, roomNumber, opts)
         return result
     end
 
-    local elites = Encounters.eliteCount(roomNumber)
+    local elites = math.floor(Encounters.eliteCount(roomNumber) * Admin.get("eliteMult") + 0.5)
     local fillBudget = math.max(Encounters.BUDGET_BASE, budget - Encounters.ELITE_RESERVE * elites)
     local split = Encounters.WAVE_SPLIT[Encounters.waveCount(budget)]
     for w, share in ipairs(split) do

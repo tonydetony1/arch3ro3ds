@@ -443,7 +443,7 @@ function WorldManager.generateEncounter(chapterIndex, roomNumber, mapW, mapH)
     local count = #refs
     local baseHp = chap.baseHp + (roomNumber - 1) * chap.hpScaling
     local budget = Balance.ENCOUNTER.hpMult * WorldManager.hpBudget(baseHp, math.max(4, math.min(10, count)))
-        * enc.hpMult
+        * enc.hpMult * require("src.data.admin").get("hpMult")
     local totalWeight = 0
     for _, w in ipairs(weights) do totalWeight = totalWeight + w end
 

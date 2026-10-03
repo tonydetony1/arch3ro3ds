@@ -75,4 +75,44 @@ T["identifiant inconnu refusé"] = function()
     assert(not pcall(Admin.toggle, "nope"))
 end
 
+T["ELITE RATE à 0 : aucune élite"] = function()
+    local Director = require("src.core.encounter_director")
+    fresh()
+    Admin.set("eliteMult", 0)
+    for room = 20, 40 do
+        if room % 10 ~= 0 and room % 10 ~= 5 and room % 10 ~= 7 then
+            for _, wave in ipairs(Director.compose(3, room).waves) do
+                for _, s in ipairs(wave) do assert(not s.affixes, "salle " .. room) end
+            end
+        end
+    end
+    fresh()
+end
+
+T["THREAT BUDGET double le budget"] = function()
+    local Director = require("src.core.encounter_director")
+    fresh()
+    local base = Director.compose(2, 12).budget
+    Admin.set("budgetMult", 2)
+    assert(math.abs(Director.compose(2, 12).budget - base * 2) < 1e-9)
+    fresh()
+end
+
+T["MONSTER HP double les PV de la salle"] = function()
+    local WorldManager = require("src.core.world_manager")
+    local function total()
+        local sum = 0
+        for _, wave in ipairs(WorldManager.generateEncounter(2, 13, 640, 480).waves) do
+            for _, s in ipairs(wave) do sum = sum + s.hp end
+        end
+        return sum
+    end
+    fresh()
+    local base = total()
+    Admin.set("hpMult", 2)
+    local doubled = total()
+    assert(math.abs(doubled - base * 2) <= 20, base .. " / " .. doubled)
+    fresh()
+end
+
 return T
