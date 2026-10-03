@@ -2,7 +2,7 @@
 
 # 🏹 ARCH3RO 3DS
 
-### *A Fast-Paced Action Roguelite Crafted Specifically for Nintendo 3DS & PC*
+### *An action roguelite for Nintendo 3DS & PC*
 
 [![Platform](https://img.shields.io/badge/Platform-Nintendo%203DS%20%7C%202DS%20%7C%20PC-E60012?style=for-the-badge&logo=nintendo-3ds&logoColor=white)](https://github.com/tonydetony1/arch3ro3ds)
 [![Engine](https://img.shields.io/badge/Engine-L%C3%96VE--Potion%203.x-D83A56?style=for-the-badge&logo=lua&logoColor=white)](https://lovebrew.org/)
@@ -16,35 +16,15 @@
 <img src="assets/banner.png" alt="Arch3ro 3DS Banner" width="800"/>
 
 <p align="center">
-  <b>Arch3ro 3DS</b> is an adrenaline-fueled action roguelite heavily inspired by <i>Archero</i>, engineered from scratch and finely tuned for the <b>Nintendo 3DS family</b> (Old 3DS, 2DS, New 3DS, New 2DS XL) as well as <b>Desktop PC</b> (Linux, Windows, macOS via LÖVE 11.x).
+  <b>Arch3ro 3DS</b> runs on the <b>Nintendo 3DS family</b> (Old 3DS, 2DS, New 3DS, New 2DS XL) and on <b>Desktop PC</b> (Linux, Windows, macOS via LÖVE 11.x).
 </p>
 
-[Key Features](#-key-features) •
 [Installation Guide](#-installation-guide-3ds--pc) •
-[Heroes & Arsenal](#-heroes--arsenal) •
 [3DS Technical Feats](#-3ds-technical-feats--optimizations) •
 [Controls](#-controls--gameplay) •
 [Building from Source](#-building-from-source) •
 [Modding & Contributing](CONTRIBUTING.md)
 
-</div>
-
----
-
-## 🌟 Overview
-
-Step into dangerous procedurally generated dungeons where positioning, reflexes, and tactical synergy determine whether you conquer the chapter or perish:
-- **Iconic "Hit & Run" Mechanics**: Move freely using the Circle Pad or D-Pad to dodge barrage patterns; release the controls to plant your feet and automatically loose devastating volleys of arrows, blades, and spells.
-- **Full Dual-Screen 3DS Utilization**:
-  - **Top Screen (400×240 @ 60 FPS)**: Full-screen battle arena with dynamic lighting, parallax skies, shadow casting, Floating Combat Text (FCT), and **true stereoscopic 3D** driven by the physical console depth slider.
-  - **Bottom Touch Screen (320×240)**: Responsive "Gummy UI" dashboard featuring real-time minimap radar, drag-and-drop inventory forge, talent upgrades, interactive bestiary, AFK patrol claim, and draft selection cards.
-
-<div align="center">
-  <img src="docs/screenshots/screen_top.png" alt="Top Screen Battle" width="45%" />
-  &nbsp;&nbsp;
-  <img src="docs/screenshots/screen_bottom.png" alt="Bottom Touch Screen" width="37%" />
-  <br/>
-  <i>Top Screen (Combat & Boss Encounters) &nbsp;&nbsp;•&nbsp;&nbsp; Bottom Screen (HUD, Minimap & Touch Menus)</i>
 </div>
 
 ---
@@ -103,99 +83,6 @@ Arch3ro runs natively on PC through the **LÖVE 2D** engine:
 
 ---
 
-## ⚔️ Key Features
-
-### 🏰 Procedural Roguelite Progression
-- **6 Thematic Chapters (50 Floors Each)** across diverse biomes:
-  1. 🌲 **Verdant Forest** (*Boss: Granite Golem*)
-  2. 🏜️ **Arid Desert** (*Boss: Skeleton King*)
-  3. 💎 **Crystal Caverns** (*Boss: Crystal Witch*)
-  4. 🌋 **Volcanic Inferno** (*Boss: Lava Titan*)
-  5. ☁️ **Skyward Isles** (*Boss: Storm Drake*)
-  6. 🌌 **Void City** (*Boss: Void Eye*)
-- **Multiple Game Modes**:
-  - **Ascension**: The core chapter-by-chapter roguelite campaign.
-  - **The Abyss (Endless)**: Infinite scaling descent with continuous monster waves and successive boss trials.
-  - **Boss Rush**: Test your builds against formidable bosses in rapid succession.
-  - **Survival Arena**: Hold out against unstoppable monster onslaughts in a closed death arena.
-
-### 🎯 Encounters That Stay Fresh
-Difficulty comes from smarter fights, not from flooding the screen (the Old 3DS keeps at most **7 monsters alive at once**):
-- **Encounter Director**: every monster has a role (*tank*, *harasser*, *shooter*, *zone control*, *special*) and a threat cost. Each room gets a threat budget that grows with depth and is spent on 1 to 3 waves with complementary roles: something always forces you to move, shooters come with a bodyguard, each room has a dominant role different from the previous one, and a new monster type first appears in a lighter room.
-- **Reinforcement Waves**: the next wave arrives when two monsters are left (or after 14 s), announced by ground runes and a `WAVE 2/3` banner. The gate only opens once every wave is down.
-- **Elite Monsters** with a tinted aura and an affix icon: *Swift*, *Shielded*, *Volatile* (explodes on death), *Regenerating*, *Enraged*, *Frost* (its shots slow you down). From room 4 on, up to 3 per room in The Abyss.
-- **Champions**: room 7 of every chapter ends with a champion carrying two affixes.
-- Fully deterministic per room: a resumed run replays the exact same fights.
-
-### 👑 Bosses With Three Phases
-Each of the six bosses has its own move set and changes at 66 % and 33 % HP (1 s invulnerable stagger, shockwave, bullets cleared, `PHASE 2` banner, phase marks on the boss bar). Every attack is telegraphed (aim line, pulsing ring or impact circles) before it fires:
-- **Granite Golem**: radial stars, then rock rain, then alternating stars and a charge.
-- **Skeleton King**: locked aimed volleys, skeleton reinforcements, arrow rain and a ring with a gap to slip through.
-- **Crystal Witch**: teleports, orb fans, spirals and bat swarms.
-- **Lava Titan**: charges, lava stars and dense lava rain.
-- **Storm Drake**: keeps its distance, lightning fans, dashes and spirals.
-- **Void Eye**: anchored in the centre, ever faster spirals, tight fans and gap rings.
-
-Boss damage scales with the chapter (+25 % per chapter).
-
-### 🎲 Dynamic Special Rooms
-- 👼 **Angel Sanctuary** (Stages 5, 15, 25, 35, 45): Choose between divine healing or permanent offensive/defensive blessings.
-- 🎡 **Lucky Wheel**: Spin for gold rewards, gems, restoration hearts, or bonus combat skills.
-- 😈 **Devil Pacts**: Defeating a boss without taking any damage summons the Devil. Sacrifice permanent Max HP in exchange for forbidden relics (*Ghost Walk through walls, Water Walking, Dark Multishot, Resurrection*).
-- 🧙‍♂️ **Mysterious Merchant**: Purchase upgrade scrolls, rare equipment, and emergency potions.
-
-### 🔮 82 In-Run Stackable Skills & Legendary Synergies
-At each level up, draft 1 skill among 3 randomly selected upgrades:
-- **Ballistics & Multi-Shot**: Front Arrow +1, Diagonal Arrows, Side Arrows, Rear Arrow.
-- **Physics & Piercing**: Ricochet, Piercing Shot, Bouncy Walls, Homing Tracking Orbs.
-- **Elemental Affinities**: Permanent Acid Poison, Incendiary Burn DoT, Chain Lightning, Polar Freeze.
-- **Orbiting Shields & Swords**: Rotating elemental swords and golden shields that intercept enemy missiles.
-- **Celestial Powers**: Flaming meteors, frost meteors, and lightning strikes raining from above.
-- **Companion Familiars**: Autonomous Laser Bats, Ghost Phantoms, and Bomb Pups that fire alongside you.
-- **Legendary Fusions**: Combine elemental upgrades into overpowered synergies (*Toxic Flames, Magnetic Storm, Blade Vortex*).
-
----
-
-## 🏹 Heroes & Arsenal
-
-### 🛡️ Playable Hero Roster
-Every hero has unique base stat bonuses, visual sprites, custom color palettes, and a **signature Ultimate ability**:
-
-| Hero | Title | Combat Passive | Signature Ultimate (`L` / `X` / `Y`) |
-| :--- | :--- | :--- | :--- |
-| **Atreus** | *Ranger Archer* | **Courage**: +10% Attack Speed, +5% Permanent Dodge | **Celestial Barrage** (Volley of 16 homing golden arrows) |
-| **Urasil** | *Poison Master* | **Deadly Venom**: All arrows inflict 35 acid DPS | **Deadly Miasma** (Asphyxiating acid blanket over the whole room) |
-| **Phoren** | *Flame Lord* | **Pyrotechnic Fury**: Flaming arrows with rapid burn | **Volcanic Meteor** (Cataclysmic impact dealing 120 fire AoE) |
-| **Helix** | *Berserker Warrior* | **Primal Fury**: Damage scales up to +120% as HP drops | **Berserker Fury** (3s invulnerability + 2× attack speed) |
-| **Rolla** | *Frost Queen* | **Arctic Frost**: All arrows freeze enemies for 1.5s | **Absolute Zero** (Instantly freeze the entire room for 3s) |
-
-### 🗡️ 8 Weapon Archetypes
-1. **Brave's Bow (Starter Bow)**: Perfectly balanced damage, fire rate, and projectile stability.
-2. **Rapid Daggers**: Hyper-fast attack speed ideal for continuous kiting and on-hit proc builds.
-3. **Heavy Ballista**: Heavy penetrating bolts with massive knockback.
-4. **Saw Blade**: Rapid circular blades granting a burst of agility upon room entry.
-5. **Death Scythe**: High raw damage with **instant lethal execution** against enemies below 30% HP!
-6. **Stalker Staff**: Arcane orbs that curve dynamically through the air, relentlessly homing in on targets.
-7. **Tornado Boomerang**: Pierces through all enemies on outward flight and deals return damage.
-8. **Brightspear**: Near-instantaneous hitscan laser beam that strikes enemies without travel time.
-
----
-
-## 🔨 Forge & Equipment System
-
-Equip your hero across **6 strategic slots**: Weapon, Armor, 2 Rings, and 2 Pets:
-
-```text
-   [COMMON] ───(Fuse 3x)───> [UNCOMMON] ───(Fuse 3x)───> [RARE]
-                                                           │
-   [LEGENDARY] <───(Fuse 3x)─── [EPIC] <───────────────────┘
-```
-
-- **5 Rarity Tiers**: *Common* ➔ *Uncommon* (+25% stats) ➔ *Rare* (Passive 1) ➔ *Epic* (Major combat trait) ➔ *Legendary* (Maximum stat multipliers & star refinement).
-- **3-to-1 Fusion Forge**: Merge 3 identical copies to elevate equipment rarity and unlock hidden passives.
-- **Bestiary Mastery**: Defeating 50, 200, and 500 of any monster species unlocks permanent bonus damage and resistance against that monster type.
-
----
 
 ## 🚀 3DS Technical Feats & Optimizations
 
@@ -243,17 +130,6 @@ Arch3ro was built with surgical respect for the Nintendo 3DS hardware constraint
 
 ---
 
-## ⚙️ Settings & Production Admin Panel
-
-The **SETTINGS** tab (gear icon, last tab of the touch-screen dock, or `Y`) holds music, sound, 3D depth, damage numbers, battery saver and save reset.
-
-**Admin panel** (for tuning on real hardware, hidden from players): tap the **SETTINGS** title 7 times within 4 seconds. Four pages then appear (switch with the page buttons or `L`/`R`):
-- **TUNE**: monster HP, threat budget, elite rate, boss damage, hero damage and gold gain multipliers (saved, applied live).
-- **CHEAT**: god mode, one-hit kills, infinite ultimate, +10K gold, +1K gems, unlock all heroes.
-- **TOOLS**: start a run at any room, test any boss, hitboxes, performance overlay, reset tuning, lock the panel again.
-
-While any admin value differs from its default, a red **ADMIN** tag is shown during runs.
-
 ## 🎮 Controls & Gameplay
 
 | Action | Nintendo 3DS Console | PC Desktop (Keyboard / Mouse) |
@@ -288,8 +164,7 @@ arch3ro3ds/
 │   ├── atlas.png / atlas.t3x # Universal packed spritesheet
 │   ├── banner.png / icon.png # Official CIA banner and icon artwork
 │   └── audio/                # Sound effects and music tracks
-├── docs/                     # Additional documentation and assets
-│   └── screenshots/          # Dual-screen gameplay captures
+├── docs/                     # Design specs and plans
 ├── src/                      # Modular Lua source codebase
 │   ├── audio/                # Adaptive music and sound effect managers
 │   ├── core/                 # Engine loop, camera, GPU guardrails, memory pools
