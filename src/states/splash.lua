@@ -174,12 +174,12 @@ function SplashState:drawBottom()
 
     -- Footer d'auteur
     UI.setFont("tiny")
-    UI.drawTextAligned("Développé par TonyDeTony • v1.0.2", 0, 222, w, "center", { 0.55, 0.65, 0.80, 0.75 })
+    UI.drawTextAligned("Développé par TonyDeTony • v1.0.4", 0, 222, w, "center", { 0.55, 0.65, 0.80, 0.75 })
     UI.setFont("main")
 end
 
 function SplashState:startGame()
-    Audio.playSfx("ui_confirm")
+    Audio.play("ui_confirm", 0, 0.9)
     self.sm:switch("menu")
 end
 

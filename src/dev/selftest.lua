@@ -7,7 +7,14 @@ local Save = require("src.data.save")
 local SelfTest = {}
 
 function SelfTest.update(gameStateMachine, testFrames)
-            if testFrames == 5 then
+            if testFrames == 2 then
+            -- 0. Écran titre : A / toucher mène au menu (Audio.playSfx inexistant plantait ici)
+            local splash = gameStateMachine.states["splash"]
+            assert(gameStateMachine.current == splash, "Game must boot on the splash screen")
+            splash:keypressed("a")
+            assert(gameStateMachine.current == gameStateMachine.states["menu"], "Splash must open the menu on A")
+            print("[TEST] Splash screen -> Hub Menu transition VALIDATED.")
+        elseif testFrames == 5 then
             -- 1. Validation de l'UI Gummy, Typographie & Micro-animations du Menu
             local menu = gameStateMachine.current
             local UI = require("src.ui.ui_components")

@@ -208,12 +208,16 @@ OLD_BOOT_BLOCK = """    local arg0 = love.arg.getLow(love.rawGameArguments)
     -- Is this one of those fancy "fused" games?
     local can_has_game = pcall(love.filesystem.setSource, exepath)"""
 
-NEW_BOOT_RAW = """    local a = love.arg and love.arg.getLow(love.rawGameArguments)
-    local exepath = "sdmc:/3ds/Arch3ro.3dsx"
-    for _,p in ipairs({"romfs:/game.love",a,"sdmc:/3ds/Arch3ro.3dsx"}) do
-        if p and #p>0 then local f=io.open(p) if f then f:close() exepath=p break end end
+# love.filesystem.init(chemin) fixe le dossier de base de PhysFS, d'où LÖVE Potion tire le
+# dossier de sauvegarde (<base>save/<identité>). Dans le CIA, le jeu est lu dans romfs:/ (lecture
+# seule) : on initialise alors avec un chemin de sdmc:/3ds/ pour sauvegarder dans
+# sdmc:/3ds/save/arch3ro, comme le 3DSX. Sinon la première écriture plante (écran noir au boot).
+NEW_BOOT_RAW = """    local a,d = love.arg and love.arg.getLow(love.rawGameArguments),"sdmc:/3ds/Arch3ro.3dsx"
+    local exepath = d
+    for _,p in ipairs({"romfs:/game.love",a,d}) do
+        if p then local f=io.open(p) if f then f:close() exepath=p break end end
     end
-    love.filesystem.init(exepath)
+    love.filesystem.init(exepath:find"^romfs:" and d or exepath)
     no_game_code = false
     invalid_game_path = nil
     local can_has_game = pcall(love.filesystem.setSource, exepath)"""
@@ -328,14 +332,12 @@ if cur_elf_instr == 0xebffff56:
 elif cur_elf_instr == 0xe1a00000:
     print(" -> NOP mcuHwcInit déjà présent sur l'ELF.")
 
-# Patch 2: NOP __PHYSFS_platformCalcBaseDir dans l'ELF (VA 0x1b9404)
+# Pas de NOP __PHYSFS_platformCalcBaseDir dans l'ELF (VA 0x1b9404), contrairement au 3DSX :
+# il forcerait le dossier de base sur le répertoire courant, romfs:/ dans un CIA, donc une
+# sauvegarde impossible. PhysFS doit déduire la base du chemin passé à love.filesystem.init.
 o_calc = v2f(0x1b9404)
-cur_calc_instr = struct.unpack_from("<I", raw_elf, o_calc)[0]
-if cur_calc_instr == 0x1a00001e:
-    struct.pack_into("<I", raw_elf, o_calc, 0xe1a00000)
-    print(f" -> NOP __PHYSFS_platformCalcBaseDir appliqué sur l'ELF (offset {hex(o_calc)}).")
-elif cur_calc_instr == 0xe1a00000:
-    print(" -> NOP __PHYSFS_platformCalcBaseDir déjà présent sur l'ELF.")
+assert struct.unpack_from("<I", raw_elf, o_calc)[0] == 0x1a00001e, \
+    "lovepotion.elf inattendu : __PHYSFS_platformCalcBaseDir déjà modifié (voir les empreintes du README)"
 
 # Patch 3: Patch boot.lua dans l'ELF
 raw_elf = patch_boot_lua(raw_elf)

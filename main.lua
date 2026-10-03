@@ -138,8 +138,8 @@ function love.load(arg)
     gameStateMachine:add("pause", PauseState.new(gameStateMachine))
     gameStateMachine:add("gameover", GameOverState.new(gameStateMachine))
 
-    -- Par défaut : Écran titre officiel avec logo (ou direct menu si mode test)
-    gameStateMachine:switch(isTestMode and "menu" or "splash")
+    -- Écran titre officiel avec logo (l'autotest le franchit lui-même, src/dev/selftest.lua)
+    gameStateMachine:switch("splash")
     bootMark("menu prêt")
     Boot.save()
     if releaseModuleBundle then releaseModuleBundle() end
@@ -309,9 +309,11 @@ function love.gamepadpressed(joystick, button)
     gameStateMachine:gamepadpressed(joystick, button)
 end
 
--- Gestionnaire d'erreur robuste : affiche l'erreur à l'écran au lieu de fermer la fenêtre
+-- Gestionnaire d'erreur robuste : affiche l'erreur à l'écran au lieu de fermer la fenêtre.
+-- Comme dans LÖVE 11, il renvoie la boucle de l'écran d'erreur (une image par appel).
 function love.errorhandler(msg)
-    local errText = tostring(msg) .. "\n\n" .. debug.traceback()
+    local trace = debug.traceback()
+    local errText = tostring(msg) .. "\n\n" .. trace
     print("FATAL ERROR:\n" .. errText)
 
     pcall(function()
@@ -328,36 +330,51 @@ function love.errorhandler(msg)
         os.exit(1)
     end
 
-    while true do
+    -- Texte borné : le garde-fou de sommets (src/core/gpu.lua) rejetterait un texte trop long
+    local title = "ARCH3RO ERREUR (START : quitter) :\n" .. tostring(msg):sub(1, 600)
+    trace = trace:sub(1, 1200)
+
+    local function draw()
+        if not (love.graphics and love.graphics.isActive()) then return end
+        -- Hors de love.draw : budget de sommets remis à zéro ici, sinon le texte disparaît
+        -- après quelques images ; une erreur pendant un enregistrement de lot le laisserait actif
+        Gpu.endRecord()
+        Gpu.beginFrame()
+        love.graphics.setScissor()
+        -- Écrans LÖVE Potion : "left" et "right" (haut, un par œil) puis "bottom" ; "top"
+        -- n'existe pas et ferait planter ce gestionnaire (le jeu quittait sur un écran noir)
+        local screens = love.graphics.getScreens and love.graphics.getScreens()
+        if screens then
+            for _, screen in ipairs(screens) do
+                love.graphics.origin()
+                love.graphics.setActiveScreen(screen)
+                if screen == "bottom" then
+                    love.graphics.clear(0.12, 0.02, 0.02)
+                    love.graphics.setColor(1, 0.8, 0.8)
+                    love.graphics.printf(trace, 10, 10, 300)
+                else
+                    love.graphics.clear(0.25, 0.05, 0.05)
+                    love.graphics.setColor(1, 1, 1)
+                    love.graphics.printf(title, 10, 10, 380)
+                end
+            end
+        else
+            love.graphics.origin()
+            love.graphics.clear(0.25, 0.05, 0.05)
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.printf("ARCH3RO ERREUR :\n" .. errText, 10, 10, 380)
+        end
+        love.graphics.present()
+    end
+
+    return function()
         if love.event then
             love.event.pump()
-            for name, a in love.event.poll() do
-                if name == "quit" then return end
+            for name, a, b in love.event.poll() do
+                if name == "quit" or (name == "gamepadpressed" and b == "start") then return 1 end
             end
         end
-
-        if love.graphics and love.graphics.isActive() then
-            love.graphics.origin()
-            love.graphics.setScissor()
-            local setScreen = love.graphics.setActiveScreen or love.graphics.setScreen
-            if setScreen then
-                setScreen("top")
-                love.graphics.clear(0.25, 0.05, 0.05)
-                love.graphics.setColor(1, 1, 1)
-                love.graphics.printf("ARCH3RO ERREUR :\n" .. tostring(msg), 10, 10, 380)
-
-                setScreen("bottom")
-                love.graphics.clear(0.12, 0.02, 0.02)
-                love.graphics.setColor(1, 0.8, 0.8)
-                love.graphics.printf(debug.traceback(), 10, 10, 300)
-            else
-                love.graphics.clear(0.25, 0.05, 0.05)
-                love.graphics.setColor(1, 1, 1)
-                love.graphics.printf("ARCH3RO ERREUR :\n" .. errText, 10, 10, 380)
-            end
-            love.graphics.present()
-        end
-
+        draw()
         if love.timer then
             love.timer.sleep(0.05)
         end

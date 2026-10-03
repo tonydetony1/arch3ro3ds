@@ -26,6 +26,12 @@ function love.conf(t)
         t.modules.physics = false
         t.modules.video = false
         t.modules.thread = false
+        -- Sans le firmware DSP (sdmc:/3ds/dspfirm.cdc, dump DSP1), le module audio échoue et
+        -- LÖVE Potion s'arrête avant d'ouvrir la fenêtre : on démarre alors sans son
+        if love._console or love._os == "3DS" then
+            local dsp = io.open("sdmc:/3ds/dspfirm.cdc", "rb")
+            if dsp then dsp:close() else t.modules.audio = false end
+        end
     end
 end
 

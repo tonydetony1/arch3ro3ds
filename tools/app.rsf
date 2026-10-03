@@ -64,7 +64,7 @@ AccessControlInfo:
 
   MemoryType                    : Application
   SystemMode                    : 64MB
-  SystemModeExt                 : Legacy
+  SystemModeExt                 : 124MB
   CpuSpeed                      : 804MHz
   EnableL2Cache                 : true
   CanAccessCore2                : false
