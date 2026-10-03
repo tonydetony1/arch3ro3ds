@@ -8,6 +8,7 @@ local files = {
     "tests.test_world_encounter",
     "tests.test_wave_runner",
     "tests.test_elite_affixes",
+    "tests.test_admin",
 }
 
 local passed, failed = 0, 0
