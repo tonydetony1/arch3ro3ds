@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  selftest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LÖVE 11, Lua 5.1 and a virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y love lua5.1 xvfb
+
+      # La 3DS exécute du Lua 5.1 interprété : tout le code doit compiler avec luac5.1
+      # (pas d'extension LuaJIT), et le bytecode doit se convertir au format de la console
+      - name: Lua 5.1 compile check and 3DS bytecode round trip
+        run: python3 tools/lua_bytecode.py --selftest
+
+      - name: Self-test suite
+        env:
+          SDL_AUDIODRIVER: dummy
+        run: |
+          set -o pipefail
+          timeout 300 xvfb-run -a love . --test 2>&1 | tee selftest.log
+          grep -q "SUCCESS: 100%" selftest.log
+
+      - name: Room build benchmark (PC, JIT off)
+        env:
+          SDL_AUDIODRIVER: dummy
+        run: |
+          timeout 300 xvfb-run -a love . --bench --sim3ds --roomload 2>&1 | grep -E "ROOMLOAD\] (moyenne|salle)" | tail -5

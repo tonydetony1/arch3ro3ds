@@ -321,6 +321,12 @@ function love.errorhandler(msg)
         love.filesystem.write("error_log.txt", errText)
     end)
 
+    -- Autotest et banc d'essai (lancés sans écran, ex. intégration continue) : on quitte
+    -- avec un code d'erreur au lieu d'attendre devant l'écran d'erreur
+    if isTestMode or benchMode then
+        os.exit(1)
+    end
+
     while true do
         if love.event then
             love.event.pump()
