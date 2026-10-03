@@ -19,6 +19,7 @@ local Bestiary = require("src.data.bestiary")
 local Achievements = require("src.data.achievements")
 local Inventory = require("src.states.inventory")
 local Balance = require("src.data.balance")
+local SettingsPanel = require("src.ui.settings_panel")
 
 local MenuState = {}
 MenuState.__index = MenuState
@@ -37,7 +38,7 @@ function MenuState.new(stateMachine)
     self.heroSubPage = "roster"
     self.questSubPage = "quests"
     self.chestSubPage = "chests"
-    self.settingsOpen = false
+    self.settingsPanel = SettingsPanel.new()
     self.bestiarySelected = "slime"
 
     -- Dedicated inventory manager with kinetic scrolling
@@ -85,14 +86,19 @@ function MenuState.new(stateMachine)
     self.patrolRewardTimer = 0
 
     -- Floating Bento touch navigation bar
+    -- 7 onglets de 41 px (pas de 44 px) : le 7ᵉ ouvre les réglages (+ panneau admin caché)
     self.tabs = {
-        { id = "play",      name = "PLAY",    icon = "swords",   x = 6,   y = 207, w = 48, h = 26, theme = "emerald" },
-        { id = "quests",    name = "QUESTS",  icon = "check",    x = 57,  y = 207, w = 48, h = 26, theme = "amber"   },
-        { id = "heroes",    name = "HEROES",  icon = "hero",     x = 108, y = 207, w = 48, h = 26, theme = "sapphire"},
-        { id = "equipment", name = "FORGE",   icon = "shield",   x = 159, y = 207, w = 48, h = 26, theme = "sapphire"},
-        { id = "talents",   name = "TALENTS", icon = "rune",     x = 210, y = 207, w = 48, h = 26, theme = "violet"  },
-        { id = "chests",    name = "CHESTS",  icon = "chest",    x = 261, y = 207, w = 48, h = 26, theme = "amber"   },
+        { id = "play",      name = "PLAY",     icon = "swords", theme = "emerald" },
+        { id = "quests",    name = "QUESTS",   icon = "check",  theme = "amber"   },
+        { id = "heroes",    name = "HEROES",   icon = "hero",   theme = "sapphire"},
+        { id = "equipment", name = "FORGE",    icon = "shield", theme = "sapphire"},
+        { id = "talents",   name = "TALENTS",  icon = "rune",   theme = "violet"  },
+        { id = "chests",    name = "CHESTS",   icon = "chest",  theme = "amber"   },
+        { id = "settings",  name = "SETTINGS", icon = "gear",   theme = "gray"    },
     }
+    for i, tab in ipairs(self.tabs) do
+        tab.x, tab.y, tab.w, tab.h = 6 + (i - 1) * 44, 207, 41, 26
+    end
 
 
     return self
@@ -111,6 +117,7 @@ end
 
 function MenuState:update(dt)
     self.godRaysAngle = (self.godRaysAngle + dt * 1.4) % (math.pi * 2)
+    self.settingsPanel:update(dt)
 
     -- Accumulation de la patrouille AFK
     Save.updatePatrol(dt)
@@ -306,7 +313,10 @@ function MenuState:drawTop()
     UI.drawText(string.format("%d", self.saveData.gems), 166, 10, Palette.C.leaf)
     UI.drawIcon("energy", 232, 16, 11)
     UI.drawText(string.format("%d/%d", self.saveData.energy, self.saveData.maxEnergy), 242, 10, Palette.C.cyan)
-    UI.drawPillButton(w - 76, 5, 68, 20, "SETTINGS", "gray", self.pressedBtn == "open_settings", "rune")
+    -- Réglages : onglet SETTINGS de l'écran tactile (l'écran du haut n'est pas tactile)
+    UI.setFont("tiny")
+    UI.drawTextAligned("Y: SETTINGS", w - 76, 12, 68, "center", Palette.C.fog)
+    UI.setFont("main")
 
     -- ------------------------------------------------------------------
     -- Power Card (attack / max health)
@@ -347,11 +357,10 @@ function MenuState:drawBottom()
     love.graphics.rectangle("fill", 0, 0, botW, botH)
 
     -- 1. Contenu selon l'onglet actif (Zone utile : y=4 à y=200)
-    if self.settingsOpen then
-        self:drawSettingsPage()
-        return
-    elseif self.openingChest then
+    if self.openingChest then
         self:drawGachaSequence()
+    elseif self.currentTab == "settings" then
+        self.settingsPanel:draw()
     elseif self.currentTab == "play" then
         self:drawPlayTab()
     elseif self.currentTab == "quests" then
@@ -714,99 +723,6 @@ end
 -- ============================================================================
 -- PAGE : BESTIARY (fiches, éliminations et maîtrise)
 -- ============================================================================
--- ============================================================================
--- PAGE SETTINGS (écran du bas)
--- ============================================================================
-MenuState.SETTINGS_ROWS = {
-    { id = "music",      label = "MUSIC",           kind = "slider" },
-    { id = "sfx",        label = "SOUND EFFECTS",   kind = "slider" },
-    { id = "depth3d",    label = "3D DEPTH",        kind = "slider", max = 1.5 },
-    { id = "showDamage", label = "DAMAGE NUMBERS",  kind = "toggle" },
-    { id = "lowPower",   label = "BATTERY SAVER",   kind = "toggle" },
-    { id = "reset",      label = "RESET SAVE DATA", kind = "action" },
-}
-
-function MenuState:settingsValue(id)
-    local d = self.saveData
-    if id == "music" then return (d.audio and d.audio.music) or 0.55 end
-    if id == "sfx" then return (d.audio and d.audio.sfx) or 0.85 end
-    local st = d.settings or {}
-    if id == "depth3d" then return st.depth3d or 1.0 end
-    if id == "showDamage" then return st.showDamage ~= false end
-    if id == "lowPower" then return st.lowPower == true end
-    return nil
-end
-
-function MenuState:drawSettingsPage()
-    local W = Config.BOTTOM_WIDTH
-
-    UI.drawBentoCard(6, 4, W - 12, 24, {})
-    UI.drawText("SETTINGS", 14, 8, Palette.C.yellow)
-    UI.drawPillButton(W - 68, 5, 60, 20, "BACK", "gray", self.pressedBtn == "settings_back")
-
-    local y = 34
-    for _, row in ipairs(MenuState.SETTINGS_ROWS) do
-        local h = 28
-        UI.drawBentoCard(6, y, W - 12, h, {})
-        UI.drawText(row.label, 14, y + 9, Palette.C.silver)
-
-        if row.kind == "slider" then
-            local maxV = row.max or 1.0
-            local value = self:settingsValue(row.id)
-            local ratio = math.max(0, math.min(1, value / maxV))
-            UI.drawPillButton(W - 104, y + 4, 22, 20, "-", "gray", self.pressedBtn == ("set_dec_" .. row.id))
-            -- Gauge
-            local bx, bw = W - 78, 44
-            love.graphics.setColor(Palette.C.slate)
-            love.graphics.rectangle("fill", bx, y + 11, bw, 6)
-            love.graphics.setColor(Palette.C.leaf)
-            love.graphics.rectangle("fill", bx, y + 11, math.floor(bw * ratio), 6)
-            love.graphics.setColor(1, 1, 1, 1)
-            UI.setFont("tiny")
-            UI.drawTextAligned(string.format("%d%%", math.floor(ratio * 100 + 0.5)), bx, y + 19, bw, "center", Palette.C.fog)
-            UI.setFont("main")
-            UI.drawPillButton(W - 30, y + 4, 22, 20, "+", "gray", self.pressedBtn == ("set_inc_" .. row.id))
-        elseif row.kind == "toggle" then
-            local on = self:settingsValue(row.id)
-            UI.drawPillButton(W - 78, y + 4, 70, 20, on and "ON" or "OFF", on and "green" or "gray",
-                self.pressedBtn == ("set_toggle_" .. row.id))
-        else
-            UI.drawPillButton(W - 90, y + 4, 82, 20,
-                self.confirmReset and "CONFIRM?" or "RESET", self.confirmReset and "red" or "gray",
-                self.pressedBtn == "set_reset")
-        end
-        y = y + h + 2
-    end
-
-    UI.setFont("tiny")
-    UI.drawTextAligned("A: Confirm   B: Back   L/R: Switch Tabs", 6, y + 4, W - 12, "center", Palette.C.fog)
-    UI.setFont("main")
-end
-
--- Applique un changement de réglage et le persiste
-function MenuState:changeSetting(id, delta)
-    local d = Save.get()
-    d.settings = d.settings or {}
-    d.audio = d.audio or {}
-
-    if id == "music" or id == "sfx" then
-        local cur = (id == "music") and (d.audio.music or 0.55) or (d.audio.sfx or 0.85)
-        local nv = math.max(0, math.min(1, cur + delta * 0.1))
-        d.audio[id] = nv
-        if id == "music" then Audio.setMusicVolume(nv) else Audio.setSfxVolume(nv) end
-    elseif id == "depth3d" then
-        d.settings.depth3d = math.max(0, math.min(1.5, (d.settings.depth3d or 1.0) + delta * 0.25))
-    elseif id == "showDamage" then
-        d.settings.showDamage = not (d.settings.showDamage ~= false)
-    elseif id == "lowPower" then
-        d.settings.lowPower = not (d.settings.lowPower == true)
-    end
-
-    Save.save()
-    Save.applySettings()
-    self.saveData = Save.get()
-end
-
 function MenuState:drawBestiaryPage()
     local counters = Save.getBestiary()
     local W = Config.BOTTOM_WIDTH
@@ -1220,34 +1136,10 @@ end
 function MenuState:touchpressed(id, tx, ty)
     Audio.play("ui_click", 0.05, 0.5)
 
-    -- Page Paramètres : prioritaire sur le reste de l'interface
-    if self.settingsOpen then
-        local W = Config.BOTTOM_WIDTH
-        if tx >= W - 68 and tx <= W - 8 and ty >= 5 and ty <= 25 then
-            self.pressedBtn = "settings_back"
-            return
-        end
-        local y = 34
-        for _, row in ipairs(MenuState.SETTINGS_ROWS) do
-            if ty >= y and ty <= y + 28 then
-                if row.kind == "slider" then
-                    if tx >= W - 104 and tx <= W - 82 then self.pressedBtn = "set_dec_" .. row.id
-                    elseif tx >= W - 30 and tx <= W - 8 then self.pressedBtn = "set_inc_" .. row.id end
-                elseif row.kind == "toggle" then
-                    if tx >= W - 78 and tx <= W - 8 then self.pressedBtn = "set_toggle_" .. row.id end
-                else
-                    if tx >= W - 90 and tx <= W - 8 then self.pressedBtn = "set_reset" end
-                end
-                return
-            end
-            y = y + 30
-        end
-        return
-    end
-
-    -- Bouton OPTIONS de la barre supérieure
-    if ty >= 5 and ty <= 25 and tx >= Config.BOTTOM_WIDTH - 76 and tx <= Config.BOTTOM_WIDTH - 8 then
-        self.pressedBtn = "open_settings"
+    -- Onglet Réglages : le panneau reçoit tout l'écran sauf la barre d'onglets
+    if self.currentTab == "settings" and ty < 202 and not self.openingChest then
+        self.settingsPanel:touchpressed(tx, ty)
+        self.pressedBtn = "settings_panel"
         return
     end
 
@@ -1442,44 +1334,9 @@ function MenuState:touchmoved(id, tx, ty, dx, dy)
 end
 
 function MenuState:touchreleased(id, tx, ty)
-    -- Actions de la page Paramètres
-    if self.pressedBtn == "open_settings" then
-        self.settingsOpen = true
-        self.confirmReset = false
+    if self.pressedBtn == "settings_panel" then
         self.pressedBtn = nil
-        Audio.play("ui_confirm", 0, 0.7)
-        return
-    elseif self.pressedBtn == "settings_back" then
-        self.settingsOpen = false
-        self.confirmReset = false
-        self.pressedBtn = nil
-        Audio.play("ui_cancel", 0, 0.7)
-        return
-    elseif self.pressedBtn and self.pressedBtn:match("^set_") then
-        local btn = self.pressedBtn
-        self.pressedBtn = nil
-        local decId = btn:match("^set_dec_(.+)$")
-        local incId = btn:match("^set_inc_(.+)$")
-        local togId = btn:match("^set_toggle_(.+)$")
-        if decId then
-            self:changeSetting(decId, -1)
-        elseif incId then
-            self:changeSetting(incId, 1)
-        elseif togId then
-            self:changeSetting(togId, 1)
-        elseif btn == "set_reset" then
-            if self.confirmReset then
-                Save.reset()
-                self.saveData = Save.get()
-                self.inventory:refresh()
-                self.confirmReset = false
-                self.settingsOpen = false
-                Audio.play("ui_cancel", 0, 0.9)
-            else
-                self.confirmReset = true
-            end
-        end
-        Audio.play("ui_click", 0.05, 0.6)
+        self:handlePanelRequest(self.settingsPanel:touchreleased())
         return
     end
 
@@ -1500,6 +1357,8 @@ function MenuState:touchreleased(id, tx, ty)
             self.currentTab = tab.id
             if tab.id == "equipment" then
                 self.inventory:refresh()
+            elseif tab.id == "settings" then
+                self.settingsPanel:open()
             end
             self.pressedBtn = nil
             return
@@ -1636,6 +1495,18 @@ function MenuState:touchreleased(id, tx, ty)
     self.pressedBtn = nil
 end
 
+-- Requêtes du panneau de réglages (src/ui/settings_panel.lua)
+function MenuState:handlePanelRequest(request)
+    if not request then return end
+    if request.refresh then
+        self.saveData = Save.get()
+        self.inventory:refresh()
+    end
+    if request.launch then
+        self.sm:switch("game", { mode = "ascension", startRoom = request.launch.startRoom })
+    end
+end
+
 function MenuState:launchGame()
     Audio.play("ui_confirm", 0, 0.8)
     local run = Save.getRun()
@@ -1672,8 +1543,8 @@ function MenuState:gamepadpressed(joystick, button)
     for i, tab in ipairs(self.tabs or {}) do order[i] = tab.id end
 
     if button == "b" then
-        if self.settingsOpen then
-            self.settingsOpen = false
+        if self.currentTab == "settings" then
+            self.currentTab = "play"
         elseif self.questSubPage == "achievements" then
             self.questSubPage = "quests"
         elseif self.heroSubPage == "bestiary" then
@@ -1686,8 +1557,18 @@ function MenuState:gamepadpressed(joystick, button)
         Audio.play("ui_cancel", 0, 0.7)
         return
     elseif button == "y" then
-        self.settingsOpen = not self.settingsOpen
+        if self.currentTab == "settings" then
+            self.currentTab = "play"
+        else
+            self.currentTab = "settings"
+            self.settingsPanel:open()
+        end
         Audio.play("ui_click", 0.05, 0.7)
+        return
+    elseif self.currentTab == "settings" and (button ~= "leftshoulder" and button ~= "rightshoulder"
+        or self.settingsPanel:isAdminUnlocked()) then
+        -- Réglages : la croix, A et (admin débloqué) L/R pilotent le panneau
+        self:handlePanelRequest(self.settingsPanel:gamepadpressed(button))
         return
     elseif button == "leftshoulder" or button == "l" or button == "rightshoulder" or button == "r" then
         if #order > 0 then

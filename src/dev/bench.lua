@@ -32,6 +32,10 @@ function Bench.parse(args)
         if a == "--alloc" then Bench.alloc = {} end
         if a == "--roomload" then Bench.roomload = true end
         if a == "--showcase" then Bench.showcase = true end
+        local tab = a:match("^%-%-tab=(%a+)$")
+        if tab then Bench.tab = tab end
+        local page = a:match("^%-%-page=(%a+)$")
+        if page then Bench.page = page end
         local r = a:match("^%-%-room=(%d+)$")
         if r then Bench.room = tonumber(r) end
         local d = a:match("^%-%-duration=(%d+)$")
@@ -200,6 +204,18 @@ function Bench.start(sm)
     if Bench.lprof then startLuaProfiler() end
     if Bench.menu then
         print("[BENCH] menu principal")
+        -- Captures d'un onglet ou d'une page du panneau (`--tab=settings --page=tools`)
+        local m = sm.current
+        if Bench.tab and m.tabs then
+            m.currentTab = Bench.tab
+            if Bench.tab == "settings" then
+                m.settingsPanel:open()
+                if Bench.page then
+                    require("src.data.save").get().settings.adminUnlocked = true
+                    m.settingsPanel.page = Bench.page
+                end
+            end
+        end
         return
     end
     sm:switch("game", { mode = "ascension" })

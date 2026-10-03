@@ -120,6 +120,10 @@ local ICONS = {
         grid = { "SSSSS", "S.S.S", "S.S.S", "SSSSS" },
         pal = { S = "8b9bb4" },
     },
+    gear = {
+        grid = { ".S.S.S.", "SSSSSSS", ".SSdSS.", "SSd.dSS", ".SSdSS.", "SSSSSSS", ".S.S.S." },
+        pal = { S = "c0cbdc", d = "5a6988" },
+    },
     affix_swift = {
         grid = { "....YY.", "...YY..", "..YYYY.", ".YYYY..", "...YY..", "..YY...", ".YY...." },
         pal = { Y = "fee761" },

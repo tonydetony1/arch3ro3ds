@@ -1094,6 +1094,39 @@ function SelfTest.update(gameStateMachine, testFrames)
             assert(champion, "Room 17 must hold a champion with two affixes")
             print(string.format("[TEST] Encounters VALIDATED: 3 waves, %d elites, max %d alive, gate after last wave, champion in room 17.", elites, maxAlive))
 
+        elseif testFrames == 117 then
+            -- Réglages : 7 touchers sur le titre débloquent l'admin ; TEST BOSS lance la salle 10
+            local Admin = require("src.data.admin")
+            local SettingsPanel = require("src.ui.settings_panel")
+            local st = Save.get().settings
+            st.adminUnlocked = false
+            local panel = SettingsPanel.new()
+            panel:open()
+            for _ = 1, 6 do panel:touchpressed(20, 12); panel:touchreleased() end
+            assert(not panel:isAdminUnlocked(), "6 taps must not unlock admin")
+            panel:touchpressed(20, 12); panel:touchreleased()
+            assert(panel:isAdminUnlocked(), "7 taps on the title must unlock admin")
+            for _, page in ipairs({ "game", "tuning", "cheats", "tools" }) do
+                panel.page = page
+                panel:draw()
+            end
+            panel.page = "tuning"
+            panel.cursor = 1
+            panel:gamepadpressed("dpright")
+            assert(Admin.get("hpMult") > 1 and Admin.isModified(), "D-pad right must raise MONSTER HP")
+            Admin.resetTuning()
+            Save.get().admin = Admin.export()
+            panel.page = "tools"
+            panel.cursor = 2
+            panel:gamepadpressed("dpright")
+            local request = panel:gamepadpressed("a")
+            assert(request and request.launch and request.launch.startRoom == 20, "TEST BOSS 2 must launch room 20")
+            gameStateMachine:switch("game", { mode = "ascension", startRoom = 20 })
+            local g = gameStateMachine.current
+            assert(g.roomNumber == 20 and g.roomType == "boss", "Start room 20 must be the chapter 2 boss")
+            st.adminUnlocked = false
+            print("[TEST] Settings + Admin VALIDATED: 7-tap unlock, 4 pages drawn, tuning via D-pad, TEST BOSS launches room 20.")
+
         elseif testFrames >= 118 then
             collectgarbage("collect")
             local mem = collectgarbage("count")

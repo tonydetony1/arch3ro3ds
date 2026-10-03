@@ -91,6 +91,7 @@ local ICON_SPRITES = {
     swords = "icon_sword", sword = "icon_sword", attack = "icon_sword",
     skull = "icon_skull", kills = "icon_skull", pause = "icon_pause",
     star = "icon_star", sparkles = "icon_star", rune = "icon_star",
+    gear = "icon_gear", settings = "icon_gear",
     door = "icon_door", room = "icon_door", lock = "icon_lock", check = "icon_check",
     shield = "icon_skill_shield", hero = "icon_skill_boots", boots = "icon_skill_boots",
     chest = "icon_door", fuse = "icon_star", upgrade = "icon_star", equip = "icon_check",
