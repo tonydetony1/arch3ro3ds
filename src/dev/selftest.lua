@@ -168,6 +168,23 @@ function SelfTest.update(gameStateMachine, testFrames)
             g.player.hasInput = false
             g.player.isMoving = false
 
+            -- A2. Premier tir après l'arrêt : la flèche vise l'ennemi, pas l'ancienne direction
+            -- (ennemi collé derrière le héros, qui regardait encore à droite)
+            g.dummyPool:clear()
+            g.projectilePool:clear()
+            local chaser = g.dummyPool:obtain()
+            chaser:spawn(g.player.x - 18, g.player.y, 500, "slime")
+            g.player.currentAngle, g.player.targetAngle, g.player.fireCooldown = 0, 0, 0
+            g.player:update(0.033, g.projectilePool, g.dummyPool, g.fctPool, g.obstacleManager)
+            local aimedAtChaser = false
+            for p = 1, g.projectilePool.activeCount do
+                local proj = g.projectilePool.items[g.projectilePool.activeList[p]]
+                if proj and not proj.isEnemy and proj.dirX < -0.99 then aimedAtChaser = true end
+            end
+            assert(aimedAtChaser, "First arrow after stopping must fly straight at the nearby enemy")
+            g.projectilePool:clear()
+            print("[TEST] Point-blank aim VALIDATED: first arrow after stopping flies at the enemy.")
+
             -- B. Validation GLISSADE VECTORIELLE CONTRE LES MURS (WALL SLIDING)
             local testDummy = { x = 25, y = 100, radius = 10 }
             -- Mouvement diagonal contre le mur gauche (x < minX)

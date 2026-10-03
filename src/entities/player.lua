@@ -1,5 +1,6 @@
 local Config = require("src.data.config")
 local Screen = require("src.core.screen")
+local Stick = require("src.core.stick")
 local PlayerStats = require("src.data.player_stats")
 local Weapons = require("src.data.weapons")
 local VFX = require("src.render.vfx_manager")
@@ -217,8 +218,7 @@ function Player:handleInput(dt)
     -- 1. Circle Pad 3DS
     local joy = primaryJoystick()
     if joy then
-        local rawX = joy:getAxis(1) or 0
-        local rawY = joy:getAxis(2) or 0
+        local rawX, rawY = Stick.read(joy, Screen.is3DS)
         local mag = math.sqrt(rawX * rawX + rawY * rawY)
 
         if mag > Config.INPUT.DEADZONE then
@@ -730,6 +730,12 @@ function Player:update(dt, projectilePool, dummyPool, fctPool, obstacleManager, 
         end
 
         if self.currentTarget and self.fireCooldown <= 0 then
+            -- Tir droit sur la cible : l'angle lissé ne sert qu'à tourner le héros entre deux
+            -- tirs. Sinon la 1re flèche après un arrêt partait vers l'ancienne visée (ennemi
+            -- proche qui poursuit le héros : flèche dans le mauvais sens)
+            self.currentAngle = self.targetAngle
+            self.aimDirX = math.cos(self.currentAngle)
+            self.aimDirY = math.sin(self.currentAngle)
             self:shoot(projectilePool)
             self.fireCooldown = effectiveFireRate
         end
