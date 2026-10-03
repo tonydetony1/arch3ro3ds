@@ -12,6 +12,9 @@ local Pool = require("src.core.pool")
 local Camera = require("src.core.camera")
 local ObstacleManager = require("src.core.obstacle_manager")
 local RunLoop = require("src.core.runloop")
+local WaveRunner = require("src.core.wave_runner")
+local EliteAffixes = require("src.core.elite_affixes")
+local Encounters = require("src.data.encounters")
 local Player = require("src.entities.player")
 local Projectile = require("src.entities.projectile")
 local Dummy = require("src.entities.dummy")
@@ -38,6 +41,13 @@ local PREFETCH_BUDGET_CALM = 0.008
 local PREFETCH_MIN_COMBAT = 0.0005 -- avance garantie même quand l'image est pleine
 local PREFETCH_MIN_CALM = 0.002
 local FRAME_TARGET = 0.0155        -- 1/60 s moins une marge pour le present()
+
+-- Renforts (src/core/wave_runner.lua) : runes au sol avant leur arrivée, et distance
+-- minimale au héros (sinon renvoyés de l'autre côté du centre de la salle)
+local REINFORCE_WARNING = 1.0
+local REINFORCE_MIN_DIST = 110
+local REINFORCE_CLEARANCE = 16
+local VOLATILE_COLOR = { 1.0, 0.45, 0.1, 1.0 }
 
 local function prefetchBudget(busy)
     local work = RunLoop.lastWork
@@ -277,6 +287,7 @@ function GameState:setupRoom(roomNum)
     self.obstacleManager:generate(self.mapW, self.mapH, roomNum, spec.kind)
 
     local spawns, chap
+    self.waveRunner = nil
     if self.gameMode == "boss_rush" then
         spawns, chap = WorldManager.generateBossRush(self.chapterIndex, roomNum, self.mapW, self.mapH)
     elseif self.gameMode == "survival" then
@@ -284,7 +295,11 @@ function GameState:setupRoom(roomNum)
         self.waveCount = 1
         self.waveTimer = 15.0
     else
-        spawns, chap = WorldManager.generateWave(self.chapterIndex, roomNum, self.mapW, self.mapH)
+        -- Rencontre composée : 1 à 3 vagues, renforts déclenchés en jeu (voir update)
+        local enc
+        enc, chap = WorldManager.generateEncounter(self.chapterIndex, roomNum, self.mapW, self.mapH)
+        self.waveRunner = WaveRunner.new(enc.waves)
+        spawns = self.waveRunner:start()
     end
     spawns = self.obstacleManager:placeSpawns(spawns)
     self.currentChapter = chap
@@ -349,6 +364,21 @@ function GameState:setupRoom(roomNum)
     self:prefetchNextRoom()
 end
 
+-- Renforts : points d'apparition de la salle, mais jamais sur le héros (renvoyés de
+-- l'autre côté du centre s'ils tombent à moins de REINFORCE_MIN_DIST), puis case libre
+function GameState:placeReinforcements(spawns)
+    local placed = self.obstacleManager:placeSpawns(spawns)
+    local cx, cy = self.mapW / 2, self.mapH / 2
+    local p = self.player
+    for _, sp in ipairs(placed) do
+        local dx, dy = sp.x - p.x, sp.y - p.y
+        if dx * dx + dy * dy < REINFORCE_MIN_DIST * REINFORCE_MIN_DIST then
+            sp.x, sp.y = self.obstacleManager:findFreeSpot(cx * 2 - sp.x, cy * 2 - sp.y, REINFORCE_CLEARANCE)
+        end
+    end
+    return placed
+end
+
 function GameState:spawnMonstersNow()
     local bossType = nil
     for _, sp in ipairs(self.pendingSpawns) do
@@ -357,6 +387,14 @@ function GameState:spawnMonstersNow()
             d:spawn(sp.x, sp.y, sp.hp, sp.type)
             d.isBoss = sp.isBoss or false
             if d.isBoss then bossType = sp.type end
+            if sp.affixes then
+                EliteAffixes.apply(d, sp.affixes, sp.champion)
+                VFX.addFCT(d.x, d.y - 22, sp.champion and "CHAMPION" or Encounters.AFFIXES[sp.affixes[1]].label, true)
+                if sp.champion then
+                    Banner.show("boss", "CHAMPION", Bestiary.nameOf(sp.type):upper())
+                    Audio.play("boss_roar", 0.1, 0.7)
+                end
+            end
         end
     end
     self.pendingSpawns = {}
@@ -463,6 +501,15 @@ function GameState:handleMonsterDeath(target)
         VFX.addSparks(target.x, target.y, 5, { 1.0, 1.0, 1.0, 1.0 })
     end
     AIController.onDeath(target, self.dummyPool, self.fctPool)
+    -- Élite "volatile" : explosion télégraphiée à l'endroit de sa mort (bombe ennemie)
+    local blast = EliteAffixes.onDeath(target, self.chapterIndex)
+    if blast then
+        local bomb = self.projectilePool:obtain()
+        if bomb then
+            bomb:spawnLobbed(blast.x, blast.y, blast.x, blast.y, blast.delay, blast.damage, blast.radius,
+                VOLATILE_COLOR, true)
+        end
+    end
     self.dummyPool:free(target)
     self.kills = self.kills + 1
     self.ultimateCharge = math.min(1.0, self.ultimateCharge + 0.18)
@@ -675,6 +722,19 @@ function GameState:update(dt)
         end
     end
 
+    -- Renforts : vague suivante quand la salle se vide (src/core/wave_runner.lua)
+    if self.waveRunner and self.phase == "combat" and not self.isGameOver then
+        local spawns, waveNo = self.waveRunner:update(dt, self.dummyPool.activeCount, self.spawnWarningTimer > 0)
+        if spawns then
+            self.pendingSpawns = self:placeReinforcements(spawns)
+            self.spawnWarningTimer = REINFORCE_WARNING
+            if waveNo then
+                Banner.show("room", self.waveRunner:label())
+                VFX.shakeLight()
+            end
+        end
+    end
+
     -- 1. Mise à jour de l'arène, des obstacles et de l'UI
     self.arena:update(dt, self.isGateOpen)
     self.obstacleManager:update(dt, self.player, self.fctPool, self.dummyPool)
@@ -756,6 +816,7 @@ function GameState:update(dt)
                     if distSq <= (proj.aoeRadius * proj.aoeRadius) then
                         local dmg = proj.damage or 20
                         self.player:takeDamage(dmg)
+                        if proj.chill then self.player:chill(EliteAffixes.CHILL_TIME) end
                         Audio.play("player_hurt", 0.08, 0.8)
                         VFX.triggerHitFlash(self.player, 3)
                         VFX.shakeMedium()
@@ -823,6 +884,7 @@ function GameState:update(dt)
                             else
                                 local dmg = proj.damage or 15
                                 self.player.hp = math.max(0, self.player.hp - dmg)
+                                if proj.chill then self.player:chill(EliteAffixes.CHILL_TIME) end
                                 VFX.triggerHitFlash(self.player, 3)
                                 VFX.shakeMedium()
                                 VFX.addFCT(self.player.x, self.player.y - 12, dmg, false)
@@ -999,7 +1061,8 @@ function GameState:update(dt)
 
     Perf.sec("u:collisions")
     -- 8. PHASE DE CLEAR & MAGNÉTISME DU BUTIN (OU APPARITION DU DÉMON APRÈS BOSS)
-    if self.gameMode ~= "survival" and self.dummyPool.activeCount == 0 and self.spawnWarningTimer <= 0 and not self.isGateOpen and not (self.specialRoomManager and self.specialRoomManager.isActive) then
+    if self.gameMode ~= "survival" and self.dummyPool.activeCount == 0 and self.spawnWarningTimer <= 0 and not self.isGateOpen and not (self.specialRoomManager and self.specialRoomManager.isActive)
+        and (not self.waveRunner or self.waveRunner:isDone()) then
         if self.roomType == "boss" and not self.devilEncountered then
             -- APPARITION DU DÉMON APRÈS LE GRAND BOSS !
             self.devilEncountered = true

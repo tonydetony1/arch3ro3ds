@@ -903,6 +903,8 @@ function SelfTest.update(gameStateMachine, testFrames)
             local prePhorenHp = dPhoren.hp
             g.heroId = "phoren"
             g.player.heroId = "phoren"
+            -- Le météore tombe dans la direction visée : on vise le golem (à droite du héros)
+            g.player.aimDirX, g.player.aimDirY = 1, 0
             g:triggerUltimate()
             assert(dPhoren.hp < prePhorenHp and dPhoren.status.fire > 0, "Phoren ultimate must drop volcanic meteor dealing 120 damage + burn")
             g.dummyPool:free(dPhoren)
@@ -1049,6 +1051,48 @@ function SelfTest.update(gameStateMachine, testFrames)
             Save.data = nil
             assert(Save.load().saveSeq == seq, "Next save must repair the broken slot")
             print("[TEST] Crash-safe Save VALIDATED: ping-pong slots, truncated write recovered.")
+
+        elseif testFrames == 116 then
+            -- Rencontres : une salle à 3 vagues jouée jusqu'au bout (monstres éliminés au fur et
+            -- à mesure) ; la porte ne s'ouvre qu'après la dernière vague
+            local WaveRunner = require("src.core.wave_runner")
+            local Encounters = require("src.data.encounters")
+            gameStateMachine:switch("game", { mode = "ascension" })
+            local g = gameStateMachine.current
+            g.hasSpunStartWheel = true
+            g:setupRoom(38)
+            assert(g.waveRunner and g.waveRunner:total() == 3, "Room 38 must have 3 waves")
+            g.player.maxHp, g.player.hp = 1e9, 1e9
+            local wavesSeen, elites, maxAlive = 1, 0, 0
+            for _ = 1, 3000 do
+                g.isDrafting = false
+                g:update(1 / 30)
+                if g.waveRunner:currentWave() > wavesSeen then wavesSeen = g.waveRunner:currentWave() end
+                maxAlive = math.max(maxAlive, g.dummyPool.activeCount)
+                assert(not g.isGateOpen or g.waveRunner:isDone(), "Gate must stay closed while waves remain")
+                if g.isGateOpen then break end
+                for i = g.dummyPool.activeCount, 1, -1 do
+                    local d = g.dummyPool.items[g.dummyPool.activeList[i]]
+                    if d and d.alive then
+                        if d.elite then elites = elites + 1 end
+                        g:handleMonsterDeath(d)
+                    end
+                end
+            end
+            assert(wavesSeen == 3, "All 3 waves must arrive")
+            assert(g.isGateOpen, "Gate must open once every wave is cleared")
+            assert(elites >= Encounters.eliteCount(38), "Elites must spawn")
+            assert(maxAlive <= WaveRunner.MAX_ACTIVE, "At most 7 monsters at once (got " .. maxAlive .. ")")
+            -- Champion : salle 17
+            g:setupRoom(17)
+            local champion = false
+            for _, wave in ipairs(g.waveRunner.waves) do
+                for _, sp in ipairs(wave) do
+                    if sp.champion then champion = (#sp.affixes == 2) end
+                end
+            end
+            assert(champion, "Room 17 must hold a champion with two affixes")
+            print(string.format("[TEST] Encounters VALIDATED: 3 waves, %d elites, max %d alive, gate after last wave, champion in room 17.", elites, maxAlive))
 
         elseif testFrames >= 118 then
             collectgarbage("collect")
