@@ -103,7 +103,6 @@ function VFX.buildTextureAtlas()
         meteor    = Art.frame("fx_meteor", 1),
         spore     = Art.frame("fx_spore", 1),
         fireball  = Art.frame("fx_orb", 1),
-        orbCore   = Art.frame("fx_orb_core", 1),
         bomb      = Art.frame("bomber_bomb", 1),
         coin      = Art.frame("fx_coin", 1),
         coinEdge  = Art.frame("fx_coin", 2),
@@ -462,10 +461,9 @@ function VFX.drawProjectileBatch(projectilePool)
                 local s = p.lobKind and 2 or 1
                 Gpu.addSprite(img, f.quad, floor(p.x + 0.5), floor(p.y - (p.arcZ or 0) + 0.5), 0, s, s, f.ox, f.oy)
             elseif p.isEnemy then
-                local f, core = tintFrame("orb", c) or F.fireball, F.orbCore
+                local f = tintFrame("orb", c) or F.fireball
                 local s = ((p.radius or 3) >= 4) and 2 or 1
                 Gpu.addSprite(img, f.quad, floor(p.x + 0.5), floor(p.y + 0.5), 0, s, s, f.ox, f.oy)
-                Gpu.addSprite(img, core.quad, floor(p.x + 0.5), floor(p.y + 0.5), 0, s, s, core.ox, core.oy)
             else
                 local f = tintFrame("arrow", c) or F.arrow
                 local s = ((p.radius or 3) >= 4) and 2 or 1

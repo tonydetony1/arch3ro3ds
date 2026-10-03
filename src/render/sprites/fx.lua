@@ -20,7 +20,6 @@ local ORB = {
     ".WWW.",
 }
 
-local ORB_CORE = { "WW", "WW" }
 
 local SPORE = {
     ".GG.",
@@ -135,7 +134,6 @@ function Fx.define(atlas)
     d("fx_shadow", { SHADOW }, { W = "ffffff" }, nil, "center")
     d("fx_arrow", { ARROW }, { f = "8b9bb4", S = "c0cbdc", H = "ffffff" }, INK, { 6, 1 })
     d("fx_orb", { ORB }, { W = "ffffff" }, INK)
-    d("fx_orb_core", { ORB_CORE }, { W = "ffffff" }, nil)
     d("fx_spore", { SPORE }, { G = "63c74d", W = "ffffff", d = "3e8948" }, INK)
     d("fx_coin", { COIN, COIN_EDGE }, { o = "f77622", y = "fee761", Y = "feae34" }, INK)
     d("fx_gem", { GEM }, { g = "2ce8f5", G = "0099db", W = "ffffff", d = "124e89" }, INK)

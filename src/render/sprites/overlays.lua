@@ -52,7 +52,8 @@ Overlays.TINTS = { "white", "red", "orange", "amber", "yellow", "leaf", "cyan", 
 local ARROW = { "ff.....H..", ".SSSSSSHHH", "ff.....H.." }
 local SPARK = { "..W..", "..W..", "WWWWW", "..W..", "..W.." }
 local RING = { "..WWW..", ".W...W.", "W.....W", "W.....W", "W.....W", ".W...W.", "..WWW.." }
-local ORB = { ".WWW.", "WWWWW", "WWWWW", "WWWWW", ".WWW." }
+-- Orbe ennemie avec son cœur blanc (C) intégré : un seul sprite par tir au lieu de deux
+local ORB = { ".WWW.", "WCCWW", "WCCWW", "WWWWW", ".WWW." }
 
 local function mul(hexOrC, t)
     local c = type(hexOrC) == "string" and Palette.hex(hexOrC) or hexOrC
@@ -68,7 +69,7 @@ function Overlays.define(atlas)
             outline = mul("181425", t), anchor = { 6, 1 },
         })
         atlas:define("fx_orb_" .. name, {
-            frames = { ORB }, palette = { W = mul("ffffff", t) }, outline = mul("181425", t), anchor = "center",
+            frames = { ORB }, palette = { W = mul("ffffff", t), C = { 1, 1, 1, 1 } }, outline = mul("181425", t), anchor = "center",
         })
         atlas:define("fx_spark_" .. name, { frames = { SPARK }, palette = { W = mul("ffffff", t) }, anchor = "center" })
         atlas:define("fx_ring_" .. name, { frames = { RING }, palette = { W = mul("ffffff", t) }, anchor = "center" })
