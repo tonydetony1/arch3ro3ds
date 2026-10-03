@@ -394,20 +394,6 @@ function WorldManager.generateWave(chapterIndex, roomNumber, mapW, mapH)
         return spawns, chap
     end
 
-    if roomNumber % 5 == 0 then
-        -- MINI-BOSS : un slime écarlate costaud entouré d'une escorte légère
-        local escortCount = math.max(2, math.min(6, WorldManager.monsterCount(roomNumber) - 2))
-        table.insert(spawns, { x = cx, y = cy - 70, hp = math.floor(baseHp * 2.8), type = "splitter" })
-
-        local escortTypes = pickTypes(chap, roomNumber, escortCount)
-        local escortHps = WorldManager.distributeHp(escortTypes, baseHp * 1.9)
-        for i = 1, escortCount do
-            local ex, ey = ringPosition(i, escortCount, cx, cy + 40, mapW, mapH)
-            table.insert(spawns, { x = ex, y = ey, hp = escortHps[i], type = escortTypes[i] })
-        end
-        return spawns, chap
-    end
-
     -- VAGUE CLASSIQUE : le nombre grimpe avec la profondeur, les PV individuels baissent
     local count = WorldManager.monsterCount(roomNumber)
     local types = pickTypes(chap, roomNumber, count)
@@ -419,6 +405,65 @@ function WorldManager.generateWave(chapterIndex, roomNumber, mapW, mapH)
     end
 
     return spawns, chap
+end
+
+-- ============================================================================
+-- RENCONTRES (salles de combat de l'Ascension et de l'Abysse) : 1 à 3 vagues composées
+-- par src/core/encounter_director.lua. PV totaux = Balance.ENCOUNTER.hpMult x l'ancien
+-- budget de salle, répartis selon le poids de chaque monstre (archétype, élite, champion).
+-- Salles d'ange : aucune vague ; salles de boss : génération historique, vague unique.
+-- ============================================================================
+function WorldManager.generateEncounter(chapterIndex, roomNumber, mapW, mapH)
+    local roomType = WorldManager.getRoomType(roomNumber)
+    if roomType == "angel" then
+        return { waves = {} }, WorldManager.getChapter(chapterIndex)
+    end
+    if roomType == "boss" then
+        local spawns, chap = WorldManager.generateWave(chapterIndex, roomNumber, mapW, mapH)
+        return { waves = { spawns } }, chap
+    end
+
+    local Director = require("src.core.encounter_director")
+    local Encounters = require("src.data.encounters")
+    local Balance = require("src.data.balance")
+    local chap = WorldManager.getChapter(chapterIndex)
+    local enc = Director.compose(chapterIndex, roomNumber)
+
+    local types, weights, refs = {}, {}, {}
+    for _, wave in ipairs(enc.waves) do
+        for _, s in ipairs(wave) do
+            local w = WorldManager.ARCHETYPE_HP[s.type] or 1.0
+            if s.affixes then w = w * Encounters.ELITE_HP_MULT end
+            if s.champion then w = w * Encounters.CHAMPION_HP_MULT end
+            types[#types + 1] = s.type
+            weights[#weights + 1] = w
+            refs[#refs + 1] = s
+        end
+    end
+    local count = #refs
+    local baseHp = chap.baseHp + (roomNumber - 1) * chap.hpScaling
+    local budget = Balance.ENCOUNTER.hpMult * WorldManager.hpBudget(baseHp, math.max(4, math.min(10, count)))
+        * enc.hpMult
+    local totalWeight = 0
+    for _, w in ipairs(weights) do totalWeight = totalWeight + w end
+
+    local cx = mapW and (mapW / 2) or 200
+    local cy = mapH and (mapH / 2) or 120
+    local waves, k = {}, 0
+    for wi, wave in ipairs(enc.waves) do
+        local out = {}
+        for i, s in ipairs(wave) do
+            k = k + 1
+            local x, y = ringPosition(i, #wave, cx, cy, mapW, mapH)
+            if s.champion then x, y = cx, cy - 70 end
+            out[i] = {
+                x = x, y = y, type = s.type, affixes = s.affixes, champion = s.champion,
+                hp = math.max(1, math.floor(budget * weights[k] / math.max(1e-9, totalWeight) + 0.5)),
+            }
+        end
+        waves[wi] = out
+    end
+    return { waves = waves }, chap
 end
 
 return WorldManager

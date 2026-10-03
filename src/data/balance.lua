@@ -108,4 +108,10 @@ function Balance.rarityRank(rarity)
     return RARITY_RANK[rarity or "common"] or 1
 end
 
+-- Rencontres (src/core/encounter_director.lua) : PV totaux d'une salle de combat par rapport
+-- à l'ancien budget à vague unique (réparti désormais sur 1 à 3 vagues)
+Balance.ENCOUNTER = {
+    hpMult = 1.3,
+}
+
 return Balance
