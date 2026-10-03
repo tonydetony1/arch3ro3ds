@@ -7,6 +7,7 @@ local Config = require("src.data.config")
 local Monsters = require("src.render.monsters")
 local AIController = require("src.core.ai_controller")
 local VFX = require("src.render.vfx_manager")
+local EliteAffixes = require("src.core.elite_affixes")
 
 local Dummy = {}
 Dummy.__index = Dummy
@@ -60,6 +61,7 @@ function Dummy:spawn(x, y, hp, monsterType)
     self.darkMark = 0
     self.enrageFlash = 0
     self.attackRateMult = 1.0
+    EliteAffixes.reset(self)
     self.isBurrowed = false
     self.aimLocked = false
     self.telegraphActive = false
@@ -223,6 +225,12 @@ function Dummy:takeDamage(dmg, hitDirX, hitDirY, elements)
         return false -- Invincible quand sous terre
     end
 
+    -- Élite : le bouclier absorbe d'abord ; tout coup interrompt la régénération
+    if self.elite then
+        dmg = EliteAffixes.absorb(self, dmg)
+        EliteAffixes.onHit(self)
+    end
+
     self.hp = self.hp - dmg
     self.hitFlash = 1.0 -- Flash blanc
     VFX.triggerHitFlash(self, 3)
@@ -259,6 +267,11 @@ end
 -- Mise à jour principale déléguée à AIController
 function Dummy:update(dt, player, projectilePool, obstacleManager, dummyPool, fctPool, mapW, mapH)
     if (self.darkMark or 0) > 0 then self.darkMark = math.max(0, self.darkMark - dt) end
+    if self.elite and EliteAffixes.update(self, dt) == "enraged" then
+        VFX.addFCT(self.x, self.y - 24, "ENRAGED!", true)
+        VFX.addSparks(self.x, self.y, 10, { 1.0, 0.25, 0.2, 1.0 })
+        VFX.triggerHitFlash(self, 4)
+    end
     -- Décrémentation du compteur de frames exactes du Hit-Flash (3 frames)
     VFX.updateEntity(self)
 
@@ -327,7 +340,9 @@ function Dummy:update(dt, player, projectilePool, obstacleManager, dummyPool, fc
     if not player or player.hp <= 0 then return true end
 
     -- 4. Délégation complète de la logique de déplacement, attaque et télégraphing à AIController
+    EliteAffixes.shooter = self -- marque les tirs créés par cette IA (affixe frost)
     AIController.update(self, dt, player, projectilePool, obstacleManager, dummyPool, fctPool, mapW, mapH)
+    EliteAffixes.shooter = nil
 
     return true
 end

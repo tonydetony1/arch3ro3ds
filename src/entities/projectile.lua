@@ -1,5 +1,6 @@
 local Config = require("src.data.config")
 local VFX = require("src.render.vfx_manager")
+local EliteAffixes = require("src.core.elite_affixes")
 
 local Projectile = {}
 Projectile.__index = Projectile
@@ -123,6 +124,8 @@ function Projectile:spawn(startX, startY, dirX, dirY, weapon, isCrit, bounces, i
 
     self.bouncesLeft = bounces or 0
     self.lastHitTargetId = nil
+    -- Tir d'une élite "frost" : ralentit le héros à l'impact
+    self.chill = (isEnemy and EliteAffixes.chillsShots(EliteAffixes.shooter)) or false
 end
 
 -- Projectile lobé en cloche qui passe par-dessus les murs et les obstacles
@@ -157,6 +160,7 @@ function Projectile:spawnLobbed(startX, startY, targetX, targetY, flightDuration
     self.behavior = "lobbed"
     self.isReturning = false
     self.isHitscan = false
+    self.chill = (isEnemy and EliteAffixes.chillsShots(EliteAffixes.shooter)) or false
 end
 
 function Projectile:update(dt, mapW, mapH, obstacleManager, dummyPool, player)

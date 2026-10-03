@@ -9,6 +9,7 @@ local Audio = require("src.audio.audio")
 local Palette = require("src.render.palette")
 local PixelFont = require("src.ui.pixel_font")
 local HeroSprites = require("src.render.sprites.heroes")
+local EliteAffixes = require("src.core.elite_affixes")
 
 local Player = {}
 
@@ -45,6 +46,7 @@ function Player.new(startX, startY)
     self.speed = self.baseSpeed
     -- Effets de terrain : sable (ralenti), glace (glissade)
     self.terrainSpeedMult = 1.0
+    self.chillTimer = 0 -- ralentissement par les tirs d'une élite "frost"
     self.terrainSlip = 0
     self.maxHp = PlayerStats.max_hp
     self.hp = self.maxHp
@@ -269,7 +271,8 @@ function Player:handleInput(dt)
     self.hasInput = hasInput
 
     -- Physique d'accélération et glissade (le terrain modifie vitesse et adhérence)
-    local speed = self.speed * (self.terrainSpeedMult or 1.0)
+    local chilled = (self.chillTimer or 0) > 0
+    local speed = self.speed * (self.terrainSpeedMult or 1.0) * (chilled and EliteAffixes.CHILL_SPEED or 1)
     local grip = 25 * (1.0 - (self.terrainSlip or 0) * 0.82)
     local targetVx = inputX * speed
     local targetVy = inputY * speed
@@ -559,9 +562,18 @@ function Player:setBounds(mapW, mapH)
     self.maxY = (mapH or Config.TOP_HEIGHT) - 22
 end
 
+-- Ralentissement (tirs d'une élite "frost")
+function Player:chill(duration)
+    if (self.chillTimer or 0) <= 0 then
+        VFX.addFCT(self.x, self.y - 22, "CHILLED", false)
+    end
+    self.chillTimer = math.max(self.chillTimer or 0, duration)
+end
+
 function Player:update(dt, projectilePool, dummyPool, fctPool, obstacleManager, isGateOpen)
     -- Décrémentation du Hit-Flash (exactement 3 frames)
     VFX.updateEntity(self)
+    if (self.chillTimer or 0) > 0 then self.chillTimer = self.chillTimer - dt end
 
     -- Régénération passive (compétences de soin) : accumulée puis appliquée par point entier
     if (self.hpRegen or 0) > 0 and self.hp < self.maxHp then
