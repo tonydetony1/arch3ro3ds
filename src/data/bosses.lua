@@ -8,7 +8,7 @@ local Bosses = {
     STAGGER_TIME = 1.0,          -- étourdissement invulnérable au changement de phase
     INITIAL_DELAY = 1.2,         -- délai avant la première attaque
     AIM_LOCK = 0.3,              -- la visée se fige pendant les dernières secondes du télégraphe
-    MAX_SHOTS = 60,              -- tirs ennemis simultanés au plus (performances Old 3DS)
+    MAX_SHOTS = 48,              -- tirs ennemis simultanés au plus (mesuré : 51 tirs = 34 FPS sur Old 3DS)
     DAMAGE_PER_CHAPTER = 0.25,
     SHOT_RADIUS = 4,
 }

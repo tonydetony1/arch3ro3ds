@@ -42,7 +42,7 @@ L'ancienne rage à 50 % ne s'applique plus aux boss pilotés par le cerveau.
 | `teleport` | près du héros (bande de distance) ou centre | étincelles au départ et à l'arrivée |
 
 Dégâts = base × (1 + 0.25 × (chapitre − 1)) × réglage admin BOSS DAMAGE.
-Au plus **60 tirs ennemis** simultanés : au-delà, les tirs d'une attaque sont ignorés.
+Au plus **48 tirs ennemis** simultanés (60 mesurés trop lourds sur Old 3DS) : au-delà, les tirs d'une attaque sont ignorés.
 
 Déplacements : `chase` (poursuite, facteur de vitesse), `keep` (garde une distance min-max,
 glisse latéralement), `hover` (tourne autour du centre), `anchor` (rejoint le centre et y reste).
@@ -57,6 +57,8 @@ glisse latéralement), `hover` (tourne autour du centre), `anchor` (rejoint le c
 | Titan de Lave (ch.4) | poursuite lente ; étoile 10, pluie de 4 | charge, étoile 12 ×2, pluie de 6 | double charge, étoile 14, pluie de 8 |
 | Drake des Tempêtes (ch.5) | distance ; éventail de 3 éclairs, ruée | ruée, éventail de 5 ×2, anneau à trou | spirale 4 bras, ruée, éventail de 7 |
 | Œil du Vide (ch.6) | ancré au centre ; spirale 4 bras, éventail de 5 | anneau à trou ×2, 2 feux follets, spirale 5 bras | spirale 6 bras, éventail de 9 serré, anneau à trou |
+
+Escorte des salles de boss réduite à 1-3 gardes (au lieu de 2-6).
 
 Mode Boss Rush : les types sans fiche (slime géant) gardent l'IA d'origine.
 

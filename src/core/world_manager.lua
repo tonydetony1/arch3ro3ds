@@ -384,7 +384,9 @@ function WorldManager.generateWave(chapterIndex, roomNumber, mapW, mapH)
         -- GRAND BOSS DE PALIER : le boss concentre les PV, sa garde est plus nombreuse en profondeur
         table.insert(spawns, { x = cx, y = cy - 80, hp = math.floor(baseHp * 4.5), type = chap.boss or "golem", isBoss = true })
 
-        local guardCount = math.max(2, math.min(6, 2 + math.floor(roomNumber / 10)))
+        -- Escorte légère : les boss ont leurs propres attaques et invocations (src/data/bosses.lua),
+        -- et chaque monstre de plus coûte cher sur Old 3DS
+        local guardCount = math.min(3, 1 + math.floor(roomNumber / 20))
         local guardTypes = pickTypes(chap, roomNumber + 1, guardCount)
         local guardHps = WorldManager.distributeHp(guardTypes, baseHp * 2.4)
         for i = 1, guardCount do
