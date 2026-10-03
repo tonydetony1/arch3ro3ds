@@ -119,6 +119,14 @@ Arch3ro runs natively on PC through the **LÖVE 2D** engine:
   - **Boss Rush**: Test your builds against formidable bosses in rapid succession.
   - **Survival Arena**: Hold out against unstoppable monster onslaughts in a closed death arena.
 
+### 🎯 Encounters That Stay Fresh
+Difficulty comes from smarter fights, not from flooding the screen (the Old 3DS keeps at most **7 monsters alive at once**):
+- **Encounter Director**: every monster has a role (*tank*, *harasser*, *shooter*, *zone control*, *special*) and a threat cost. Each room gets a threat budget that grows with depth and is spent on 1 to 3 waves with complementary roles: something always forces you to move, shooters come with a bodyguard, each room has a dominant role different from the previous one, and a new monster type first appears in a lighter room.
+- **Reinforcement Waves**: the next wave arrives when two monsters are left (or after 14 s), announced by ground runes and a `WAVE 2/3` banner. The gate only opens once every wave is down.
+- **Elite Monsters** with a tinted aura and an affix icon: *Swift*, *Shielded*, *Volatile* (explodes on death), *Regenerating*, *Enraged*, *Frost* (its shots slow you down). From room 4 on, up to 3 per room in The Abyss.
+- **Champions**: room 7 of every chapter ends with a champion carrying two affixes.
+- Fully deterministic per room: a resumed run replays the exact same fights.
+
 ### 🎲 Dynamic Special Rooms
 - 👼 **Angel Sanctuary** (Stages 5, 15, 25, 35, 45): Choose between divine healing or permanent offensive/defensive blessings.
 - 🎡 **Lucky Wheel**: Spin for gold rewards, gems, restoration hearts, or bonus combat skills.
@@ -214,7 +222,7 @@ Arch3ro was built with surgical respect for the Nintendo 3DS hardware constraint
    - Measured in Azahar at Old 3DS clock: room transitions went from **2.1 s on average (up to 8.2 s)** to **~0.15 s**.
 6. **Measured Frame Rate**:
    - New 3DS: 60 FPS.
-   - Old 3DS (Azahar at native clock): ~58 FPS in typical rooms, ~46 FPS in the busiest rooms (10 monsters on screen).
+   - Old 3DS (Azahar at native clock): ~56-58 FPS in typical rooms, ~53 FPS in the busiest rooms (late-game waves with elites).
 7. **Hardware Stereoscopic 3D Slider Support (`src/render/depth.lua`)**:
    - 8 distinct depth layers mapped directly to the physical 3DS slider:
      - `SKY` (-10 px): Recessed deep behind the screen
