@@ -1,0 +1,44 @@
+# ==============================================================================
+# Arch3ro 3DS - .gitignore
+# ==============================================================================
+
+# Binaires et packages Nintendo 3DS générés
+*.3dsx
+*.cia
+*.elf
+tools/romfs_dir/game.love
+
+# Textures GPU précompilées (générées par build_all.py / png2t3x.py)
+assets/atlas.t3x
+
+# Bases de données & verrous d'outils / agents IA
+*.db
+*.rvf
+*.lock
+.swarm/
+.claude-flow/
+tools/.claude-flow/
+
+# Cache Python & LÖVE
+tools/__pycache__/
+__pycache__/
+*.pyc
+
+# Dossiers et fichiers de logs / diagnostics temporaires
+logs/
+*.log
+*_log.txt
+test_*.txt
+test_*.png
+
+# Sauvegardes locales de développement
+_sauvegarde_avant_refonte/
+*.tmp
+*.bak
+
+# Fichiers d'environnement & éditeurs
+.vscode/
+.idea/
+*.code-workspace
+.DS_Store
+Thumbs.db
