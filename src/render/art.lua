@@ -30,13 +30,14 @@ function Art.init()
     local hasPrebakedData, prebakedData = pcall(require, "src.render.atlas_data")
     Boot.mark("  atlas: données Lua " .. (hasPrebakedData and type(prebakedData) or tostring(prebakedData)))
 
-    local okData, imgData = pcall(love.image.newImageData, prebakedImg)
-    local okImg, rawImg = false, nil
-    if not okData then okImg, rawImg = pcall(love.graphics.newImage, prebakedImg) end
-    Boot.mark("  atlas: PNG " .. tostring(okData) .. " " .. tostring(okData and "" or imgData) .. " / " .. tostring(okImg) .. " " .. tostring(rawImg))
+    local okImg, img = pcall(love.graphics.newImage, prebakedImg)
+    if not okImg then
+        local okData, imgData = pcall(love.image.newImageData, prebakedImg)
+        if okData then okImg, img = pcall(love.graphics.newImage, imgData) end
+    end
+    Boot.mark("  atlas: texture " .. tostring(okImg))
 
-    if hasPrebakedData and type(prebakedData) == "table" and (okData or okImg) then
-        local img = okData and love.graphics.newImage(imgData) or rawImg
+    if hasPrebakedData and type(prebakedData) == "table" and okImg and img then
         img:setFilter("nearest", "nearest")
         Boot.mark("  atlas: texture GPU")
         local atlas = SpriteAtlas.loadPrebaked(prebakedData, img)

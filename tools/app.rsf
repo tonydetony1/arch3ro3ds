@@ -60,19 +60,14 @@ AccessControlInfo:
   PermitMainFunctionArgument    : true
   CanShareDeviceMemory          : true
   RunnableOnSleep               : false
-  SpecialMemoryArrange          : true
+  SpecialMemoryArrange          : false
 
   MemoryType                    : Application
   SystemMode                    : 64MB
   SystemModeExt                 : Legacy
-  CpuSpeed                      : 268MHz
-  EnableL2Cache                 : false
-  CanAccessCore2                : true
-
-  IORegisterMapping:
-   - 1ff00000-1ff7ffff
-  MemoryMapping:
-   - 1f000000-1f5fffff:r
+  CpuSpeed                      : 804MHz
+  EnableL2Cache                 : true
+  CanAccessCore2                : false
 
   SystemCallAccess:
     ArbitrateAddress: 34

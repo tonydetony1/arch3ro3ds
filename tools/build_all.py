@@ -149,14 +149,38 @@ print(f" -> Archive game.love : {love_size / (1024*1024):.2f} Mo ({love_size:,} 
 # 2. Vérification du fichier SMDH (Métadonnées & Icônes 3DS)
 # -------------------------------------------------------------
 smdh_path = os.path.join(ROOT_DIR, "Arch3ro.smdh")
-if not os.path.exists(smdh_path) or os.path.getsize(smdh_path) != 14016:
+export_script = os.path.join(TOOLS_DIR, "export_3ds_assets.py")
+need_smdh = (not os.path.exists(smdh_path) or 
+             os.path.getsize(smdh_path) != 14016 or
+             (os.path.exists(export_script) and os.path.getmtime(export_script) > os.path.getmtime(smdh_path)))
+if need_smdh:
     print("\n[2/5] Génération d'Arch3ro.smdh...")
-    subprocess.run([sys.executable, os.path.join(TOOLS_DIR, "export_3ds_assets.py")], check=True)
+    subprocess.run([sys.executable, export_script], check=True)
 else:
     print(f"\n[2/5] Arch3ro.smdh conforme ({os.path.getsize(smdh_path)} octets).")
 
 with open(smdh_path, "rb") as f:
     smdh_bytes = f.read()
+
+# -------------------------------------------------------------
+# 2.5. Génération de la bannière HOME Menu (Photo & Jingle sonore)
+# -------------------------------------------------------------
+banner_path = os.path.join(ROOT_DIR, "Arch3ro.bnr")
+banner_png = os.path.join(ROOT_DIR, "assets", "banner.png")
+banner_audio = os.path.join(ROOT_DIR, "assets", "audio", "sfx", "gate_open.wav")
+bannertool_bin = os.path.join(TOOLS_DIR, "bannertool")
+
+if os.path.exists(bannertool_bin) and os.path.exists(banner_png):
+    print("\n[2.5/5] Génération de la bannière HOME Menu 3DS (Arch3ro.bnr)...")
+    cmd_b = [bannertool_bin, "makebanner", "-i", banner_png]
+    if os.path.exists(banner_audio):
+        cmd_b.extend(["-a", banner_audio])
+    cmd_b.extend(["-o", banner_path])
+    res_b = subprocess.run(cmd_b, capture_output=True, text=True)
+    if res_b.returncode == 0:
+        print(f" -> Arch3ro.bnr généré avec succès ({os.path.getsize(banner_path)} octets).")
+    else:
+        print(f" -> Avertissement bannertool : {res_b.stderr.strip()}")
 
 # -------------------------------------------------------------
 # 3. Code Lua universel de recherche de jeu pour boot.lua
@@ -176,13 +200,12 @@ OLD_BOOT_BLOCK = """    local arg0 = love.arg.getLow(love.rawGameArguments)
     -- Is this one of those fancy "fused" games?
     local can_has_game = pcall(love.filesystem.setSource, exepath)"""
 
-NEW_BOOT_RAW = """    local arg0 = "sdmc:/3ds/Arch3ro.3dsx"
-    for _, p in ipairs({"romfs:/game.love","sdmc:/3ds/Arch3ro.3dsx","sdmc:/3ds/Arch3ro/Arch3ro.3dsx"}) do
-        local f = io.open(p, "rb")
-        if f then f:close() arg0 = p break end
+NEW_BOOT_RAW = """    local a = love.arg and love.arg.getLow(love.rawGameArguments)
+    local exepath = "sdmc:/3ds/Arch3ro.3dsx"
+    for _,p in ipairs({"romfs:/game.love",a,"sdmc:/3ds/Arch3ro.3dsx"}) do
+        if p and #p>0 then local f=io.open(p) if f then f:close() exepath=p break end end
     end
-    love.filesystem.init(arg0)
-    local exepath = arg0
+    love.filesystem.init(exepath)
     no_game_code = false
     invalid_game_path = nil
     local can_has_game = pcall(love.filesystem.setSource, exepath)"""
@@ -325,6 +348,9 @@ cmd_makerom = [
     "-target", "t",
     "-exefslogo"
 ]
+if os.path.exists(banner_path):
+    cmd_makerom.extend(["-banner", banner_path])
+
 res_make = subprocess.run(cmd_makerom, capture_output=True, text=True)
 if res_make.returncode != 0:
     print("ERREUR makerom :", res_make.stderr)
@@ -346,6 +372,9 @@ shutil.copyfile(out_3dsx, os.path.join(SDMC_3DS_DIR, "Arch3ro.3dsx"))
 shutil.copyfile(smdh_path, os.path.join(SDMC_3DS_DIR, "Arch3ro.smdh"))
 shutil.copyfile(out_3dsx, os.path.join(SDMC_3DS_DIR, "Arch3ro", "Arch3ro.3dsx"))
 shutil.copyfile(smdh_path, os.path.join(SDMC_3DS_DIR, "Arch3ro", "Arch3ro.smdh"))
+if os.path.exists(banner_path):
+    shutil.copyfile(banner_path, os.path.join(SDMC_3DS_DIR, "Arch3ro.bnr"))
+    shutil.copyfile(banner_path, os.path.join(SDMC_3DS_DIR, "Arch3ro", "Arch3ro.bnr"))
 
 # Copie de l'archive game.love sur SDMC comme filet de sécurité
 shutil.copyfile(love_archive_path, os.path.join(SDMC_LP_DIR, "game.love"))

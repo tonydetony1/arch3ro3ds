@@ -6,6 +6,7 @@
 *.3dsx
 *.cia
 *.elf
+*.bnr
 tools/romfs_dir/game.love
 
 # Textures GPU précompilées (générées par build_all.py / png2t3x.py)
@@ -42,3 +43,4 @@ _sauvegarde_avant_refonte/
 *.code-workspace
 .DS_Store
 Thumbs.db
+qr_code.png

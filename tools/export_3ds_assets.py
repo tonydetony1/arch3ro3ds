@@ -17,9 +17,27 @@ ARTIFACTS_DIR = "/home/tonydetony/.gemini/antigravity-ide/brain/f15e127d-8a6c-49
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS_DIR = os.path.join(PROJECT_DIR, "assets")
 
-ICON_SRC = os.path.join(ARTIFACTS_DIR, "arch3ro_icon_1789928556073.jpg")
-BANNER_SRC = os.path.join(ARTIFACTS_DIR, "arch3ro_banner_clean_1789928595778.jpg")
-LOGO_SRC = os.path.join(ARTIFACTS_DIR, "arch3ro_logo_1789928524143.jpg")
+def find_source(candidates):
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return candidates[-1]
+
+ICON_SRC = find_source([
+    os.path.join(ARTIFACTS_DIR, "arch3ro_icon_1789928556073.jpg"),
+    os.path.join(ASSETS_DIR, "icon_hd.png"),
+    os.path.join(ASSETS_DIR, "icon.png")
+])
+BANNER_SRC = find_source([
+    os.path.join(ARTIFACTS_DIR, "arch3ro_banner_clean_1789928595778.jpg"),
+    os.path.join(ASSETS_DIR, "banner_hd.png"),
+    os.path.join(ASSETS_DIR, "banner.png")
+])
+LOGO_SRC = find_source([
+    os.path.join(ARTIFACTS_DIR, "arch3ro_logo_1789928524143.jpg"),
+    os.path.join(ASSETS_DIR, "logo_hd.png"),
+    os.path.join(ASSETS_DIR, "logo.png")
+])
 
 os.makedirs(ASSETS_DIR, exist_ok=True)
 
