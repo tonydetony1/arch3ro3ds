@@ -64,7 +64,7 @@ function SelfTest.update(gameStateMachine, testFrames)
             local upgradeCost = ItemsData.getUpgradeCost(preLvl, Save.getItemRarity and Save.getItemRarity(bow) or "common")
             Save.addGold(upgradeCost + 1000) -- solde garanti pour des tests idempotents
             local preGold = menu.saveData.gold
-            -- Vrai appui sur le bouton dessiné (la Forge n'agit que si le stylet est relâché dessus)
+            -- Real tap on the drawn button (the Forge only acts when the stylus is released on it)
             menu.inventory:refresh()
             local upBtn = menu.inventory:getModalButton("upgrade")
             assert(upBtn, "Forge modal must offer an upgrade button")
@@ -684,7 +684,7 @@ function SelfTest.update(gameStateMachine, testFrames)
 
         elseif testFrames == 108 then
             local g = gameStateMachine.current
-            -- Les familiers en combat sont exactement ceux des emplacements Familier 1 / 2
+            -- Combat pets are exactly those in the Pet 1 / Pet 2 slots
             local Pet = require("src.entities.pet")
             local eq = Save.get().equipped
             local expected = {}

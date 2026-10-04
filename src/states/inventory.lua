@@ -1,13 +1,13 @@
 -- src/states/inventory.lua
--- Interface d'Inventaire et d'Équipement ergonomique Archero pour le Bottom Screen (320x240)
--- 6 Slots d'équipement entourant le Héros, Grille d'Inventaire avec Kinetic Scrolling,
--- Raretés 5 paliers colorées et Pop-up Modale détaillée d'Équipement / Amélioration
+-- Archero-style inventory and equipment panel for the bottom screen (320x240):
+-- 6 equipment slots around the hero, a kinetic-scrolling backpack grid, 5 colored
+-- rarity tiers and a detailed item sheet (equip / upgrade / fuse).
 --
--- Règles d'équipement (src/data/save.lua) : chaque emplacement n'accepte que son type
--- d'objet ; un anneau ou un familier va dans le premier emplacement libre, ou dans celui
--- que le joueur a touché, ou, les deux étant pris, dans celui qu'il choisit (RING 1 / RING 2).
--- Les boutons de la modale sont calculés une fois (rebuildModalButtons) : le dessin et la
--- détection tactile lisent la même liste, ils ne peuvent plus diverger.
+-- Equipment rules (src/data/save.lua): each slot only accepts its item type; a ring or
+-- pet goes to the first free slot, or to the slot the player tapped, or, when both are
+-- taken, to the one the player picks (RING 1 / RING 2).
+-- The sheet buttons are computed once (rebuildModalButtons): drawing and touch handling
+-- read the same list, so they can no longer drift apart.
 
 local Config = require("src.data.config")
 local Save = require("src.data.save")
@@ -22,21 +22,21 @@ local Screen = require("src.core.screen")
 local Inventory = {}
 Inventory.__index = Inventory
 
--- Modale d'objet
+-- Item sheet (modal)
 local MODAL_X, MODAL_Y, MODAL_W, MODAL_H = 22, 10, 276, 186
 local CLOSE_SIZE = 24
 local BTN_Y, BTN_H = MODAL_Y + 142, 36
 local BTN_LEFT, BTN_SPAN, BTN_GAP = MODAL_X + 6, MODAL_W - 12, 4
 
--- Sac à dos (grille défilante)
+-- Backpack (scrolling grid)
 local GRID_X, GRID_Y, GRID_W, GRID_H = 4, 88, 312, 108
 local GRID_VIEW_TOP, GRID_VIEW_BOTTOM = GRID_Y + 18, GRID_Y + GRID_H - 2
 local GRID_COLS, CARD_W, CARD_H, GAP_X, GAP_Y = 4, 70, 48, 6, 6
 local GRID_ORIGIN_X = GRID_X + 7
 local GRID_ORIGIN_Y = GRID_Y + 20
 
-local TAP_SLOP_SQ = 196 -- au-delà de 14 px de déplacement, l'appui devient un défilement
-local RELEASE_SLOP = 8  -- tolérance du relâchement autour d'un bouton
+local TAP_SLOP_SQ = 196 -- beyond 14 px of movement, a tap becomes a scroll
+local RELEASE_SLOP = 8  -- release tolerance around a button
 local TOAST_TIME = 1.6
 
 Inventory.SLOT_LABELS = {
@@ -44,8 +44,8 @@ Inventory.SLOT_LABELS = {
 }
 local TYPE_LABELS = { weapon = "WEAPON", armor = "ARMOR", ring = "RING", pet = "PET" }
 
--- Le ciseau se règle en pixels de la fenêtre, sans tenir compte de la translation : sur PC,
--- l'écran du bas est dessiné décalé sous celui du haut (sur 3DS, il a son propre tampon)
+-- Scissor rectangles are in window pixels and ignore the current translation: on PC the
+-- bottom screen is drawn offset below the top one (on 3DS it has its own framebuffer)
 local function setLocalScissor(x, y, w, h)
     if Screen.is3DS then
         love.graphics.setScissor(x, y, w, h)
@@ -67,29 +67,29 @@ function Inventory.new()
     local self = setmetatable({}, Inventory)
     self.saveData = nil
 
-    -- Défilement tactile à inertie (Hauteur vue = 108px)
+    -- Kinetic touch scrolling (view height = 108px)
     self.scroller = UI.newScroller(108, 120)
 
-    -- Pop-up Modale d'objet sélectionné
+    -- Item sheet of the selected item
     self.modalItem = nil
     self.modalItemId = nil
-    self.modalSourceSlot = nil -- emplacement touché pour ouvrir la modale (cible de l'équipement)
+    self.modalSourceSlot = nil -- slot tapped to open the sheet (equip target)
     self.modalButtons = {}
 
-    -- Emplacement vide touché alors que plusieurs objets peuvent y aller : le prochain
-    -- objet compatible touché dans le sac y sera équipé
+    -- Empty slot tapped while several items could go there: the next compatible item
+    -- tapped in the backpack is equipped into it
     self.targetSlot = nil
 
-    -- Message bref affiché à la place du titre du sac (objet équipé, or insuffisant...)
+    -- Short message shown instead of the backpack title (item equipped, not enough gold...)
     self.toastText = nil
     self.toastTimer = 0
 
-    -- Détection appui court (Tap) vs glissement (Drag)
+    -- Tap vs drag detection
     self.touchStartX = 0
     self.touchStartY = 0
     self.hasDragged = false
 
-    -- Élément sous le stylet ("slot_<id>", identifiant de bouton, "close", "outside")
+    -- Element under the stylus ("slot_<id>", a button id, "close", "outside")
     self.pressedBtn = nil
 
     -- 6 Equipped slots surrounding the hero
@@ -107,7 +107,7 @@ end
 
 function Inventory:refresh()
     self.saveData = Save.get()
-    -- Calcul de la hauteur totale du contenu pour le scroller
+    -- Total content height for the scroller
     local itemCount = #(self.saveData.inventory or {})
     local rows = math.ceil(math.max(1, itemCount) / GRID_COLS)
     local contentH = rows * 56 + 12
@@ -122,7 +122,7 @@ function Inventory:update(dt)
     end
 end
 
--- Vérifie si un objet est équipé dans l'un des 6 slots
+-- Is the item equipped in one of the 6 slots?
 function Inventory:isEquipped(itemId)
     return Save.isEquipped(itemId)
 end
@@ -139,7 +139,7 @@ function Inventory:getSlot(slotId)
     return nil
 end
 
--- Objets du sac qui peuvent aller dans un emplacement de ce type sans être déjà portés
+-- Backpack items of this slot type that are not already worn
 function Inventory:candidatesFor(slotType)
     local list = {}
     for _, invId in ipairs(self.saveData.inventory or {}) do
@@ -151,14 +151,14 @@ function Inventory:candidatesFor(slotType)
     return list
 end
 
--- Position d'une carte du sac (dessin et détection tactile)
+-- Position of a backpack card (drawing and touch handling)
 local function cardPosition(index, offsetY)
     local col = (index - 1) % GRID_COLS
     local row = math.floor((index - 1) / GRID_COLS)
     return GRID_ORIGIN_X + col * (CARD_W + GAP_X), GRID_ORIGIN_Y + offsetY + row * (CARD_H + GAP_Y)
 end
 
--- Objet du sac sous le point touché (seulement dans la fenêtre visible de la grille)
+-- Backpack item under the touch point (only inside the visible grid window)
 function Inventory:itemAt(tx, ty)
     if ty < GRID_VIEW_TOP or ty > GRID_VIEW_BOTTOM then return nil end
     local offsetY = self.scroller:getOffset()
@@ -172,11 +172,11 @@ function Inventory:itemAt(tx, ty)
 end
 
 -- ============================================================================
--- MODALE : BOUTONS D'ACTION
+-- ITEM SHEET: ACTION BUTTONS
 -- ============================================================================
--- Emplacement où ira l'objet si le joueur appuie sur EQUIP : celui qui a ouvert la modale
--- s'il convient, sinon l'unique emplacement du type ou le premier libre. nil quand les
--- deux emplacements d'anneau (ou de familier) sont pris : le joueur choisit.
+-- Slot the item goes to when the player presses EQUIP: the slot that opened the sheet if
+-- it fits, otherwise the only slot of that type or the first free one. nil when both ring
+-- (or pet) slots are taken: the player picks one.
 function Inventory:defaultTargetSlot(itemId)
     local item = Items.get(itemId)
     local slots = item and Save.SLOTS_BY_TYPE[item.slot]
@@ -243,7 +243,7 @@ function Inventory:getModalButton(id)
     return nil
 end
 
--- Exécute l'action d'un bouton de la modale
+-- Runs the action of a sheet button
 function Inventory:runAction(b)
     local itemId = self.modalItemId
     if b.id == "unequip" then
@@ -283,34 +283,34 @@ function Inventory:runAction(b)
 end
 
 -- ============================================================================
--- RENDU PRINCIPAL DU PANNEAU INVENTAIRE (BOTTOM SCREEN 320x240)
+-- INVENTORY PANEL RENDERING (BOTTOM SCREEN 320x240)
 -- ============================================================================
 function Inventory:draw()
     if not self.saveData then self:refresh() end
     local t = love.timer.getTime()
 
-    -- 1. HAUT DE L'ÉCRAN : LES 6 SLOTS ÉQUIPÉS ENCADRANT LE HÉROS
+    -- 1. TOP: THE 6 EQUIPPED SLOTS AROUND THE HERO
     self:drawEquippedSection(t)
 
-    -- 2. BAS DE L'ÉCRAN : GRILLE DE SAC À DOS AVEC KINETIC SCROLLING
+    -- 2. BOTTOM: BACKPACK GRID WITH KINETIC SCROLLING
     self:drawBackpackSection()
 
-    -- 3. MODALE POP-UP DÉTAILLÉE D'OBJET (SI OUVERTE)
+    -- 3. ITEM SHEET (WHEN OPEN)
     if self.modalItem then
         self:drawItemModal(t)
     end
 end
 
--- Section supérieure : 6 Slots & Portrait du Héros
+-- Upper section: 6 slots and hero portrait
 function Inventory:drawEquippedSection(t)
-    -- Fond subtil de la section équipée (Bento Card)
+    -- Subtle background of the equipped section (bento card)
     UI.drawBentoCard(4, 4, 312, 82, {
         r = 8,
         bg = {0.08, 0.10, 0.15, 0.96},
         borderColor = {0.18, 0.23, 0.33, 0.85},
     })
 
-    -- 1. Les 6 Slots d'Équipement (Padding aéré & pas de chevauchement)
+    -- 1. The 6 equipment slots (padded, no overlap)
     local fontTiny = UI.getFont("tiny")
     for _, s in ipairs(self.slots) do
         local itemId = self.saveData.equipped[s.id]
@@ -321,7 +321,7 @@ function Inventory:drawEquippedSection(t)
             local effRarity = Save.getItemRarity(itemId)
             UI.drawItemCard(s.x, s.y, s.w, s.h, item, lvl, false, false, effRarity)
 
-            -- Libellé du slot aéré avec micro-pastille sombre protectrice au bas
+            -- Slot label on a small dark pill at the bottom
             local prevFont = love.graphics.getFont()
             love.graphics.setFont(fontTiny)
 
@@ -331,7 +331,7 @@ function Inventory:drawEquippedSection(t)
 
             love.graphics.setFont(prevFont)
         else
-            -- Emplacement vide Bento (bordure dorée pulsée s'il attend un objet du sac)
+            -- Empty slot (pulsing gold border while waiting for a backpack item)
             local isTarget = (self.targetSlot == s.id)
             local pulse = 0.65 + 0.35 * math.sin(t * 6)
             UI.drawBentoCard(s.x, s.y, s.w, s.h, {
@@ -341,10 +341,10 @@ function Inventory:drawEquippedSection(t)
                 borderWidth = isTarget and 2 or 1,
             })
 
-            -- Icône silhouette discrète
+            -- Faint silhouette icon
             UI.drawItemIcon(s.type, s.x + s.w / 2, s.y + 14, 10, isTarget and {1.0, 0.85, 0.30, 0.9} or {0.35, 0.40, 0.50, 0.6})
 
-            -- Libellé du slot vide sous l'icône silhouette
+            -- Empty slot label under the silhouette icon
             local prevFont = love.graphics.getFont()
             love.graphics.setFont(fontTiny)
             UI.drawTextAligned(s.name, s.x, s.y + s.h - 11, s.w, "center", {0.60, 0.65, 0.75, 0.85}, {0.04, 0.05, 0.08, 0.8}, 1, 1)
@@ -352,7 +352,7 @@ function Inventory:drawEquippedSection(t)
         end
     end
 
-    -- 2. Carte Centrale : Vitrine du Héros & Statistiques Globales (Bento Card)
+    -- 2. Center card: hero showcase and total stats (bento card)
     local hx, hy, hw, hh = 108, 7, 104, 76
     UI.drawBentoCard(hx, hy, hw, hh, {
         r = 7,
@@ -361,7 +361,7 @@ function Inventory:drawEquippedSection(t)
         isElevated = true,
     })
 
-    -- Portrait pixel du héros équipé (respiration)
+    -- Pixel portrait of the equipped hero (breathing)
     local bob = math.floor(math.sin(t * 3.0) * 1.5 + 0.5)
     local heroCx = hx + hw / 2
     local heroBottom = hy + 36 + bob
@@ -381,13 +381,13 @@ function Inventory:drawEquippedSection(t)
         Art.drawEx("hero_acc_" .. acc, 1, heroCx + o[1], heroBottom - 4 + o[2], 0, 1, 1)
     end
 
-    -- Titre "HÉROS"
+    -- Hero title
     local fontSmall = UI.getFont("small")
     local prevFont = love.graphics.getFont()
     love.graphics.setFont(fontSmall)
     UI.drawTextAligned("ARCHER LV." .. (self.saveData.accountLevel or 1), hx, hy + 38, hw, "center", {1.0, 0.88, 0.25, 1.0}, {0.08, 0.10, 0.14, 1.0})
 
-    -- Calcul des stats cumulées
+    -- Total stats
     local totalAtk = 0
     local totalHp = 100
     for _, slot in ipairs(self.slots) do
@@ -399,7 +399,7 @@ function Inventory:drawEquippedSection(t)
         end
     end
 
-    -- Badges ATQ et PV aérés
+    -- ATK and HP badges
     love.graphics.setColor(0.85, 0.22, 0.22, 0.9)
     love.graphics.rectangle("fill", hx + 4, hy + 54, 46, 15, 3, 3)
     UI.drawTextAligned("ATK " .. totalAtk, hx + 4, hy + 55, 46, "center", {1, 1, 1, 1}, {0.1, 0.05, 0.05, 1.0})
@@ -410,7 +410,7 @@ function Inventory:drawEquippedSection(t)
     love.graphics.setFont(prevFont)
 end
 
--- Titre du sac : message bref, consigne de l'emplacement visé, ou nombre d'objets
+-- Backpack title: short message, targeted slot hint, or item count
 function Inventory:backpackTitle()
     if self.toastTimer > 0 and self.toastText then
         return self.toastText, {1.0, 0.88, 0.30, 1.0}
@@ -423,11 +423,11 @@ function Inventory:backpackTitle()
     return string.format("BACKPACK (%d ITEM%s)", count, count > 1 and "S" or ""), {0.80, 0.85, 0.95, 1.0}
 end
 
--- Section inférieure : Sac à Dos & Grille avec Scissor
+-- Lower section: backpack grid with scissor
 function Inventory:drawBackpackSection()
     local sx, sy, sw, sh = GRID_X, GRID_Y, GRID_W, GRID_H
 
-    -- Bannière Bento du Sac à dos
+    -- Backpack bento banner
     UI.drawBentoCard(sx, sy, sw, sh, {
         r = 8,
         bg = {0.08, 0.10, 0.15, 0.96},
@@ -441,7 +441,7 @@ function Inventory:drawBackpackSection()
     UI.drawText(title, sx + 8, sy + 4, titleColor, {0.08, 0.10, 0.14, 1.0})
     love.graphics.setFont(prevFont)
 
-    -- ZONE DE CISEAUX POUR LE KINETIC SCROLLER
+    -- SCISSOR AREA FOR THE KINETIC SCROLLER
     local px, py, pw, ph
     if love.graphics.getScissor then px, py, pw, ph = love.graphics.getScissor() end
     setLocalScissor(sx + 2, sy + 18, sw - 4, sh - 20)
@@ -452,7 +452,7 @@ function Inventory:drawBackpackSection()
     for i, itemId in ipairs(self.saveData.inventory) do
         local cx, cy = cardPosition(i, offsetY)
 
-        -- Ne dessine que les cartes visibles
+        -- Only draw visible cards
         if cy + CARD_H >= sy + 18 and cy <= sy + sh then
             local item = Items.get(itemId)
             local lvl = self.saveData.itemLevels[itemId] or 1
@@ -462,7 +462,7 @@ function Inventory:drawBackpackSection()
 
             UI.drawItemCard(cx, cy, CARD_W, CARD_H, item, lvl, isEq, isSel, effRarity)
 
-            -- Emplacement visé : les objets qui n'y vont pas sont assombris
+            -- Targeted slot: items that do not fit it are dimmed
             if target and (not item or item.slot ~= target.type or isEq) then
                 love.graphics.setColor(0.04, 0.05, 0.08, 0.62)
                 love.graphics.rectangle("fill", cx, cy, CARD_W, CARD_H, 5, 5)
@@ -472,7 +472,7 @@ function Inventory:drawBackpackSection()
 
     restoreScissor(px, py, pw, ph)
 
-    -- Indicateur de défilement (Scrollbar subtile)
+    -- Subtle scrollbar
     local totalContentH = self.scroller.contentH
     if totalContentH > (sh - 20) then
         local barH = math.max(12, math.floor(((sh - 20) / totalContentH) * (sh - 20)))
@@ -485,17 +485,17 @@ function Inventory:drawBackpackSection()
 end
 
 -- ============================================================================
--- MODALE POP-UP DÉTAILLÉE D'OBJET (ÉQUIPER / AMÉLIORER)
+-- ITEM SHEET (EQUIP / UPGRADE)
 -- ============================================================================
 function Inventory:drawItemModal(t)
     local botW = Config.BOTTOM_WIDTH
     local botH = Config.BOTTOM_HEIGHT
 
-    -- 1. Overlay sombre
+    -- 1. Dark overlay
     love.graphics.setColor(0.04, 0.05, 0.08, 0.82)
     love.graphics.rectangle("fill", 0, 0, botW, botH)
 
-    -- 2. Carte Modale Bento Grid 2026
+    -- 2. Sheet card
     local mx, my, mw, mh = MODAL_X, MODAL_Y, MODAL_W, MODAL_H
     local item = self.modalItem
     local itemId = self.modalItemId
@@ -505,7 +505,7 @@ function Inventory:drawItemModal(t)
     local copies = Save.getItemCopies(itemId)
     local stars = Save.getItemStars(itemId)
 
-    -- Cadre Bento principal avec bordure subtile aux teintes de la rareté
+    -- Main frame with a subtle rarity-tinted border
     UI.drawBentoCard(mx, my, mw, mh, {
         r = 10,
         bg = {0.08, 0.10, 0.15, 0.98},
@@ -514,13 +514,13 @@ function Inventory:drawItemModal(t)
         accentColor = rData.color,
     })
 
-    -- Bandeau supérieur d'accentuation de rareté (Subtle Sheen)
+    -- Top rarity sheen
     love.graphics.setColor(rData.bg[1], rData.bg[2], rData.bg[3], 0.35)
     love.graphics.rectangle("fill", mx + 1, my + 1, mw - 2, 38, 9, 9)
     love.graphics.setColor(1, 1, 1, 0.08)
     love.graphics.rectangle("fill", mx + 8, my + 2, mw - 16, 1, 1, 1)
 
-    -- Bouton de fermeture tactile stylisé
+    -- Close button
     love.graphics.setColor(0.18, 0.22, 0.30, 0.90)
     love.graphics.circle("fill", mx + mw - 16, my + 18, 9)
     love.graphics.setColor(0.85, 0.30, 0.30, 1.0)
@@ -529,17 +529,17 @@ function Inventory:drawItemModal(t)
     love.graphics.line(mx + mw - 12, my + 14, mx + mw - 20, my + 22)
     love.graphics.setLineWidth(1)
 
-    -- Icône et Nom de l'objet avec Drop Shadow
+    -- Item icon and name with drop shadow
     UI.drawItemIcon(item.icon, mx + 22, my + 20, 15, rData.color)
     UI.drawText(item.name, mx + 44, my + 8, {1, 1, 1, 1}, {0.08, 0.10, 0.14, 1.0})
 
-    -- Badge Pillule de rareté, niveau et copies possédées
+    -- Rarity / level badge and owned copies
     UI.drawPillBadge(mx + 44, my + 23, 76, 15, string.format("%s LV.%d", rData.name, lvl), {0.12, 0.15, 0.22, 0.9}, rData.color, rData.color)
     local copiesText = string.format("Copies: %d/3", copies)
     if stars > 0 then copiesText = copiesText .. string.format("  Stars: %d", stars) end
     UI.drawText(copiesText, mx + 126, my + 24, {0.60, 0.70, 0.85, 0.9}, {0.05, 0.08, 0.12, 1.0})
 
-    -- Statistiques Actuelles et Prochain Niveau dans une sous-carte Bento
+    -- Current and next-level stats in a sub-card
     local curStats = Save.getItemStats(itemId)
     local nextStats = Items.getStats(itemId, lvl + 1, effRarity, stars)
 
@@ -567,8 +567,8 @@ function Inventory:drawItemModal(t)
     local prevFont = love.graphics.getFont()
     love.graphics.setFont(fontSmall)
     UI.drawTextAligned(statStr, mx + 8, my + 48, mw - 16, "center", {0.35, 0.95, 0.55, 1.0}, {0.04, 0.08, 0.04, 1.0})
-    -- La description (2 lignes au plus, dans la carte) cède sa place au message d'une
-    -- action (amélioration, fusion, or manquant)
+    -- The description (2 lines max, inside the card) gives way to the result of an
+    -- action (upgrade, fusion, missing gold)
     if self.toastTimer > 0 and self.toastText then
         PixelFont.printf(self.toastText, mx + 10, my + 63, mw - 20, "center", {1.0, 0.88, 0.30, 1.0}, "tiny", 1, nil, 1)
     else
@@ -602,21 +602,21 @@ function Inventory:drawItemModal(t)
             local iconLock = isUnlocked and "check" or "lock"
 
             UI.drawIcon(iconLock, mx + 16, lineY + 6, 8, pColor)
-            -- Une ligne par passif, tronquée au bord de la carte
+            -- One line per passive, truncated at the card edge
             PixelFont.printf(string.format("[%s] %s: %s", tInfo.name, pInfo.name, pInfo.desc), mx + 24, lineY + 3, mw - 36, "left", pColor, "tiny", 1, nil, 1)
         end
     end
     love.graphics.setFont(prevFont)
 
-    -- 4. Boutons d'action (même liste que la détection tactile)
+    -- 4. Action buttons (same list as touch handling)
     for _, b in ipairs(self.modalButtons) do
         UI.drawPillButton(b.x, b.y, b.w, b.h, b.label, b.theme, self.pressedBtn == b.id, b.icon)
     end
 end
 
 -- ============================================================================
--- GESTION TACTILE DU PANNEAU D'INVENTAIRE (STYLUS / TOUCH)
--- L'appui repère l'élément touché, le relâchement sur ce même élément déclenche l'action
+-- INVENTORY TOUCH HANDLING (STYLUS)
+-- Press records the touched element; releasing on that same element triggers the action
 -- ============================================================================
 function Inventory:touchpressed(id, tx, ty)
     self.touchStartX = tx
@@ -624,7 +624,7 @@ function Inventory:touchpressed(id, tx, ty)
     self.hasDragged = false
     self.pressedBtn = nil
 
-    -- 1. Si la modale est ouverte, elle capte tout l'écran
+    -- 1. An open sheet captures the whole screen
     if self.modalItem then
         if tx >= MODAL_X + MODAL_W - CLOSE_SIZE and tx <= MODAL_X + MODAL_W and ty >= MODAL_Y and ty <= MODAL_Y + CLOSE_SIZE then
             self.pressedBtn = "close"
@@ -636,14 +636,14 @@ function Inventory:touchpressed(id, tx, ty)
                 return true
             end
         end
-        -- Toucher hors de la carte referme la modale
+        -- Touching outside the card closes the sheet
         if tx < MODAL_X or tx > MODAL_X + MODAL_W or ty < MODAL_Y or ty > MODAL_Y + MODAL_H then
             self.pressedBtn = "outside"
         end
         return true
     end
 
-    -- 2. L'un des 6 slots équipés du haut
+    -- 2. One of the 6 equipped slots
     for _, s in ipairs(self.slots) do
         if inside(s, tx, ty) then
             self.pressedBtn = "slot_" .. s.id
@@ -651,7 +651,7 @@ function Inventory:touchpressed(id, tx, ty)
         end
     end
 
-    -- 3. Début de défilement ou sélection dans le sac à dos
+    -- 3. Scroll start or backpack selection
     if ty >= GRID_Y and ty <= GRID_Y + GRID_H then
         self.scroller:touchDown(tx, ty)
     end
@@ -675,7 +675,7 @@ function Inventory:touchreleased(id, tx, ty)
     local pressed = self.pressedBtn
     self.pressedBtn = nil
 
-    -- 1. Relâchement dans la modale
+    -- 1. Release inside the sheet
     if self.modalItem then
         if pressed == "outside" then
             self:closeModal()
@@ -692,7 +692,7 @@ function Inventory:touchreleased(id, tx, ty)
         return
     end
 
-    -- 2. Emplacement équipé
+    -- 2. Equipped slot
     if pressed and pressed:sub(1, 5) == "slot_" then
         local s = self:getSlot(pressed:sub(6))
         if s and inside(s, tx, ty, RELEASE_SLOP) then
@@ -701,7 +701,7 @@ function Inventory:touchreleased(id, tx, ty)
         return
     end
 
-    -- 3. Fin de défilement ; un appui bref sans glissement sélectionne l'objet
+    -- 3. Scroll end; a short tap without drag selects the item
     local wasScrolling = self.scroller.isDragging
     self.scroller:touchUp(tx, ty)
     if wasScrolling and not self.hasDragged then
@@ -710,8 +710,8 @@ function Inventory:touchreleased(id, tx, ty)
     end
 end
 
--- Emplacement touché : objet porté -> sa fiche ; emplacement vide -> l'objet compatible
--- s'il est seul, sinon le sac attend que le joueur en choisisse un
+-- Slot tapped: worn item -> its sheet; empty slot -> the only compatible item, or the
+-- backpack waits for the player to pick one
 function Inventory:onSlotTapped(s)
     local itemId = self.saveData.equipped[s.id]
     if itemId then
@@ -737,7 +737,7 @@ function Inventory:onSlotTapped(s)
     end
 end
 
--- Objet du sac touché : sa fiche, en visant l'emplacement choisi juste avant s'il convient
+-- Backpack item tapped: its sheet, targeting the slot chosen just before if it fits
 function Inventory:onItemTapped(itemId)
     local target = self.targetSlot
     self.targetSlot = nil
@@ -766,14 +766,14 @@ function Inventory:closeModal()
     self.pressedBtn = nil
 end
 
--- Ferme la modale et oublie l'emplacement visé (changement d'onglet)
+-- Closes the sheet and forgets the targeted slot (tab change)
 function Inventory:reset()
     self:closeModal()
     self.targetSlot = nil
 end
 
--- Bouton « retour » (B, Échap) : ferme la modale, sinon annule l'emplacement visé.
--- Renvoie true si l'appui a servi.
+-- Back (B, Escape): closes the sheet, otherwise cancels the targeted slot.
+-- Returns true when the press was used.
 function Inventory:back()
     if self.modalItem then
         self:closeModal()
@@ -788,14 +788,14 @@ function Inventory:back()
     return false
 end
 
--- Déclenche un bouton de la modale sans le toucher (boutons physiques, clavier)
+-- Triggers a sheet button without touching it (console buttons, keyboard)
 function Inventory:pressModalButton(id)
     local b = id and self:getModalButton(id) or self.modalButtons[1]
     if b then self:runAction(b) end
     return true
 end
 
--- Boutons physiques 3DS dans la modale : A équipe / déséquipe, X améliore, Y fusionne, B ferme
+-- 3DS buttons in the sheet: A equips / unequips, X upgrades, Y fuses, B closes
 function Inventory:gamepadpressed(button)
     if button == "b" then return self:back() end
     if not self.modalItem then return false end
@@ -810,7 +810,7 @@ function Inventory:gamepadpressed(button)
     return true
 end
 
--- Clavier PC : Entrée / Espace / E équipe, U améliore, F fusionne, Échap ferme
+-- PC keyboard: Return / Space / E equips, U upgrades, F fuses, Escape closes
 function Inventory:keypressed(key)
     if key == "escape" or key == "backspace" then return self:back() end
     if not self.modalItem then return false end

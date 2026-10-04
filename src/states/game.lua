@@ -166,7 +166,7 @@ function GameState:enter(params)
     self.gameOverTimer = 0
     self.hasSpunStartWheel = false
 
-    -- Application des Talents permanents (effets décrits dans src/data/talents.lua)
+    -- Permanent talents (effects described in src/data/talents.lua)
     local talents = Save.getTalents()
     Talents.apply(self.player, talents)
 
@@ -198,13 +198,13 @@ function GameState:enter(params)
     end
 end
 
--- Équipement de la Forge : chacun des 6 emplacements compte une seule fois, et le niveau,
--- la rareté et les étoiles de chaque objet s'appliquent en combat
+-- Forge equipment: each of the 6 slots counts exactly once, and each item's level,
+-- rarity and stars apply in combat
 function GameState:applyEquipment(equipped)
     local player = self.player
 
-    -- Arme : son type fixe le tir, sa puissance (Forge) multiplie les dégâts.
-    -- Emplacement vide : arc de départ, sans bonus.
+    -- Weapon: its type sets the shot, its Forge power multiplies damage.
+    -- Empty slot: starter bow, no bonus.
     player:equipWeapon(equipped.weapon or "starter_bow")
     if equipped.weapon then
         player.damageMult = player.damageMult + (Save.getItemPower(equipped.weapon) - 1)
@@ -232,7 +232,7 @@ function GameState:applyEquipment(equipped)
         end
     end
 
-    -- Familiers : exactement ceux des emplacements Familier 1 / Familier 2
+    -- Pets: exactly those in the Pet 1 / Pet 2 slots
     player.pets = {}
     for i, slot in ipairs(PET_SLOTS) do
         local pId = equipped[slot]
@@ -310,6 +310,7 @@ function GameState:setupRoom(roomNum)
     ObstacleManager.settlePrefetch(spec.key)
     self.roomNumber = roomNum
     self.chapterIndex = spec.chapterIndex
+    -- Normal monsters hit harder in deeper rooms (survival: set again at each wave)
     self.roomType = spec.roomType
     self.bossWheelDone = false
 
