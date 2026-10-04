@@ -1,5 +1,8 @@
 -- src/data/weapons.lua
--- Définition data-driven des armes et caractéristiques des projectiles
+-- Data-driven weapons and their projectiles.
+-- Damage per second (damage / fire_rate, x(1 + return_damage_mult) for the boomerang) rises
+-- with the item rarity (src/data/items.lua), checked by tests/test_rewards.lua:
+--   common ~43 | uncommon 50-53 | rare 60-66 | epic 70-73
 
 local Weapons = {
     starter_bow = {
@@ -55,7 +58,7 @@ local Weapons = {
         type = "scythe",
         fire_rate = 0.55,
         projectile_speed = 200,
-        damage = 38,
+        damage = 36,
         range = 340,
         radius = 6.5,
         knockback_mult = 3.2,
@@ -70,7 +73,7 @@ local Weapons = {
         type = "staff",
         fire_rate = 0.38,
         projectile_speed = 220,
-        damage = 22,
+        damage = 27,
         range = 420,
         radius = 5.0,
         tracking_speed = 7.0, -- Angular tracking speed towards enemies (rad/s)
@@ -84,8 +87,8 @@ local Weapons = {
         type = "boomerang",
         fire_rate = 0.40,
         projectile_speed = 280,
-        damage = 20,
-        return_damage_mult = 0.65, -- Return damage multiplier back to player
+        damage = 14,
+        return_damage_mult = 0.5, -- damage multiplier of the return flight
         range = 260,
         radius = 5.5,
         pierce_all = true, -- Pierces through all enemies forward and backward
@@ -99,7 +102,7 @@ local Weapons = {
         type = "spear",
         fire_rate = 0.48,
         projectile_speed = 1800, -- Rayon instantané quasi-hitscan
-        damage = 32,
+        damage = 34,
         range = 450,
         radius = 3.5,
         is_hitscan = true,

@@ -12,6 +12,53 @@ local VFX = require("src.render.vfx_manager")
 local SpecialRoomManager = {}
 SpecialRoomManager.__index = SpecialRoomManager
 
+-- Lucky wheel segments (start of run) and boss wheel (after each boss).
+-- "boost" multiplies a hero stat by `mult`: the label must show exactly that percentage.
+local GOLD, ORANGE, HEAL = { 0.92, 0.70, 0.18 }, { 0.95, 0.52, 0.15 }, { 0.20, 0.82, 0.35 }
+local GEM, ATK, SPD, JACKPOT = { 0.22, 0.68, 0.95 }, { 0.90, 0.22, 0.25 }, { 0.85, 0.30, 0.85 }, { 1.0, 0.88, 0.20 }
+SpecialRoomManager.WHEELS = {
+    normal = {
+        { type = "gold", val = 60, label = "+60 GOLD", short = "+60", color = GOLD, icon = "gold" },
+        { type = "heal", val = 0.35, label = "+35% HP", short = "+35%", color = HEAL, icon = "heart" },
+        { type = "gold", val = 120, label = "+120 GOLD", short = "+120", color = ORANGE, icon = "gold" },
+        { type = "boost", stat = "damageMult", mult = 1.30, label = "+30% ATK", short = "+30%", color = ATK, icon = "swords" },
+        { type = "gold", val = 80, label = "+80 GOLD", short = "+80", color = GOLD, icon = "gold" },
+        { type = "gems", val = 5, label = "+5 GEM", short = "+5", color = GEM, icon = "gem" },
+        { type = "boost", stat = "attackSpeedMult", mult = 1.20, label = "+20% SPD", short = "+20%", color = SPD, icon = "energy" },
+        { type = "gold", val = 200, label = "JACKPOT", short = "MAX", color = JACKPOT, icon = "star" },
+    },
+    boss = {
+        { type = "gold", val = 300, label = "+300 GOLD", short = "+300", color = GOLD, icon = "gold" },
+        { type = "heal", val = 1.0, label = "FULL HEAL", short = "100%", color = HEAL, icon = "heart" },
+        { type = "gems", val = 15, label = "+15 GEM", short = "+15", color = GEM, icon = "gem" },
+        { type = "boost", stat = "damageMult", mult = 1.50, label = "+50% ATK", short = "+50%", color = ATK, icon = "swords" },
+        { type = "gold", val = 500, label = "JACKPOT", short = "MAX", color = JACKPOT, icon = "star" },
+        { type = "heal", val = 0.6, label = "+60% HP", short = "+60%", color = HEAL, icon = "heart" },
+        { type = "gems", val = 8, label = "+8 GEM", short = "+8", color = GEM, icon = "gem" },
+        { type = "boost", stat = "attackSpeedMult", mult = 1.35, label = "+35% SPD", short = "+35%", color = SPD, icon = "energy" },
+    },
+}
+
+-- Applies a wheel segment to the hero (gold and gems go to `save`).
+-- Returns the floating text to show and whether it is highlighted.
+function SpecialRoomManager.applyWheelReward(player, r, save)
+    if r.type == "gold" then
+        save.addGold(r.val)
+        return "+" .. r.val .. " GOLD", false
+    elseif r.type == "gems" then
+        save.addGems(r.val)
+        return "+" .. r.val .. " GEM", true
+    elseif r.type == "heal" then
+        local h = math.floor(player.maxHp * r.val)
+        player.hp = math.min(player.maxHp, player.hp + h)
+        return "+" .. h .. " HP", false
+    elseif r.type == "boost" then
+        player[r.stat] = (player[r.stat] or 1.0) * r.mult
+        return r.label, true
+    end
+    return r.label, false
+end
+
 function SpecialRoomManager.new()
     local self = setmetatable({}, SpecialRoomManager)
     self.activeType = "none" -- "none", "angel", "devil", "merchant"
@@ -207,36 +254,13 @@ function SpecialRoomManager:setup(roomType, player, roomNumber, variant, opts)
         self.lastPegIndex = -1
         self.winAnimTimer = 0
         self.winningIndex = nil
-        self.wheelSegments = {
-            { type = "gold", val = 60, label = "+60 GOLD", short = "+60", color = {0.92, 0.70, 0.18}, icon = "gold" },
-            { type = "heal", val = 0.35, label = "+35% HP", short = "+35%", color = {0.20, 0.82, 0.35}, icon = "heart" },
-            { type = "gold", val = 120, label = "+120 GOLD", short = "+120", color = {0.95, 0.52, 0.15}, icon = "gold" },
-            { type = "skill", id = "attack_boost", label = "+30% ATK", short = "+30%", color = {0.90, 0.22, 0.25}, icon = "swords" },
-            { type = "gold", val = 80, label = "+80 GOLD", short = "+80", color = {0.92, 0.70, 0.18}, icon = "gold" },
-            { type = "gems", val = 5, label = "+5 GEM", short = "+5", color = {0.22, 0.68, 0.95}, icon = "gem" },
-            { type = "skill", id = "speed_boost", label = "+20% SPD", short = "+20%", color = {0.85, 0.30, 0.85}, icon = "energy" },
-            { type = "gold", val = 200, label = "JACKPOT", short = "MAX", color = {1.0, 0.88, 0.20}, icon = "star" },
-        }
-
-        -- BOSS WHEEL: Exclusive rewards after a boss
-        if variant == "boss" then
-            self.wheelSegments = {
-                { type = "gold", val = 300, label = "+300 GOLD", short = "+300", color = {0.92, 0.70, 0.18}, icon = "gold" },
-                { type = "heal", val = 1.0, label = "FULL HEAL", short = "100%", color = {0.20, 0.82, 0.35}, icon = "heart" },
-                { type = "gems", val = 15, label = "+15 GEM", short = "+15", color = {0.22, 0.68, 0.95}, icon = "gem" },
-                { type = "skill", id = "attack_boost", label = "+50% ATK", short = "+50%", color = {0.90, 0.22, 0.25}, icon = "swords" },
-                { type = "gold", val = 500, label = "JACKPOT", short = "MAX", color = {1.0, 0.88, 0.20}, icon = "star" },
-                { type = "heal", val = 0.6, label = "+60% HP", short = "+60%", color = {0.20, 0.82, 0.35}, icon = "heart" },
-                { type = "gems", val = 8, label = "+8 GEM", short = "+8", color = {0.22, 0.68, 0.95}, icon = "gem" },
-                { type = "skill", id = "speed_boost", label = "+35% SPD", short = "+35%", color = {0.85, 0.30, 0.85}, icon = "energy" },
-            }
-        end
+        self.wheelSegments = (variant == "boss") and SpecialRoomManager.WHEELS.boss or SpecialRoomManager.WHEELS.normal
 
     elseif self.activeType == "merchant" then
         -- 4. MYSTERIOUS MERCHANT
         self.merchantOffers = {
             { id = "potion", name = "Healing Potion", desc = "+50% Instant HP", cost = 70, icon = "heal", bought = false, apply = function(p) p.hp = math.min(p.maxHp, p.hp + math.floor(p.maxHp * 0.5)) end },
-            { id = "scroll", name = "Scroll Bundle", desc = "+3 Weapon Scrolls", cost = 90, icon = "scroll", bought = false, apply = function(p) local s = require("src.data.save"); s.addScrolls("weapon", 3) end },
+            { id = "haste", name = "Swift Tonic", desc = "+15% Attack speed", cost = 90, icon = "speed", bought = false, apply = function(p) p.attackSpeedMult = (p.attackSpeedMult or 1.0) * 1.15 end },
             { id = "strength", name = "Elixir of Might", desc = "+15% Permanent ATK", cost = 120, icon = "damage", bought = false, apply = function(p) p.damageMult = (p.damageMult or 1.0) + 0.15 end },
         }
     end
@@ -935,25 +959,8 @@ function SpecialRoomManager:touchreleased(id, x, y, player, fctPool, onComplete)
             self.winningIndex = nil
             VFX.shakeLight()
         elseif (btn == "wheel_claim" or self.wheelStopped) and self.wheelStopped and self.spinReward then
-            local r = self.spinReward
-            local Save = require("src.data.save")
-            if r.type == "gold" then
-                Save.addGold(r.val)
-                if fctPool then VFX.addFCT(player.x, player.y - 16, "+" .. r.val .. " OR", false) end
-            elseif r.type == "gems" then
-                Save.addGems(r.val)
-                if fctPool then VFX.addFCT(player.x, player.y - 16, "+" .. r.val .. " GEM", true) end
-            elseif r.type == "heal" then
-                local h = math.floor(player.maxHp * r.val)
-                player.hp = math.min(player.maxHp, player.hp + h)
-                if fctPool then VFX.addFCT(player.x, player.y - 16, "+" .. h .. " PV", false) end
-            elseif r.type == "skill" then
-                local sk = Skills.get(r.id)
-                if sk and sk.hooks and sk.hooks.onApply then
-                    sk.hooks.onApply(player)
-                end
-                if fctPool then VFX.addFCT(player.x, player.y - 16, r.label, true) end
-            end
+            local text, highlight = SpecialRoomManager.applyWheelReward(player, self.spinReward, require("src.data.save"))
+            if fctPool then VFX.addFCT(player.x, player.y - 16, text, highlight) end
             VFX.shakeLight()
             self.isResolved = true
             self.isActive = false

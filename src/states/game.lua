@@ -604,21 +604,14 @@ function GameState:dropLoot(x, y, isBoss)
     for i = 1, dropCount do
         local l = self.lootPool:obtain()
         if l then
-            -- Tirage : Pièces d'or en majorité, Gemmes d'XP, Cœur si blessé
-            local r = math.random()
-            local lootType = "coin"
+            -- Mostly gold coins, experience gems, a heart when the hero is hurt
+            local lootType = Balance.lootType(math.random(), self.player.hp < self.player.maxHp)
             local val = math.random(Balance.LOOT.coinMin, Balance.LOOT.coinMax)
                 * (self.player.goldMultiplier or 1.0) * depth
-
-            if r < 0.40 then
-                lootType = "xp"
+            if lootType == "xp" then
                 val = 25 * depth
-            elseif r < 0.55 and self.player.hp < self.player.maxHp then
-                lootType = "heart"
+            elseif lootType == "heart" then
                 val = 30
-            elseif r < 0.60 then
-                lootType = "scroll"
-                val = 1
             end
 
             l:spawn(x, y, lootType, math.floor(val + 0.5))
@@ -838,8 +831,7 @@ function GameState:update(dt)
                     self:openDraft()
                 end
             elseif lType == "heart" then
-                local heal = math.floor(lVal * (self.player.healMult or 1) + 0.5)
-                self.player.hp = math.min(self.player.maxHp, self.player.hp + heal)
+                self.player.hp = math.min(self.player.maxHp, self.player.hp + self.player:heartHeal(lVal))
                 Audio.play("pickup_heart", 0.06, 0.7)
             end
             self.lootPool:free(loot)
@@ -932,7 +924,7 @@ function GameState:update(dt)
 
                         if (pdx * pdx + pdy * pdy) < (pRad * pRad) then
                             -- Test d'esquive (Dash I-Frames ou passif d'armure)
-                            if self.player.isDashing or self.player.isInvulnerable or (math.random() < (self.player.dodgeChance or 0)) then
+                            if self.player.isDashing or self.player.isInvulnerable or (math.random() < self.player:effectiveDodge()) then
                                 VFX.addFCT(self.player.x, self.player.y - 12, "DODGE", false)
                                 VFX.addSparks(self.player.x, self.player.y, 5, {0.35, 0.85, 1.0, 1.0})
                             else

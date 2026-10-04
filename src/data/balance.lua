@@ -39,7 +39,17 @@ Balance.LOOT = {
     potCoinMax = 8,
     bossBonusMin = 18,   -- bonus d'or garanti à la mort d'un boss
     bossBonusMax = 30,
+    xpShare = 0.40,      -- share of drops that are experience gems
+    heartShare = 0.15,   -- share of drops that are hearts (only when the hero is hurt)
 }
+
+-- Kind of a monster drop from a uniform roll in [0, 1): "xp", "heart" or "coin".
+-- (Scrolls used to drop as well, but nothing uses them yet.)
+function Balance.lootType(roll, isHurt)
+    if roll < Balance.LOOT.xpShare then return "xp" end
+    if isHurt and roll < Balance.LOOT.xpShare + Balance.LOOT.heartShare then return "heart" end
+    return "coin"
+end
 
 -- Le butin doit suivre la difficulté : une salle profonde rapporte davantage,
 -- sinon les runs longs ne paient pas leur risque.

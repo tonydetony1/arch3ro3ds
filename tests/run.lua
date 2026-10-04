@@ -16,6 +16,7 @@ local files = {
     "tests.test_sanctuary_rooms",
     "tests.test_ai_damage",
     "tests.test_world_progress",
+    "tests.test_rewards",
 }
 
 local passed, failed = 0, 0

@@ -113,7 +113,7 @@ local function playerStats(player)
     local w = player.currentWeapon
     local dmg = floor(w.damage * (player.damageMult or 1.0))
     local arrows = (player.frontArrows or 1) + (player.diagArrows or 0) * 2 + (player.rearArrows or 0) + (player.sideArrows or 0) * 2
-    return dmg, floor((player.critChance or 0) * 100), arrows, floor((player.dodgeChance or 0) * 100)
+    return dmg, floor((player.critChance or 0) * 100), arrows, floor(player:effectiveDodge() * 100)
 end
 
 -- Relève l'état qui détermine la couche fixe ; vrai si elle doit être réenregistrée

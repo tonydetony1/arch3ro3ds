@@ -179,6 +179,18 @@ function Player:triggerDash()
     return false
 end
 
+-- Dodge chance actually rolled against enemy shots (capped: the hero is never untouchable)
+function Player:effectiveDodge()
+    return math.min(PlayerStats.dodge_cap, self.dodgeChance or 0)
+end
+
+-- HP restored by a heart pickup worth `base` HP: at least a share of max HP, so hearts
+-- stay useful when max HP grows during a run
+function Player:heartHeal(base)
+    local amount = math.max(base, self.maxHp * PlayerStats.heart_heal_ratio)
+    return math.floor(amount * (self.healMult or 1) + 0.5)
+end
+
 function Player:takeDamage(dmg)
     if self.isDashing or self.isInvulnerable or (self.starActive or 0) > 0 then
         return 0, true

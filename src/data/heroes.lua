@@ -144,6 +144,8 @@ function Heroes.applyHeroPassives(player, heroId)
     player.maxHp = player.maxHp + (h.baseHpBonus or 0)
     player.hp = player.maxHp
     player.baseHeroAtk = h.baseAtkBonus or 0
+    -- Hero ATK raises every shot (+1% damage per point), not only the ultimate
+    player.damageMult = (player.damageMult or 1.0) + player.baseHeroAtk / 100
     player.heroId = h.id
 
     -- Trait passif unique
