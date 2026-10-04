@@ -204,6 +204,8 @@ function Bench.start(sm)
     if Bench.lprof then startLuaProfiler() end
     if Bench.menu then
         print("[BENCH] menu principal")
+        -- The game boots on the title screen: go straight to the hub
+        if not sm.current.tabs then sm:switch("menu") end
         -- Captures d'un onglet ou d'une page du panneau (`--tab=settings --page=tools`)
         local m = sm.current
         if Bench.tab and m.tabs then

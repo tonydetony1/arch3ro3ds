@@ -458,7 +458,8 @@ function HUD:drawLive(game, boss)
         PixelFont.printf("KILLS " .. (game.kills or 0), x + 52, y + 84, SIDE.w - 56, "right", C.white, "tiny")
         local waves = game.waveRunner
         if waves and waves:total() > 1 then
-            PixelFont.printf(waves:label(), x + 4, y + 84, 60, "left", C.amber, "tiny")
+            -- Right column, under KILLS: the left column holds the big stage number
+            PixelFont.printf(waves:label(), x + 52, y + 94, SIDE.w - 56, "right", C.amber, "tiny")
         end
     end
 end

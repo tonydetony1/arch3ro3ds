@@ -216,7 +216,7 @@ function Skin.pill(x, y, w, h, themeName, text, font)
     rect(th.light, x + 3, y + 1, w - 6, 1)
     if text then
         local f = font or "tiny"
-        local lh = (f == "tiny") and 5 or 7
+        local lh = (f == "tiny") and 6 or 7
         local top = (f == "tiny") and 0 or 2
         PixelFont.printf(text, x, floor(y + (h - 1 - lh) / 2) - top, w, "center", C.white, f)
     end

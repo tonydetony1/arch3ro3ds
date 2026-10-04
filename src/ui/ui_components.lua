@@ -202,7 +202,7 @@ function UI.drawPillBadge(x, y, w, h, text, bgColor, borderColor, textColor, ico
         love.graphics.setColor(1, 1, 1, 1)
     end
 
-    local ty = y + floor((h - 7) / 2)
+    local ty = y + floor((h - 8) / 2) -- tiny caps: 6 px + 1 px outline above and below
     if iconType then
         UI.drawIcon(iconType, x + 8, y + floor(h / 2), 9)
         PixelFont.printf(text or "", x + 12, ty, w - 16, "center", textColor or C.white, "tiny")
