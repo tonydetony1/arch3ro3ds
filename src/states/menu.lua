@@ -1059,7 +1059,8 @@ function MenuState:drawTalentsTab()
         if isSel then UI.drawIcon("check", x + w - 12, y + 18, 7, c) end
         love.graphics.setFont(UI.getFont("tiny"))
         local lvl = talents[talent.id] or 0
-        UI.drawText(string.format("Level %d  (%s)", lvl, Talents.totalText(talent, lvl)), x + 28, y + 20, {0.80, 0.85, 0.95, 1.0})
+        local levelText = Talents.isMaxed(talent.id, talents) and "MAX" or string.format("Level %d", lvl)
+        UI.drawText(string.format("%s  (%s)", levelText, Talents.totalText(talent, lvl)), x + 28, y + 20, {0.80, 0.85, 0.95, 1.0})
         love.graphics.setFont(prevF)
     end
 
@@ -1072,7 +1073,12 @@ function MenuState:drawTalentsTab()
     })
 
     local selTalent = Talents.get(selected)
-    local btnText = selTalent and string.format("UPGRADE %s  (%d GOLD)", selTalent.name, cost) or "SELECT A TALENT"
+    local btnText = "SELECT A TALENT"
+    if selTalent and Talents.isMaxed(selected, talents) then
+        btnText = selTalent.name .. " MAXED"
+    elseif selTalent then
+        btnText = string.format("UPGRADE %s  (%d GOLD)", selTalent.name, cost)
+    end
     local b = TALENT_BTN
     UI.drawPillButton(b.x, b.y, b.w, b.h, btnText, canUpgrade and "violet" or "gray", self.pressedBtn == "upgrade_talent", "rune")
 
