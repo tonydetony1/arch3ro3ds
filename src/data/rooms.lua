@@ -14,8 +14,8 @@
 --
 -- Familles :
 --   combat    : salles de vague ordinaires (minRoom = première salle où elle apparaît)
---   arena     : centre dégagé (boss, roue, diable, boss rush, survie)
---   sanctuary : salle de l'ange, sans obstacle au centre
+--   arena     : centre dégagé (boss, roue, boss rush, survie)
+--   sanctuary : sanctuaires de l'Ange et du Démon, un écran sans obstacle
 
 local Rooms = {}
 
@@ -281,28 +281,21 @@ Rooms.ARENA = {
     } },
 }
 
+-- Sanctuaires de l'Ange (salles 5, 15…) et du Démon (9, 19…) : salle d'un écran, sans
+-- obstacle ; autel et décor viennent de src/render/sanctuary.lua
+Rooms.SANCTUARY_W = 400
+Rooms.SANCTUARY_H = 240
 Rooms.SANCTUARY = {
-    { id = "sanctuary_plain", minRoom = 1, grid = {
-        ".............",
-        ".o.........o.",
+    { id = "shrine", minRoom = 1, grid = {
         ".............",
         ".............",
         ".............",
         ".............",
         ".............",
-        ".o.........o.",
-        ".............",
-    } },
-    { id = "sanctuary_garden", minRoom = 1, grid = {
-        ".............",
-        "..#.......#..",
-        ".~~.......~~.",
         ".............",
         ".............",
         ".............",
-        ".~~.......~~.",
-        "..#.......#..",
-        "o...........o",
+        ".............",
     } },
 }
 
@@ -350,7 +343,7 @@ function Rooms.mirror(grid)
     return out
 end
 
-local ROOMS_PER_BLOCK = 10 -- un chapitre = 10 salles : 8 combats, 1 ange (5e), 1 boss (10e)
+local ROOMS_PER_BLOCK = 10 -- un chapitre = 10 salles : 7 combats, ange (5e), démon (9e), boss (10e)
 local ANGEL_SLOT = 5
 
 -- Mélange de Fisher-Yates à graine fixe (LCG) : même bloc -> même ordre

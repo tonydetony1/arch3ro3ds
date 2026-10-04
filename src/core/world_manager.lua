@@ -215,7 +215,28 @@ WorldManager.THEMES = {
         patchLight = "patch_dark", patchDark = "patch_dirt", patchExtra = "patch_dark",
         hazard = "void",                      -- failles du Vide : dégâts et ralentissement
     },
+    [7] = { -- Sanctuaire de l'Ange (salles 5, 15…) : marbre, nuages, lumière dorée
+        variant = "sky",
+        ground = "dfe8f5", groundLight = "f4f8ff", groundDark = "c3d0e3", edge = "8b9bb4",
+        skyTop = "f2c14e", skyBottom = "fff4d6",
+        wallTree = "marble_column", wallTreeSmall = "cloud_bank",
+        decals = { "feather", "sparkle", "cloud_wisp" },
+        patchLight = "patch_light", patchDark = "patch_light", patchExtra = "patch_light",
+        hazard = nil,
+    },
+    [8] = { -- Antre du Démon (salles 9, 19…) : basalte, braises, ciel rouge
+        variant = "lava",
+        ground = "2b1d1d", groundLight = "3d2828", groundDark = "1f1414", edge = "120b0b",
+        skyTop = "1a0505", skyBottom = "8a1d0e",
+        wallTree = "obsidian_spire", wallTreeSmall = "obsidian_spire",
+        decals = { "lava_crack", "skull", "ember_rock", "lava_crack" },
+        patchLight = "patch_dark", patchDark = "patch_dirt", patchExtra = "patch_dark",
+        hazard = nil,
+    },
 }
+
+-- Thèmes des sanctuaires (src/render/sanctuary.lua ajoute autel, braseros et animations)
+WorldManager.SANCTUARY_THEME = { angel = 7, devil = 8 }
 
 function WorldManager.getTheme(chapterIndex)
     return WorldManager.THEMES[chapterIndex or 1] or WorldManager.THEMES[1]
@@ -281,12 +302,16 @@ function WorldManager.generateSurvivalWave(chapterIndex, waveNumber, mapW, mapH)
     return spawns, chap
 end
 
--- Détermine le type de salle : "angel" (sanctuaire), "boss" (palier) ou "combat" (vague)
+-- Détermine le type de salle : "angel" (sanctuaire du ciel, salles 5, 15…), "devil" (antre
+-- du Démon juste avant le boss, salles 9, 19…), "boss" (palier) ou "combat" (vague)
 function WorldManager.getRoomType(roomNumber)
-    if roomNumber % 10 == 0 then
+    local slot = roomNumber % 10
+    if slot == 0 then
         return "boss"
-    elseif roomNumber % 10 == 5 then
+    elseif slot == 5 then
         return "angel"
+    elseif slot == 9 then
+        return "devil"
     else
         return "combat"
     end
@@ -413,11 +438,11 @@ end
 -- RENCONTRES (salles de combat de l'Ascension et de l'Abysse) : 1 à 3 vagues composées
 -- par src/core/encounter_director.lua. PV totaux = Balance.ENCOUNTER.hpMult x l'ancien
 -- budget de salle, répartis selon le poids de chaque monstre (archétype, élite, champion).
--- Salles d'ange : aucune vague ; salles de boss : génération historique, vague unique.
+-- Sanctuaires (Ange, Démon) : aucune vague ; salles de boss : génération historique, vague unique.
 -- ============================================================================
 function WorldManager.generateEncounter(chapterIndex, roomNumber, mapW, mapH)
     local roomType = WorldManager.getRoomType(roomNumber)
-    if roomType == "angel" then
+    if roomType == "angel" or roomType == "devil" then
         return { waves = {} }, WorldManager.getChapter(chapterIndex)
     end
     if roomType == "boss" then
