@@ -317,7 +317,7 @@ end
 function SplashState:drawPrompt(t)
     if t < PROMPT_IN then return end
     PROMPT_COLOR[4] = min(1, (t - PROMPT_IN) / 0.5) * (0.6 + 0.4 * sin(t * 3.4))
-    local label = "APPUIE SUR"
+    local label = "PRESS"
     local tw = PixelFont.getWidth(label, "main")
     local x = floor((TOP_W - (tw + 18)) / 2) + Depth.offset(Depth.TEXT - 1)
     local y = 221
