@@ -14,7 +14,7 @@
 local GroundTiles = {
     SIZE = 64,
     VARIANTS = 6,
-    THEMES = 6,
+    THEMES = 8, -- 6 chapitres + sanctuaires de l'Ange (7) et du Démon (8)
 }
 
 function GroundTiles.name(themeIndex, variant)
