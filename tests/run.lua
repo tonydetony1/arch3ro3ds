@@ -13,6 +13,7 @@ local files = {
     "tests.test_stick",
     "tests.test_physics",
     "tests.test_save_equipment",
+    "tests.test_room_gold",
     "tests.test_sanctuary_rooms",
     "tests.test_ai_damage",
     "tests.test_world_progress",

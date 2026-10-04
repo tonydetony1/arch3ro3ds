@@ -198,6 +198,22 @@ function GameState:enter(params)
     end
 end
 
+-- Gold won in the room, for the "ROOM CLEARED!" banner: coins already picked up plus the
+-- coins still on the ground, which the magnet pulls in right after the clear (most of
+-- them, since the hero only shoots while standing still: the banner used to say +0)
+function GameState:roomClearGold()
+    local total = (self.goldEarnedRun or 0) - (self.roomGoldStart or 0)
+    local pool = self.lootPool
+    local mult = Admin.get("goldMult")
+    for i = 1, pool.activeCount do
+        local loot = pool.items[pool.activeList[i]]
+        if loot.type == "coin" then
+            total = total + math.floor(loot.value * mult + 0.5)
+        end
+    end
+    return math.max(0, math.floor(total))
+end
+
 -- Forge equipment: each of the 6 slots counts exactly once, and each item's level,
 -- rarity and stars apply in combat
 function GameState:applyEquipment(equipped)
@@ -1130,7 +1146,7 @@ function GameState:update(dt)
             self.phase = "clear"
             Audio.play("gate_open", 0, 0.7)
             self:triggerShake(0.18, 2.5)
-            Banner.show("clear", "ROOM CLEARED!", "+" .. math.max(0, (self.goldEarnedRun or 0) - (self.roomGoldStart or 0)) .. " GOLD")
+            Banner.show("clear", "ROOM CLEARED!", "+" .. self:roomClearGold() .. " GOLD")
 
             -- TOUT LE BUTIN AU SOL VOLE VERS LE JOUEUR (Effet aimant ultra-satisfaisant !)
             for i = 1, self.lootPool.activeCount do
