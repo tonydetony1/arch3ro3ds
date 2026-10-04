@@ -1,9 +1,9 @@
 -- tests/test_save_equipment.lua
--- Forge (équiper / déséquiper armes, armures, anneaux, familiers), talents, quêtes et
--- navigation du hub. Les interactions passent par de vrais appuis (touchpressed puis
--- touchreleased) aux coordonnées des éléments dessinés, comme sur l'écran tactile.
+-- Forge (equip / unequip weapons, armor, rings, pets), talents, quests and hub navigation.
+-- Interactions go through real taps (touchpressed then touchreleased) at the coordinates of
+-- the drawn elements, like on the touch screen.
 
--- Environnement LÖVE minimal + système de fichiers en mémoire (aucune vraie sauvegarde touchée)
+-- Minimal LÖVE environment + in-memory filesystem (no real save is touched)
 local files = {}
 love = love or {}
 love.timer = love.timer or { getTime = function() return 0 end }
@@ -28,7 +28,7 @@ local Items = require("src.data.items")
 local Talents = require("src.data.talents")
 local Quests = require("src.data.quests")
 local Balance = require("src.data.balance")
--- Mesure de texte sans atlas graphique : 6 px par caractère (police principale)
+-- Text measurement without the graphics atlas: 6 px per character (main font)
 require("src.ui.pixel_font").getWidth = function(text) return #tostring(text) * 6 end
 
 local T = {}
@@ -48,7 +48,7 @@ local function resetSave(inventory)
     return d
 end
 
--- Relit la sauvegarde depuis le « disque » (comme au redémarrage de la console)
+-- Reloads the save from "disk" (like a console restart)
 local function reloadSave()
     Save.data = nil
     return Save.load()
@@ -69,7 +69,7 @@ local function newInventory()
     return inv
 end
 
--- Centre de la carte d'un objet dans la grille du sac (sans défilement)
+-- Center of an item card in the backpack grid (no scrolling)
 local function cardCenter(inv, itemId)
     for i, id in ipairs(inv.saveData.inventory) do
         if id == itemId then
@@ -98,7 +98,7 @@ local function tapButton(inv, id)
 end
 
 -- ============================================================================
--- SAUVEGARDE : emplacements, migration, validation
+-- SAVE: slots, migration, validation
 -- ============================================================================
 T["new save only uses the six slot keys"] = function()
     local d = resetSave()
@@ -134,7 +134,7 @@ T["sanitize drops duplicates, wrong types and unowned items"] = function()
     assert(d.equipped.ring1 == "wolf_ring")
     assert(d.equipped.ring2 == nil, "same ring cannot be worn twice")
     assert(d.equipped.pet1 == nil, "a ring cannot sit in a pet slot")
-    -- falcon_ring n'est pas possédé : remplacé par l'armure de départ possédée
+    -- falcon_ring is not owned: replaced by the owned starter armor
     assert(d.equipped.armor == "vest_dexterity", "unowned item falls back to the starter piece")
 end
 
@@ -239,7 +239,7 @@ T["talents: combat effects match the displayed values"] = function()
 end
 
 -- ============================================================================
--- FORGE : appuis réels sur la grille, les emplacements et les boutons
+-- FORGE: real taps on the grid, the slots and the buttons
 -- ============================================================================
 T["forge: equip a second ring from the backpack"] = function()
     local d = resetSave()
@@ -301,7 +301,7 @@ T["forge: empty slot with several candidates waits for a backpack pick"] = funct
     assert(inv.modalSourceSlot == "ring2")
     tapButton(inv, "equip")
     assert(d.equipped.ring2 == "serpent_ring")
-    -- Second appui sur l'emplacement visé : annulation
+    -- Second tap on the targeted slot: cancel
     Save.unequip("ring2")
     tapSlot(inv, "ring2")
     tapSlot(inv, "ring2")
@@ -311,13 +311,13 @@ end
 T["forge: empty slot with one candidate opens it, with none shows a hint"] = function()
     local d = resetSave()
     local inv = newInventory()
-    -- pet2 vide, seul ghost_familiar est libre : sa fiche s'ouvre, ciblée sur pet2
+    -- pet2 empty and only ghost_familiar is free: its sheet opens, targeting pet2
     tapSlot(inv, "pet2")
     assert(inv.modalItemId == "ghost_familiar" and inv.modalSourceSlot == "pet2")
     tapButton(inv, "equip")
     assert(d.equipped.pet2 == "ghost_familiar")
 
-    -- Aucune armure libre dans le sac : message au lieu d'une fiche
+    -- No free armor in the backpack: hint instead of a sheet
     Save.unequip("armor")
     d.inventory = { "starter_bow", "wolf_ring", "bat_companion", "ghost_familiar" }
     inv:refresh()
@@ -392,7 +392,7 @@ T["forge: console buttons A / X / B in the sheet"] = function()
 end
 
 -- ============================================================================
--- COMBAT : l'équipement réel est appliqué
+-- COMBAT: the actual equipment is applied
 -- ============================================================================
 T["combat uses each equipped slot exactly once"] = function()
     local d = resetSave()
@@ -415,7 +415,7 @@ T["combat uses each equipped slot exactly once"] = function()
 end
 
 -- ============================================================================
--- HUB : talents, quêtes, coffres, modes
+-- HUB: talents, quests, chests, modes
 -- ============================================================================
 local function newMenu()
     local MenuState = require("src.states.menu")
@@ -469,7 +469,7 @@ local QUEST_SUBTAB_CENTERS = { quests = { 169, 13 }, weekly = { 227, 13 }, achie
 T["hub quests: every subtab is reachable from every page"] = function()
     resetSave()
     local menu = newMenu()
-    tap(menu, 26 + 44, 220) -- onglet QUESTS
+    tap(menu, 26 + 44, 220) -- QUESTS tab
     assert(menu.currentTab == "quests" and menu.questSubPage == "quests")
     for _, from in ipairs({ "quests", "weekly", "achievements" }) do
         for _, to in ipairs({ "quests", "weekly", "achievements" }) do
@@ -502,14 +502,14 @@ end
 T["hub chests: SHOP subtab, chest quest progress"] = function()
     local d = resetSave()
     local menu = newMenu()
-    tap(menu, 26 + 5 * 44, 220) -- onglet CHESTS
+    tap(menu, 26 + 5 * 44, 220) -- CHESTS tab
     assert(menu.currentTab == "chests" and menu.chestSubPage == "chests")
     tap(menu, 285, 13)
     assert(menu.chestSubPage == "shop")
     tap(menu, 227, 13)
     assert(menu.chestSubPage == "chests")
     local before = Save.getDailyQuests().progress.chests or 0
-    tap(menu, 81, 150) -- coffre doré
+    tap(menu, 81, 150) -- golden chest
     assert(menu.openingChest == "gold")
     assert((Save.getDailyQuests().progress.chests or 0) == before + 1, "opening a chest counts for chest quests")
 end
@@ -529,10 +529,10 @@ end
 T["hub: leaving the forge closes the item sheet"] = function()
     resetSave()
     local menu = newMenu()
-    tap(menu, 26 + 3 * 44, 220) -- onglet FORGE
+    tap(menu, 26 + 3 * 44, 220) -- FORGE tab
     assert(menu.currentTab == "equipment")
     menu.inventory:openModal("bear_ring", nil)
-    tap(menu, 26 + 4 * 44, 220) -- onglet TALENTS
+    tap(menu, 26 + 4 * 44, 220) -- TALENTS tab
     assert(menu.currentTab == "talents" and menu.inventory.modalItem == nil)
 end
 

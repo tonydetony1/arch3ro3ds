@@ -56,7 +56,9 @@ function SpecialRoomManager.new()
     return self
 end
 
-function SpecialRoomManager:setup(roomType, player, roomNumber, variant)
+-- opts.approach : sanctuaire (Ange, Démon), le personnage attend au centre de la salle
+-- que le héros s'approche pour ouvrir son offre (voir checkApproach)
+function SpecialRoomManager:setup(roomType, player, roomNumber, variant, opts)
     self.activeType = roomType or "angel"
     self.variant = variant
     self.isActive = true
@@ -64,6 +66,8 @@ function SpecialRoomManager:setup(roomType, player, roomNumber, variant)
     self.animTime = 0
     self.pressedBtn = nil
     self.hoverCard = nil
+    self.inSanctuary = (opts and opts.approach) or false
+    self.waitingApproach = self.inSanctuary
 
     -- Réinitialisation des particules
     for _, p in ipairs(self.particles) do
@@ -238,6 +242,34 @@ function SpecialRoomManager:setup(roomType, player, roomNumber, variant)
     end
 end
 
+SpecialRoomManager.APPROACH_RADIUS = 40
+
+-- Position du personnage : centre du sanctuaire, ou face à l'entrée sud d'une grande salle
+function SpecialRoomManager:npcPosition(mapW, mapH)
+    mapW, mapH = mapW or 640, mapH or 480
+    if self.inSanctuary then
+        return mapW / 2, mapH / 2 - 4
+    end
+    return mapW / 2, mapH - 148
+end
+
+-- Offre affichée : l'écran tactile et les boutons lui reviennent
+function SpecialRoomManager:isOfferOpen()
+    return self.isActive and not self.waitingApproach
+end
+
+-- Ouvre l'offre quand le héros arrive près du personnage ; renvoie true à l'ouverture
+function SpecialRoomManager:checkApproach(px, py, mapW, mapH)
+    if not (self.isActive and self.waitingApproach) then return false end
+    local nx, ny = self:npcPosition(mapW, mapH)
+    local dx, dy = px - nx, py - ny
+    local r = SpecialRoomManager.APPROACH_RADIUS
+    if dx * dx + dy * dy > r * r then return false end
+    self.waitingApproach = false
+    Audio.play("ui_confirm", 0, 0.8)
+    return true
+end
+
 function SpecialRoomManager:update(dt)
     if not self.isActive then return end
     self.animTime = self.animTime + dt
@@ -319,8 +351,7 @@ function SpecialRoomManager:drawTop(mapW, mapH)
     local PixelFont = require("src.ui.pixel_font")
     local C = Palette.C
 
-    local cx = (mapW or 640) / 2
-    local cy = (mapH or 480) - 148      -- placé face au joueur qui entre par le sud
+    local cx, cy = self:npcPosition(mapW, mapH)
     local t = self.animTime
     local float = math.floor(math.sin(t * 2.2) * 3 + 0.5)
 
@@ -342,7 +373,8 @@ function SpecialRoomManager:drawTop(mapW, mapH)
     end
 
     -- Piédestal de pierre
-    if setup.pedestal then
+    -- Dans un sanctuaire, l'autel (src/render/sanctuary.lua) remplace le piédestal
+    if setup.pedestal and not self.inSanctuary then
         love.graphics.setColor(1, 1, 1, 1)
         for i = -1, 1 do
             Art.draw("slab", 2 + (i + 1), cx + i * 16 - 8, cy + 10)

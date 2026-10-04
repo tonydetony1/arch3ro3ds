@@ -156,7 +156,7 @@ function Director.compose(chapterIndex, roomNumber, opts)
     local raw = Encounters.budget(roomNumber, opts.difficulty or Admin.get("budgetMult"))
     if newType then raw = raw * Encounters.NEW_TYPE_BUDGET_MULT end
     local budget = math.min(raw, Encounters.BUDGET_CAP)
-    local hpMult = (raw > Encounters.BUDGET_CAP) and (1 + (raw - Encounters.BUDGET_CAP) / Encounters.BUDGET_CAP) or 1
+    local hpMult = Encounters.hpOverflow(raw)
 
     local result = { budget = budget, hpMult = hpMult, signature = signature, newType = newType, waves = {} }
     local remaining = Encounters.MAX_PER_ROOM

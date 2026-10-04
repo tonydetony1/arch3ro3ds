@@ -529,7 +529,7 @@ function Items.applySetBonuses(player, equipped)
     return active
 end
 
--- Progression des statistiques : +16 % par niveau, +6 % par étoile, multiplicateur de rareté
+-- Stat growth: +16% per level, +6% per star, times the rarity multiplier
 local LEVEL_STEP = 0.16
 local STAR_STEP = 0.06
 
@@ -537,9 +537,9 @@ local function statScale(level, rData, stars)
     return (1.0 + ((level or 1) - 1) * LEVEL_STEP) * rData.statMult * (1.0 + (stars or 0) * STAR_STEP)
 end
 
--- Puissance d'un objet relative à son exemplaire de départ (niveau 1, rareté d'origine,
--- sans étoile) : 1.0 au départ. Sert aux objets dont l'effet en combat n'est pas une
--- statistique brute (dégâts de l'arme, tirs des familiers), pour que la Forge compte.
+-- Item power relative to its starting copy (level 1, original rarity, no star): 1.0 at
+-- first. Used where the combat effect is not a raw stat (weapon damage, pet shots), so
+-- Forge upgrades still matter.
 function Items.powerRatio(id, level, rarityOverride, stars)
     local item = Items.get(id)
     if not item then return 1.0 end

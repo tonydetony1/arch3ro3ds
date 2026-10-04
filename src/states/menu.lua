@@ -22,12 +22,20 @@ local Balance = require("src.data.balance")
 local Talents = require("src.data.talents")
 local Pet = require("src.entities.pet")
 local SettingsPanel = require("src.ui.settings_panel")
+local WorldManager = require("src.core.world_manager")
 
 local MenuState = {}
 MenuState.__index = MenuState
 
 local MODE_LABELS = { ascension = "Ascension", infinite = "The Abyss", boss_rush = "Boss Rush", survival = "Arena" }
--- Ordre des cartes de mode de l'onglet JOUER (dessin, toucher, croix directionnelle)
+
+-- Background of each world card in the Play tab (forest, desert, crystal, inferno, sky, void)
+local WORLD_CARD_BG = {
+    { 0.10, 0.22, 0.14 }, { 0.28, 0.18, 0.08 }, { 0.08, 0.16, 0.28 },
+    { 0.28, 0.10, 0.08 }, { 0.10, 0.18, 0.30 }, { 0.20, 0.10, 0.28 },
+}
+local LOCKED_TEXT = { 0.55, 0.58, 0.66, 1.0 }
+-- Mode card order on the PLAY tab (drawing, touch, d-pad)
 local PLAY_MODE_ORDER = { "ascension", "infinite", "boss_rush", "survival" }
 
 function MenuState.new(stateMachine)
@@ -49,13 +57,11 @@ function MenuState.new(stateMachine)
     -- Dedicated inventory manager with kinetic scrolling
     self.inventory = Inventory.new()
 
-    -- Chapters with distinct biomes and floors
-    self.chapters = {
-        { id = 1, name = "Emerald Plains", floors = 50, theme = "green", desc = "Slimes & Forest Wolves", bg = {0.10, 0.22, 0.14} },
-        { id = 2, name = "Crystal Caverns", floors = 30, theme = "blue", desc = "Bats & Stalactites", bg = {0.08, 0.16, 0.28} },
-        { id = 3, name = "Scorching Dunes", floors = 20, theme = "gold", desc = "Scorpions & Magma Worms", bg = {0.28, 0.18, 0.08} },
-        { id = 4, name = "Shadow Citadel", floors = 50, theme = "purple", desc = "Wraiths & Dark Skeletons", bg = {0.20, 0.10, 0.28} },
-    }
+    -- World cards: the worlds a run goes through, 10 floors each (src/core/world_manager.lua)
+    self.chapters = {}
+    for i, chap in ipairs(WorldManager.CHAPTERS) do
+        self.chapters[i] = { id = i, name = chap.name, boss = Bestiary.nameOf(chap.boss), bg = WORLD_CARD_BG[i] }
+    end
 
     -- Séquence Gacha d'ouverture de coffre
     self.openingChest = nil -- "gold" ou "obsidian"
@@ -254,7 +260,7 @@ function MenuState:powerTotals(heroId, hData, t)
             totalHp = totalHp + st.hp
         end
     end
-    -- Talents : la Force multiplie les dégâts, la Vitalité ajoute des PV (src/data/talents.lua)
+    -- Talents: Strength multiplies damage, Vitality adds HP (src/data/talents.lua)
     local talents = Save.getTalents()
     totalAtk = math.floor(totalAtk * (1 + Talents.damageBonus(talents)) + 0.5)
     totalHp = totalHp + Talents.hpBonus(talents)
@@ -302,8 +308,8 @@ function MenuState:drawTop()
     end
     Art.drawEx("bow", 1, heroX + 26, heroBottom - 34, 0.35, 2, 2)
 
-    -- Familiers équipés (sprites de combat, échelle 2) : Familier 1 à gauche, Familier 2 à
-    -- droite, tourné vers le héros
+    -- Equipped pets (combat sprites, scale 2): Pet 1 on the left, Pet 2 on the right,
+    -- facing the hero
     local petFloat = math.floor(math.sin(t * 4.6) * 3)
     local p1, p2 = self.saveData.equipped.pet1, self.saveData.equipped.pet2
     if p1 then Pet.drawSprite(p1, heroX - 58, heroBottom - 44 + petFloat, t, false, 2) end
@@ -443,26 +449,35 @@ function MenuState:drawPlayTab()
     UI.drawPillButton(cx + cw - 48, cy + 8, 20, 18, "", "blue", self.pressedBtn == "chap_prev", "arrow_left")
     UI.drawPillButton(cx + cw - 24, cy + 8, 20, 18, "", "blue", self.pressedBtn == "chap_next", "arrow_right")
 
-    -- Chapter Name
-    UI.drawText(chap.name:upper(), cx + 10, cy + 30, {0.98, 0.98, 1.0, 1.0}, {0.05, 0.06, 0.09, 1.0})
-    local prevF = love.graphics.getFont()
-    love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawText(chap.desc, cx + 10, cy + 46, {0.72, 0.80, 0.92, 1.0})
+    -- World name and boss (dimmed while the world is locked)
+    local records = self.saveData.records or {}
+    local best = math.max(records.ascensionMax or 1, records.infiniteMax or 0)
+    local prog = WorldManager.worldProgress(chap.id, best)
+    UI.drawText(chap.name:upper(), cx + 10, cy + 30, prog.unlocked and {0.98, 0.98, 1.0, 1.0} or LOCKED_TEXT, {0.05, 0.06, 0.09, 1.0})
+    UI.drawText("Boss: " .. chap.boss, cx + 10, cy + 46, {0.72, 0.80, 0.92, 1.0})
 
-    -- Floor progress bar
+    -- Floor progress of this world, from the best floor ever reached
     local barW = cw - 20
     local barX = cx + 10
     local barY = cy + 62
-    local progress = math.min(1.0, (self.saveData.records.ascensionMax or 1) / chap.floors)
-    UI.drawText(string.format("Floor %d / %d", math.min(chap.floors, self.saveData.records.ascensionMax or 1), chap.floors), barX, barY - 2, {0.85, 0.92, 1.0, 0.95})
-    love.graphics.setFont(prevF)
+    local progress, label
+    if not prog.unlocked then
+        progress, label = 0, string.format("LOCKED: floor %d+", prog.first)
+    elseif not prog.total then
+        progress, label = 1, string.format("Floor %d+  Best %d", prog.first, best)
+    elseif prog.cleared then
+        progress, label = 1, string.format("Floors %d-%d CLEARED", prog.first, prog.last)
+    else
+        progress = prog.reached / prog.total
+        label = string.format("Floors %d-%d  %d/%d", prog.first, prog.last, prog.reached, prog.total)
+    end
+    UI.drawText(label, barX, barY - 2, prog.unlocked and {0.85, 0.92, 1.0, 0.95} or LOCKED_TEXT)
 
-    -- Track de barre
+    -- Bar track, then the fill (nothing for a locked world)
     love.graphics.setColor(0.06, 0.08, 0.12, 0.95)
     love.graphics.rectangle("fill", barX, barY + 12, barW, 6, 3, 3)
-    -- Remplissage lumineux
     love.graphics.setColor(0.20, 0.85, 0.45, 1.0)
-    love.graphics.rectangle("fill", barX, barY + 12, math.max(4, barW * progress), 6, 3, 3)
+    if progress > 0 then love.graphics.rectangle("fill", barX, barY + 12, math.max(4, barW * progress), 6, 3, 3) end
 
     -- 2. BENTO 2: AFK PATROL (IDLE CHEST)
     local px, py, pw, ph = 206, 6, 108, 88
@@ -548,9 +563,9 @@ function MenuState:drawPlayTab()
     PixelFont.print(label, tx + 20, midY - 11, Palette.C.white, "main", 2, "shadow")
     Skin.pill(bx + bw - 20, midY - 6, 14, 12, "dark", "A")
 
-    -- Subtitle Mode & Chapter
+    -- Subtitle: selected mode (a run always starts on floor 1, whatever world card is shown)
     local subLabel = run and string.format("Room %d - in progress", run.room or 1)
-        or string.format("%s - Ch.%d", MODE_LABELS[self.selectedMode] or "Ascension", chap.id)
+        or (MODE_LABELS[self.selectedMode] or "Ascension")
     PixelFont.printf(subLabel, lx, ly + 78, lw, "center", {0.60, 0.95, 0.75, 1.0}, "main")
     if run then
         UI.drawPillButton(lx + lw - 66, ly + 8, 58, 18, "ABANDON", "red", self.pressedBtn == "abandon_run")
@@ -558,11 +573,11 @@ function MenuState:drawPlayTab()
 end
 
 -- ============================================================================
--- ONGLET : QUÊTES (DU JOUR + PASSE DE COMBAT, DE LA SEMAINE, SUCCÈS)
+-- TAB: QUESTS (DAILY + BATTLE PASS, WEEKLY, ACHIEVEMENTS)
 -- ============================================================================
 local QUEST_ICONS = { kills = "skull", rooms = "door", chests = "chest", upgrades = "upgrade", bosses = "swords", gold = "gold" }
 
--- Sous-onglets affichés en haut à droite de la page (même géométrie pour dessin et toucher)
+-- Subtabs at the top right of the page (same geometry for drawing and touch)
 local QUEST_SUBTABS = {
     { id = "quests",       label = "DAILY" },
     { id = "weekly",       label = "WEEKLY" },
@@ -586,7 +601,7 @@ function MenuState:drawSubtabs(tabs, current)
     end
 end
 
--- Identifiant du sous-onglet sous le point touché (nil si aucun)
+-- Id of the subtab under the touch point (nil if none)
 local function subtabAt(tabs, tx, ty)
     if ty < SUBTAB_Y - 2 or ty > SUBTAB_Y + SUBTAB_H + 2 then return nil end
     for i, tab in ipairs(tabs) do
@@ -603,7 +618,7 @@ local function rewardLabel(reward)
     return "+" .. table.concat(parts, " + ")
 end
 
--- Lignes de mission : même gabarit pour le jour et la semaine
+-- Mission rows: same template for daily and weekly
 local QUEST_ROW_H, QUEST_ROW_STEP = 27, 29
 local QUEST_BTN_X, QUEST_BTN_W = 252, 58
 
@@ -629,7 +644,7 @@ function MenuState:drawQuestRow(quest, saveQuests, y, btnPrefix)
     end
 end
 
--- Bouton CLAIM d'une ligne de mission sous le point touché
+-- Mission whose CLAIM button is under the touch point
 local function questRowAt(list, firstY, tx, ty)
     for i, quest in ipairs(list) do
         local qy = firstY + (i - 1) * QUEST_ROW_STEP
@@ -677,7 +692,7 @@ function MenuState:drawQuestsTab()
 end
 
 -- ============================================================================
--- PAGE : MISSIONS DE LA SEMAINE
+-- PAGE: WEEKLY MISSIONS
 -- ============================================================================
 function MenuState:drawWeeklyPage()
     local W = Config.BOTTOM_WIDTH
@@ -697,7 +712,7 @@ function MenuState:drawWeeklyPage()
 end
 
 -- ============================================================================
--- PAGE : SUCCÈS PERMANENTS
+-- PAGE: PERMANENT ACHIEVEMENTS
 -- ============================================================================
 function MenuState:drawAchievementsPage()
     local W = Config.BOTTOM_WIDTH
@@ -964,11 +979,11 @@ function MenuState:drawHeroesTab()
 end
 
 -- ============================================================================
--- ONGLET 4 : ARBRE DES TALENTS PERMANENTS (SCEAU SACRÉ & RUNES BENTO 2026)
--- Le joueur choisit le talent (carte ou badge GLORY), puis l'achète avec le bouton du bas.
+-- TAB 4: PERMANENT TALENTS (SACRED SEAL)
+-- The player picks a talent (card or GLORY badge), then buys it with the bottom button.
 -- ============================================================================
 local TALENT_CARD_W, TALENT_CARD_H = 150, 36
-local TALENT_CARD_POS = { { 6, 62 }, { 164, 62 }, { 6, 102 }, { 164, 102 } } -- ordre de Talents.LIST
+local TALENT_CARD_POS = { { 6, 62 }, { 164, 62 }, { 6, 102 }, { 164, 102 } } -- Talents.LIST order
 local GLORY_BADGE = { x = 186, y = 32, w = 116, h = 18 }
 local TALENT_BTN = { x = 24, y = 148, w = 272, h = 38 }
 local TALENT_FEEDBACK_TIME = 1.5
@@ -978,7 +993,7 @@ local function talentCardRect(index)
     return pos[1], pos[2], TALENT_CARD_W, TALENT_CARD_H
 end
 
--- Talent sous le point touché ("glory" pour le badge), nil sinon
+-- Talent under the touch point ("glory" for the badge), nil otherwise
 local function talentAt(tx, ty)
     for i, t in ipairs(Talents.LIST) do
         local x, y, w, h = talentCardRect(i)
@@ -1017,7 +1032,7 @@ function MenuState:drawTalentsTab()
     UI.drawText("SACRED TALENT SEAL", hx + 58, hy + 10, {1.0, 0.88, 0.25, 1.0})
     UI.drawPillBadge(hx + 58, hy + 26, 116, 18, string.format("TOTAL LEVEL: %d", totalLevel), {0.18, 0.10, 0.28, 0.9}, {0.70, 0.30, 0.90, 0.9}, {0.95, 0.85, 1.0, 1.0})
 
-    -- Gloire : achat unique, sélectionnable comme une carte tant qu'il n'est pas acquis
+    -- Glory: one-time purchase, selectable like a card until owned
     local g = GLORY_BADGE
     if Talents.isMaxed("glory", talents) then
         UI.drawPillBadge(g.x, g.y, g.w, g.h, "GLORY ACTIVE", {0.12, 0.22, 0.16, 0.9}, {0.35, 0.95, 0.55, 0.9}, {0.85, 1.0, 0.90, 1.0}, "check")
@@ -1027,7 +1042,7 @@ function MenuState:drawTalentsTab()
         UI.drawPillBadge(g.x, g.y, g.w, g.h, "GLORY: LOCKED", {0.18, 0.12, 0.12, 0.9}, {0.65, 0.25, 0.25, 0.8}, {0.95, 0.80, 0.80, 1.0}, "lock")
     end
 
-    -- 2. 4 Bento Cards (2x2 grid), une par talent de Talents.LIST
+    -- 2. 4 bento cards (2x2 grid), one per talent of Talents.LIST
     local prevF = love.graphics.getFont()
     for i, talent in ipairs(Talents.LIST) do
         local x, y, w, h = talentCardRect(i)
@@ -1061,7 +1076,7 @@ function MenuState:drawTalentsTab()
     local b = TALENT_BTN
     UI.drawPillButton(b.x, b.y, b.w, b.h, btnText, canUpgrade and "violet" or "gray", self.pressedBtn == "upgrade_talent", "rune")
 
-    -- Ligne d'information : résultat du dernier achat, sinon effet de Gloire
+    -- Info line: result of the last purchase, otherwise the Glory effect
     UI.setFont("tiny")
     if self.talentUpgradeTimer and self.talentUpgradeTimer > 0 and self.lastUpgradedTalent then
         local done = Talents.get(self.lastUpgradedTalent)
@@ -1074,7 +1089,7 @@ function MenuState:drawTalentsTab()
     UI.setFont("main")
 end
 
--- Achète un niveau du talent sélectionné (bouton tactile, A, Entrée)
+-- Buys one level of the selected talent (touch button, A, Return)
 function MenuState:upgradeSelectedTalent()
     local success, chosen = Save.upgradeTalent(self.selectedTalent)
     if success then
@@ -1082,7 +1097,7 @@ function MenuState:upgradeSelectedTalent()
         self.lastUpgradedTalent = chosen
         self.talentUpgradeTimer = TALENT_FEEDBACK_TIME
         self.talentFailTimer = 0
-        -- Gloire ne s'achète qu'une fois : la sélection revient sur la Force
+        -- Glory is bought once: selection goes back to Strength
         if Talents.isMaxed(chosen, Save.getTalents()) then self.selectedTalent = "strength" end
         Audio.play("upgrade", 0.05, 0.8)
     else
@@ -1093,7 +1108,7 @@ function MenuState:upgradeSelectedTalent()
     return success
 end
 
--- Sélection d'un talent (ignorée si Gloire est déjà acquise)
+-- Selects a talent (ignored when Glory is already owned)
 function MenuState:selectTalent(id)
     if Talents.canUpgrade(id, Save.getTalents()) then
         self.selectedTalent = id
@@ -1103,7 +1118,7 @@ function MenuState:selectTalent(id)
     return false
 end
 
--- Croix directionnelle : grille 2 x 2, Gloire au-dessus de la rangée du haut
+-- D-pad: 2 x 2 grid, Glory above the top row
 local TALENT_NAV = {
     glory    = { dpdown = "strength", dpleft = "strength", dpright = "vitality" },
     strength = { dpright = "vitality", dpdown = "agility", dpup = "glory" },
@@ -1123,7 +1138,7 @@ end
 -- ============================================================================
 -- ONGLET 5 : COFFRES (BENTO GRID 2026 : MONOLITHES DORÉ & OBSIDIENNE)
 -- ============================================================================
--- Les deux monolithes partagent la même mise en page (dessin et zone tactile)
+-- Both chest monoliths share one layout (drawing and touch area)
 local CHEST_CARD_Y, CHEST_CARD_H, CHEST_CARD_W = 30, 166, 150
 local CHEST_CARDS = {
     { id = "gold", x = 6, btn = "open_gold" },
@@ -1271,31 +1286,31 @@ function MenuState:drawGachaSequence()
 end
 
 -- ============================================================================
--- ENTRÉES TACTILES DU HUB (BOTTOM SCREEN 320x240)
--- L'appui repère l'élément touché (self.pressedBtn), le relâchement déclenche l'action.
--- Chaque onglet a son gestionnaire d'appui (PRESS) et de relâchement (RELEASE).
+-- HUB TOUCH INPUT (BOTTOM SCREEN 320x240)
+-- Press records the touched element (self.pressedBtn), release triggers the action.
+-- Each tab has its own press (PRESS) and release (RELEASE) handler.
 -- ============================================================================
 local PRESS, RELEASE = {}, {}
 
 function PRESS.play(self, tx, ty)
-    -- Chevrons Carrousel Chapitres
+    -- Chapter carousel chevrons
     if (tx >= 140 and tx <= 168 and ty >= 6 and ty <= 32) or (tx >= 6 and tx <= 44 and ty >= 6 and ty <= 40) then
         return "chap_prev"
     elseif (tx >= 168 and tx <= 202 and ty >= 6 and ty <= 32) or (tx >= 160 and tx <= 204 and ty >= 6 and ty <= 40) then
         return "chap_next"
     end
-    -- Modes de jeu (4 cartes empilées, voir drawPlayTab)
+    -- Game modes (4 stacked cards, see drawPlayTab)
     if tx >= 6 and tx <= 126 then
         for i, mode in ipairs(PLAY_MODE_ORDER) do
             local my = 100 + (i - 1) * 24
             if ty >= my and ty <= my + 22 then return "mode_" .. mode end
         end
     end
-    -- Récolte Patrouille AFK
+    -- AFK patrol collection
     if tx >= 206 and tx <= 316 and ty >= 6 and ty <= 96 then return "claim_patrol" end
-    -- Abandon de la course sauvegardée (pastille en haut à droite du bouton Jouer)
+    -- Abandon the saved run (pill at the top right of the Play button)
     if Save.getRun() and tx >= 248 and tx <= 308 and ty >= 106 and ty <= 128 then return "abandon_run" end
-    -- Bouton Master Jouer
+    -- Main Play button
     if tx >= 130 and tx <= 316 and ty >= 100 and ty <= 198 then return "play" end
     return nil
 end
@@ -1337,12 +1352,12 @@ function PRESS.heroes(self, tx, ty)
     end
 
     if tx >= 14 and tx <= 192 and ty >= 176 and ty <= 194 then return "open_bestiary" end
-    -- L'un des 5 avatars Bento en haut
+    -- One of the 5 hero avatars at the top
     for i, h in ipairs(Heroes.getAll()) do
         local ax = 6 + (i - 1) * 62
         if tx >= ax and tx <= ax + 58 and ty >= 6 and ty <= 54 then return "hero_" .. h.id end
     end
-    -- Bouton d'action droit
+    -- Right action button
     if tx >= 206 and tx <= 316 and ty >= 58 and ty <= 198 then
         return self:isPreviewUnlocked() and "select_hero" or "unlock_hero"
     end
@@ -1382,7 +1397,7 @@ function MenuState:touchpressed(id, tx, ty)
     Audio.play("ui_click", 0.05, 0.5)
     self.pressedBtn = nil
 
-    -- Onglet Réglages : le panneau reçoit tout l'écran sauf la barre d'onglets
+    -- Settings tab: the panel gets the whole screen except the tab bar
     if self.currentTab == "settings" and ty < 202 and not self.openingChest then
         self.settingsPanel:touchpressed(tx, ty)
         self.pressedBtn = "settings_panel"
@@ -1399,7 +1414,7 @@ function MenuState:touchpressed(id, tx, ty)
         return
     end
 
-    -- 1. Barre d'onglets (dessinée par-dessus le contenu, prioritaire)
+    -- 1. Tab bar (drawn over the content, takes priority)
     if ty >= 200 then
         for _, tab in ipairs(self.tabs) do
             if tx >= tab.x - 3 and tx <= tab.x + tab.w + 3 and ty >= 202 and ty <= 238 then
@@ -1409,7 +1424,7 @@ function MenuState:touchpressed(id, tx, ty)
         end
     end
 
-    -- 2. Contenu de l'onglet actif
+    -- 2. Active tab content
     if self.currentTab == "equipment" then
         self.inventory:touchpressed(id, tx, ty)
         return
@@ -1528,13 +1543,13 @@ function MenuState:touchreleased(id, tx, ty)
         return
     end
 
-    -- 1. Navigation Onglets
+    -- 1. Tab navigation
     if pressed and pressed:sub(1, 4) == "tab_" then
         self:switchTab(pressed:sub(5))
         return
     end
 
-    -- 2. Actions par onglet
+    -- 2. Per-tab actions
     if self.currentTab == "equipment" then
         self.inventory:touchreleased(id, tx, ty)
         return
@@ -1543,7 +1558,7 @@ function MenuState:touchreleased(id, tx, ty)
     if release then release(self, pressed) end
 end
 
--- Achat d'une offre de la boutique du jour
+-- Buys an offer of the daily shop
 function MenuState:buyShopOffer(idx)
     local offer = self:getShopOffers()[idx]
     local shop = Save.getShop()
@@ -1570,10 +1585,10 @@ function MenuState:buyShopOffer(idx)
 end
 
 -- ============================================================================
--- NAVIGATION : ONGLETS, RETOUR, CROIX DIRECTIONNELLE
+-- NAVIGATION: TABS, BACK, D-PAD
 -- ============================================================================
--- Change d'onglet : chaque onglet s'ouvre sur sa page principale, la modale de la Forge
--- se referme quand on la quitte
+-- Switches tab: each tab opens on its main page, and the Forge item sheet closes when
+-- leaving the Forge
 function MenuState:switchTab(tabId)
     if self.currentTab == "equipment" and tabId ~= "equipment" then
         self.inventory:reset()
@@ -1592,7 +1607,7 @@ function MenuState:switchTab(tabId)
     end
 end
 
--- Onglet précédent / suivant (gâchettes L / R)
+-- Previous / next tab (L / R shoulders)
 function MenuState:cycleTab(step)
     local idx = 1
     for i, tab in ipairs(self.tabs) do
@@ -1602,10 +1617,10 @@ function MenuState:cycleTab(step)
     Audio.play("ui_click", 0.05, 0.7)
 end
 
--- Retour (B, Échap, Retour arrière) : referme ce qui est ouvert, puis revient à JOUER.
--- Renvoie false s'il n'y avait rien à refermer.
+-- Back (B, Escape, Backspace): closes whatever is open, then returns to PLAY.
+-- Returns false when there was nothing to close.
 function MenuState:goBack()
-    -- Séquence d'ouverture de coffre : retour = récupérer l'objet (jamais quitter le jeu)
+    -- Chest opening sequence: back claims the item (never quits the game)
     if self.openingChest then
         if self.chestTimer >= 0.7 then self:claimChest() end
         return true
@@ -1626,7 +1641,7 @@ function MenuState:goBack()
     return true
 end
 
--- Élément suivant d'une liste (bouclée), repéré par sa valeur ou par son champ `key`
+-- Next element of a (wrapping) list, matched by value or by its `key` field
 local function cycleIn(list, current, step, key)
     local idx = 1
     for i, v in ipairs(list) do
@@ -1638,7 +1653,7 @@ end
 
 local DPAD_STEP = { dpleft = -1, dpright = 1, dpup = -1, dpdown = 1 }
 
--- Croix directionnelle : talents, sous-pages, mode et chapitre, héros
+-- D-pad: talents, subpages, mode and chapter, heroes
 function MenuState:navigate(button)
     local step = DPAD_STEP[button]
     if not step then return false end
@@ -1670,7 +1685,7 @@ function MenuState:isPreviewUnlocked()
     return self.saveData.unlockedHeroes and self.saveData.unlockedHeroes[cur]
 end
 
--- A / Entrée : action principale de l'onglet
+-- A / Return: main action of the tab
 function MenuState:confirm()
     if self.currentTab == "play" then
         self:launchGame()
@@ -1681,7 +1696,7 @@ function MenuState:confirm()
     end
 end
 
--- Requêtes du panneau de réglages (src/ui/settings_panel.lua)
+-- Settings panel requests (src/ui/settings_panel.lua)
 function MenuState:handlePanelRequest(request)
     if not request then return end
     if request.refresh then
@@ -1700,7 +1715,7 @@ function MenuState:launchGame()
         self.sm:switch("game", { mode = run.mode, resume = run })
         return
     end
-    -- La partie se lance toujours ; l'énergie disponible sert uniquement de bonus d'or.
+    -- The run always starts; available energy only grants a gold bonus.
     local boosted = Save.spendEnergy(self.selectedMode)
     self.saveData = Save.get()
     self.sm:switch("game", {
@@ -1715,17 +1730,17 @@ function MenuState:openChest(chestType)
     self.chestTimer = 0
     self.particles = {}
 
-    -- Tirage pondéré par la rareté, plafonné par la progression du joueur :
-    -- un objet épique ou légendaire n'apparaît qu'une fois le palier atteint.
+    -- Rarity-weighted roll capped by player progression: epic or legendary items only
+    -- appear once the matching tier is reached.
     local pickedId = Items.rollDrop(chestType, nil, Balance.maxRarity(self.saveData))
     self.rewardItem = Items.get(pickedId)
-    -- Missions « Ouvrir N coffres » (sauvegardé par Save.addItem juste après)
+    -- "Open N chests" missions (saved by Save.addItem right after)
     Save.addQuestProgress("chests", 1)
     local isNew, msg = Save.addItem(pickedId)
     self.rewardMessage = msg
 end
 
--- Fin de la séquence d'ouverture : retour à l'onglet Coffres
+-- End of the opening sequence: back to the Chests tab
 function MenuState:claimChest()
     self.openingChest = nil
     self.rewardItem = nil
@@ -1733,8 +1748,8 @@ function MenuState:claimChest()
     self.inventory:refresh()
 end
 
--- Boutons physiques 3DS : A valide, B revient, L/R changent d'onglet, Y ouvre les réglages,
--- START lance la partie, la croix navigue dans l'onglet
+-- 3DS buttons: A confirms, B goes back, L/R switch tabs, Y opens settings, START launches
+-- a run, the d-pad navigates inside the tab
 function MenuState:gamepadpressed(joystick, button)
     if self.openingChest then
         if (button == "a" or button == "b") and self.chestTimer >= 0.7 then self:claimChest() end
@@ -1751,7 +1766,7 @@ function MenuState:gamepadpressed(joystick, button)
             Audio.play("ui_click", 0.05, 0.7)
             return
         end
-        -- Réglages : la croix, A et (admin débloqué) L/R pilotent le panneau
+        -- Settings: d-pad, A and (admin unlocked) L/R drive the panel
         local isShoulder = (button == "leftshoulder" or button == "rightshoulder")
         if not isShoulder or self.settingsPanel:isAdminUnlocked() then
             self:handlePanelRequest(self.settingsPanel:gamepadpressed(button))
@@ -1763,7 +1778,7 @@ function MenuState:gamepadpressed(joystick, button)
         self:cycleTab((button == "leftshoulder" or button == "l") and -1 or 1)
         return
     end
-    -- Forge : A / X / Y agissent sur la fiche d'objet ouverte
+    -- Forge: A / X / Y act on the open item sheet
     if self.currentTab == "equipment" and self.inventory:gamepadpressed(button) then return end
 
     if button == "y" then
@@ -1780,8 +1795,8 @@ end
 
 local KEY_TO_DPAD = { left = "dpleft", right = "dpright", up = "dpup", down = "dpdown" }
 
--- Clavier PC : Entrée / Espace valident, flèches = croix, chiffres = onglets, Retour arrière
--- et Échap reviennent en arrière. Renvoie true si la touche a servi.
+-- PC keyboard: Return / Space confirm, arrows = d-pad, digits = tabs, Backspace and
+-- Escape go back. Returns true when the key was used.
 function MenuState:keypressed(key)
     if self.openingChest then
         if (key == "return" or key == "space") and self.chestTimer >= 0.7 then self:claimChest() end

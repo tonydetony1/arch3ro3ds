@@ -19,6 +19,32 @@ local Art = require("src.render.art")
 
 local AIController = {}
 
+-- Damage multiplier of normal monsters for the current room (WorldManager.damageMult),
+-- set by the game at each room. Bosses driven by src/core/boss_brain.lua scale on their own.
+local damageScale = 1.0
+
+function AIController.setDamageScale(mult)
+    damageScale = mult or 1.0
+end
+
+function AIController.scaleDamage(base)
+    return math.floor(base * damageScale + 0.5)
+end
+
+local CONTACT_SPARK = { 1, 0.2, 0.2, 1 }
+
+-- Contact hit on the hero: scaled damage, ignored during the dash and invulnerability
+-- frames (Player:takeDamage). Returns true when the hit landed.
+local function hurtPlayer(player, base)
+    local dealt, blocked = player:takeDamage(AIController.scaleDamage(base))
+    if blocked then return false end
+    VFX.triggerHitFlash(player, 3)
+    VFX.shakeMedium()
+    VFX.addFCT(player.x, player.y - 12, dealt, false)
+    VFX.addSparks(player.x, player.y, 6, CONTACT_SPARK)
+    return true
+end
+
 -- Vérifie si l'entité est vulnérable aux dégâts
 function AIController.canTakeDamage(dummy)
     if dummy.bossInvuln then return false end -- étourdissement de changement de phase
@@ -254,15 +280,9 @@ function AIController.update(dummy, dt, player, projectilePool, obstacleManager,
             dummy.stateTimer = dummy.stateTimer - dt
             Physics.moveAndSlide(dummy, dummy.dashVx, dummy.dashVy, dt, dummy.radius, obstacleManager, allowFlight, mapW, mapH)
 
-            -- Dégâts de contact
+            -- Contact damage (once per dash; dodged when the hero dashes through)
             if not dummy.didHitPlayer and dist < (dummy.radius + player.radius) then
-                dummy.didHitPlayer = true
-                local dmg = isWolf and 16 or 13
-                player.hp = math.max(0, player.hp - dmg)
-                VFX.triggerHitFlash(player, 3)
-                VFX.shakeMedium()
-                VFX.addFCT(player.x, player.y - 12, dmg, false)
-                VFX.addSparks(player.x, player.y, 6, {1, 0.2, 0.2, 1})
+                dummy.didHitPlayer = hurtPlayer(player, isWolf and 16 or 13)
             end
 
             if dummy.stateTimer <= 0 then
@@ -319,7 +339,7 @@ function AIController.update(dummy, dt, player, projectilePool, obstacleManager,
                         if p then
                             p:spawn(dummy.x, dummy.y - 4, dummy.targetDirX, dummy.targetDirY, {
                                 projectile_speed = 320,
-                                damage = 18,
+                                damage = AIController.scaleDamage(18),
                                 range = 520,
                                 radius = 3.2,
                                 color = { 1.0, 0.18, 0.18, 1.0 }
@@ -382,7 +402,7 @@ function AIController.update(dummy, dt, player, projectilePool, obstacleManager,
                             if p then
                                 p:spawn(dummy.x, dummy.y, math.cos(ang), math.sin(ang), {
                                     projectile_speed = 165,
-                                    damage = 16,
+                                    damage = AIController.scaleDamage(16),
                                     range = 460,
                                     radius = 4.0,
                                     color = { 1.0, 0.45, 0.15, 1.0 }
@@ -398,7 +418,7 @@ function AIController.update(dummy, dt, player, projectilePool, obstacleManager,
                             if p then
                                 p:spawn(dummy.x, dummy.y, math.cos(ang), math.sin(ang), {
                                     projectile_speed = 175,
-                                    damage = 12,
+                                    damage = AIController.scaleDamage(12),
                                     range = 420,
                                     radius = 3.5,
                                     color = { 0.95, 0.25, 0.35, 1.0 }
@@ -448,7 +468,7 @@ function AIController.update(dummy, dt, player, projectilePool, obstacleManager,
                 if projectilePool then
                     local p = projectilePool:obtain()
                     if p then
-                        p:spawnLobbed(dummy.x, dummy.y - 6, dummy.targetX, dummy.targetY, 1.35, 20, 30, {0.85, 0.25, 0.95, 1.0})
+                        p:spawnLobbed(dummy.x, dummy.y - 6, dummy.targetX, dummy.targetY, 1.35, AIController.scaleDamage(20), 30, {0.85, 0.25, 0.95, 1.0})
                     end
                 end
 
@@ -499,7 +519,7 @@ function AIController.update(dummy, dt, player, projectilePool, obstacleManager,
                     if p then
                         p:spawn(dummy.x, dummy.y, dirX, dirY, {
                             projectile_speed = 210,
-                            damage = 14,
+                            damage = AIController.scaleDamage(14),
                             range = 440,
                             radius = 3.5,
                             color = { 0.88, 0.40, 0.12, 1.0 }
@@ -586,7 +606,7 @@ function AIController.update(dummy, dt, player, projectilePool, obstacleManager,
                         local p = projectilePool:obtain()
                         if p then
                             p:spawn(dummy.x, dummy.y - 2, math.cos(ang), math.sin(ang), {
-                                projectile_speed = 190, damage = 14, range = 420, radius = 3.4,
+                                projectile_speed = 190, damage = AIController.scaleDamage(14), range = 420, radius = 3.4,
                                 color = { 1.0, 0.55, 0.15, 1.0 },
                             }, false, 0, true)
                         end
@@ -635,7 +655,7 @@ function AIController.update(dummy, dt, player, projectilePool, obstacleManager,
                         local p = projectilePool:obtain()
                         if p then
                             p:spawn(dummy.x, dummy.y - 6, math.cos(a), math.sin(a), {
-                                projectile_speed = isWitch and 215 or 240, damage = isWitch and 20 or 16,
+                                projectile_speed = isWitch and 215 or 240, damage = AIController.scaleDamage(isWitch and 20 or 16),
                                 range = 480, radius = 3.6, color = { 0.65, 0.35, 1.0, 1.0 },
                             }, false, 0, true)
                         end
@@ -688,7 +708,7 @@ function AIController.update(dummy, dt, player, projectilePool, obstacleManager,
                         local p = projectilePool:obtain()
                         if p then
                             p:spawn(dummy.x, dummy.y - 8, math.cos(a), math.sin(a), {
-                                projectile_speed = 300, damage = 22, range = 520, radius = 3.4,
+                                projectile_speed = 300, damage = AIController.scaleDamage(22), range = 520, radius = 3.4,
                                 color = { 1.0, 0.85, 0.35, 1.0 },
                             }, false, 0, true)
                         end
@@ -717,16 +737,10 @@ function AIController.update(dummy, dt, player, projectilePool, obstacleManager,
         -- Poursuite au sol avec glissade vectorielle
         Physics.steerAroundObstacle(dummy, player.x, player.y, dummy.speed, dt, dummy.radius, obstacleManager, false, mapW, mapH)
 
-        -- Dégâts de contact
-        if dist < (dummy.radius + player.radius) then
-            if dummy.cooldown <= 0 then
-                local dmg = isSplitter and 18 or (isMini and 8 or 12)
-                player.hp = math.max(0, player.hp - dmg)
-                VFX.triggerHitFlash(player, 3)
-                VFX.shakeMedium()
-                VFX.addFCT(player.x, player.y - 12, dmg, false)
-                VFX.addSparks(player.x, player.y, 6, {1, 0.2, 0.2, 1})
-                dummy.cooldown = 1.0 -- Cooldown de contact pour ne pas one-shot
+        -- Contact damage, then a cooldown so the hero is not hit every frame
+        if dist < (dummy.radius + player.radius) and dummy.cooldown <= 0 then
+            if hurtPlayer(player, isSplitter and 18 or (isMini and 8 or 12)) then
+                dummy.cooldown = 1.0
             end
         end
     end

@@ -30,6 +30,7 @@ local HUD = require("src.ui.hud")
 local AIController = require("src.core.ai_controller")
 local VFX = require("src.render.vfx_manager")
 local SpecialRoomManager = require("src.core.special_room_manager")
+local Sanctuary = require("src.render.sanctuary")
 local Depth = require("src.render.depth")
 local Audio = require("src.audio.audio")
 local Banner = require("src.ui.banner")
@@ -165,7 +166,7 @@ function GameState:enter(params)
     self.gameOverTimer = 0
     self.hasSpunStartWheel = false
 
-    -- Application des Talents permanents (effets décrits dans src/data/talents.lua)
+    -- Permanent talents (effects described in src/data/talents.lua)
     local talents = Save.getTalents()
     Talents.apply(self.player, talents)
 
@@ -197,13 +198,13 @@ function GameState:enter(params)
     end
 end
 
--- Équipement de la Forge : chacun des 6 emplacements compte une seule fois, et le niveau,
--- la rareté et les étoiles de chaque objet s'appliquent en combat
+-- Forge equipment: each of the 6 slots counts exactly once, and each item's level,
+-- rarity and stars apply in combat
 function GameState:applyEquipment(equipped)
     local player = self.player
 
-    -- Arme : son type fixe le tir, sa puissance (Forge) multiplie les dégâts.
-    -- Emplacement vide : arc de départ, sans bonus.
+    -- Weapon: its type sets the shot, its Forge power multiplies damage.
+    -- Empty slot: starter bow, no bonus.
     player:equipWeapon(equipped.weapon or "starter_bow")
     if equipped.weapon then
         player.damageMult = player.damageMult + (Save.getItemPower(equipped.weapon) - 1)
@@ -231,7 +232,7 @@ function GameState:applyEquipment(equipped)
         end
     end
 
-    -- Familiers : exactement ceux des emplacements Familier 1 / Familier 2
+    -- Pets: exactly those in the Pet 1 / Pet 2 slots
     player.pets = {}
     for i, slot in ipairs(PET_SLOTS) do
         local pId = equipped[slot]
@@ -273,22 +274,25 @@ function GameState:roomSpec(roomNum)
     elseif self.gameMode == "survival" then
         roomType = "combat"
     end
-    -- Grille de la salle : centre dégagé pour boss / roue / survie, vide pour l'ange
+    -- Grille de la salle : centre dégagé pour boss / roue / survie, vide pour les sanctuaires
     local kind = "combat"
     if roomType == "boss" or self.gameMode == "survival"
         or (roomNum == 1 and not self.hasSpunStartWheel) then
         kind = "arena"
-    elseif roomType == "angel" then
+    elseif roomType == "angel" or roomType == "devil" then
         kind = "sanctuary"
     end
-    local chapterIndex = math.min(6, math.floor((roomNum - 1) / 10) + 1)
-    local theme = WorldManager.getTheme(chapterIndex)
-    -- Dimensions taillées sur la grille de la salle (629x463 à 694x508)
+    local chapterIndex = WorldManager.worldOfRoom(roomNum)
+    -- Décor du chapitre, ou ciel de l'Ange / enfer du Démon (thèmes 7 et 8)
+    local themeIndex = (kind == "sanctuary") and WorldManager.SANCTUARY_THEME[roomType] or chapterIndex
+    local theme = WorldManager.getTheme(themeIndex)
+    -- Dimensions taillées sur la grille de la salle (629x463 à 694x508) ; sanctuaire : un écran
     local mapW, mapH = Rooms.roomSize(roomNum)
+    if kind == "sanctuary" then mapW, mapH = Rooms.SANCTUARY_W, Rooms.SANCTUARY_H end
     return {
-        room = roomNum, roomType = roomType, kind = kind, chapterIndex = chapterIndex,
+        room = roomNum, roomType = roomType, kind = kind, chapterIndex = chapterIndex, themeIndex = themeIndex,
         mapW = mapW, mapH = mapH, variant = theme.variant, hazard = theme.hazard,
-        key = table.concat({ roomNum, kind, mapW, mapH, tostring(theme.variant), tostring(theme.hazard) }, ":"),
+        key = table.concat({ roomNum, kind, mapW, mapH, tostring(themeIndex), tostring(theme.variant), tostring(theme.hazard) }, ":"),
     }
 end
 
@@ -300,19 +304,21 @@ end
 
 function GameState:setupRoom(roomNum)
     if roomNum > 1 then Save.addQuestProgress("rooms", 1) end
-    Audio.playMusic((WorldManager.getRoomType(roomNum) == "boss" or self.gameMode == "boss_rush") and "boss" or "battle", 0.5)
     local spec = self:roomSpec(roomNum)
+    Audio.playMusic(spec.roomType == "boss" and "boss" or (spec.kind == "sanctuary" and "hub" or "battle"), 0.5)
     -- Salle préparée pendant la précédente : on termine ce qui reste (souvent rien)
     ObstacleManager.settlePrefetch(spec.key)
     self.roomNumber = roomNum
     self.chapterIndex = spec.chapterIndex
+    -- Normal monsters hit harder in deeper rooms (survival: set again at each wave)
+    AIController.setDamageScale(WorldManager.damageMult(roomNum))
     self.roomType = spec.roomType
-    self.devilEncountered = false
     self.bossWheelDone = false
 
     self.mapW, self.mapH = spec.mapW, spec.mapH
 
-    self.camera:setBounds(self.mapW, self.mapH)
+    -- Sanctuaire d'un écran : caméra fixe, sans marge de ciel autour de la salle
+    self.camera:setBounds(self.mapW, self.mapH, spec.kind == "sanctuary" and 0 or Camera.SKY_MARGIN)
     self.player:setBounds(self.mapW, self.mapH)
     self.obstacleManager:setTheme(spec.variant, spec.hazard)
     self.obstacleManager:generate(self.mapW, self.mapH, roomNum, spec.kind)
@@ -345,26 +351,30 @@ function GameState:setupRoom(roomNum)
         Banner.show("room", "STAGE " .. roomNum .. " / 50")
     end
 
-    -- Décor du chapitre (prairie, désert, cristal, enfer) puis pré-rendu sur Canvas
-    self.arena:setTheme(self.chapterIndex)
+    -- Décor du chapitre (prairie, désert, cristal, enfer) ou du sanctuaire, puis pré-rendu
+    self.arena:setTheme(spec.themeIndex)
     self.arena:buildCanvas(self.mapW, self.mapH, self.currentChapter and self.currentChapter.palette or nil, self.obstacleManager)
 
     -- Nettoyage des ennemis de la salle précédente
     self.dummyPool:clear()
     self.isGateOpen = false
 
+    self.sanctuary = nil
     if self.gameMode == "survival" then
         self.phase = "combat"
         self.specialRoomManager.isActive = false
         self.specialRoomManager.activeType = "none"
         self.spawnWarningTimer = 0.55
         self.pendingSpawns = spawns
-    elseif self.roomType == "angel" then
-        -- SALLE DE L'ANGE (Sanctuaire sacré de bénédictions sans monstres)
-        self.phase = "angel"
+    elseif spec.kind == "sanctuary" then
+        -- SANCTUAIRE (Ange : ciel, salles 5, 15… ; Démon : enfer, salles 9, 19…) : un écran,
+        -- porte ouverte dès l'entrée, offre ouverte quand le héros s'approche du personnage
+        self.phase = "clear"
+        self.isGateOpen = true
         self.spawnWarningTimer = 0
         self.pendingSpawns = {}
-        self.specialRoomManager:setup("angel", self.player, self.roomNumber)
+        self.specialRoomManager:setup(self.roomType, self.player, self.roomNumber, nil, { approach = true })
+        self.sanctuary = Sanctuary.new(self.roomType, self.mapW, self.mapH)
     elseif roomNum == 1 and not self.hasSpunStartWheel then
         -- ROUE DE LA FORTUNE DE DÉPART (LUCKY WHEEL)
         self.hasSpunStartWheel = true
@@ -723,7 +733,7 @@ function GameState:update(dt)
             if self.fadeAlpha <= 0 then
                 self.fadeAlpha = 0
                 self.fadeDirection = 0
-                self.phase = (self.roomType == "angel") and "angel" or "combat"
+                self.phase = self.sanctuary and "clear" or "combat"
             end
         end
         return
@@ -733,18 +743,21 @@ function GameState:update(dt)
     -- Toujours exécuté pour garantir que la physique et les animations de la Roue ne soient jamais gelées
     if self.specialRoomManager and self.specialRoomManager.isActive then
         self.specialRoomManager:update(dt)
-        if self.specialRoomManager.isResolved and not self.isGateOpen then
-            if self.phase == "devil" and self.roomType == "boss" and not self.bossWheelDone then
-                -- ROUE DE BOSS : tour de roue exclusif après le grand boss
-                self.bossWheelDone = true
-                self.phase = "boss_wheel"
-                self.specialRoomManager:setup("wheel", self.player, self.roomNumber, "boss")
-                self:triggerShake(0.20, 3.0)
-            elseif self.phase ~= "wheel" and self.phase ~= "combat" then
-                self.isGateOpen = true
-                self.phase = "clear"
-            end
+        if self.specialRoomManager.isResolved and not self.isGateOpen
+            and self.phase ~= "wheel" and self.phase ~= "combat" then
+            self.isGateOpen = true
+            self.phase = "clear"
         end
+    end
+
+    -- Sanctuaire : l'offre s'ouvre quand le héros s'approche ; le jeu est figé pendant le choix
+    local srm = self.specialRoomManager
+    if srm and srm.waitingApproach then
+        srm:checkApproach(self.player.x, self.player.y, self.mapW, self.mapH)
+    end
+    if srm and srm.inSanctuary and srm:isOfferOpen() then
+        self.hud:update(dt, self.player, self.ultimateCharge)
+        return
     end
 
     -- Si Draft en cours, le jeu est en pause (monstres et combat figés)
@@ -776,6 +789,7 @@ function GameState:update(dt)
 
     -- 1. Mise à jour de l'arène, des obstacles et de l'UI
     self.arena:update(dt, self.isGateOpen)
+    if self.sanctuary then self.sanctuary:update(dt) end
     self.obstacleManager:update(dt, self.player, self.fctPool, self.dummyPool)
     self.hud:update(dt, self.player, self.ultimateCharge)
 
@@ -1091,6 +1105,7 @@ function GameState:update(dt)
         if self.waveTimer <= 0 or cleared then
             self.waveCount = (self.waveCount or 1) + 1
             self.waveTimer = 15.0
+            AIController.setDamageScale(WorldManager.damageMult(self.waveCount))
             self.pendingSpawns = self.obstacleManager:placeSpawns(
                 WorldManager.generateSurvivalWave(self.chapterIndex, self.waveCount, self.mapW, self.mapH))
             self.spawnWarningTimer = 0.55
@@ -1100,14 +1115,15 @@ function GameState:update(dt)
     end
 
     Perf.sec("u:collisions")
-    -- 8. PHASE DE CLEAR & MAGNÉTISME DU BUTIN (OU APPARITION DU DÉMON APRÈS BOSS)
+    -- 8. PHASE DE CLEAR & MAGNÉTISME DU BUTIN (OU ROUE DE BOSS APRÈS LE BOSS)
     if self.gameMode ~= "survival" and self.dummyPool.activeCount == 0 and self.spawnWarningTimer <= 0 and not self.isGateOpen and not (self.specialRoomManager and self.specialRoomManager.isActive)
         and (not self.waveRunner or self.waveRunner:isDone()) then
-        if self.roomType == "boss" and not self.devilEncountered then
-            -- APPARITION DU DÉMON APRÈS LE GRAND BOSS !
-            self.devilEncountered = true
-            self.phase = "devil"
-            self.specialRoomManager:setup("devil", self.player, self.roomNumber)
+        if self.roomType == "boss" and not self.bossWheelDone then
+            -- ROUE DE BOSS : tour de roue exclusif après le grand boss (le Démon attend
+            -- désormais dans son antre, juste avant le boss : salles 9, 19…)
+            self.bossWheelDone = true
+            self.phase = "boss_wheel"
+            self.specialRoomManager:setup("wheel", self.player, self.roomNumber, "boss")
             self:triggerShake(0.25, 4.0)
             -- Aimantation du butin
             for i = 1, self.lootPool.activeCount do
@@ -1253,6 +1269,7 @@ function GameState:drawTop(eye)
     Perf.sec("h:sol")
     self.obstacleManager:draw()
     Perf.sec("h:obstacles")
+    if self.sanctuary then self.sanctuary:drawFloor() end
 
     -- 2. Entités de salles spéciales
     if self.specialRoomManager and self.specialRoomManager.isActive then
@@ -1279,6 +1296,7 @@ function GameState:drawTop(eye)
     Perf.sec("h:ombres")
     Depth.push(Depth.WALLS)
     self.arena:drawWalls(self.isGateOpen, self.mapW)
+    if self.sanctuary then self.sanctuary:drawWalls(love.timer.getTime()) end
     Depth.pop()
     Perf.sec("h:murs")
 
@@ -1294,6 +1312,7 @@ function GameState:drawTop(eye)
     VFX.drawProjectileBatch(self.projectilePool)
     VFX.drawParticles()
     Depth.pop()
+    if self.sanctuary then self.sanctuary:drawAmbient(love.timer.getTime()) end
     Perf.sec("h:tirs")
 
     -- 7. Jauge du héros et dégâts flottants (au premier plan)
@@ -1349,7 +1368,7 @@ end
 -- ============================================================================
 function GameState:drawBottom()
     -- Rendu de la Salle Spéciale (Ange, Démon, Roue, Marchand) sur l'écran tactile
-    if self.specialRoomManager and self.specialRoomManager.isActive then
+    if self.specialRoomManager and self.specialRoomManager:isOfferOpen() then
         self.specialRoomManager:drawBottom()
         return
     end
@@ -1380,7 +1399,7 @@ function GameState:touchpressed(id, tx, ty)
         return
     end
 
-    if self.specialRoomManager and self.specialRoomManager.isActive then
+    if self.specialRoomManager and self.specialRoomManager:isOfferOpen() then
         self.specialRoomManager:touchpressed(id, tx, ty)
         return
     end
@@ -1431,23 +1450,31 @@ function GameState:tryUltimate()
     end
 end
 
+-- Fin d'une offre (Ange, Démon, roue, marchand) : la roue de départ lance le combat, les
+-- autres ouvrent la porte ; le personnage d'un sanctuaire disparaît dans un éclat
+function GameState:specialRoomDone()
+    if self.phase == "wheel" then
+        self.phase = "combat"
+        self.spawnWarningTimer = 0.55
+        -- Talent Gloire en attente : le tirage s'ouvre maintenant que la roue est résolue
+        if self.pendingGloryDraft then
+            self.pendingGloryDraft = false
+            self:openDraft()
+        end
+    else
+        self.isGateOpen = true
+        self.phase = "clear"
+    end
+    if self.sanctuary then
+        local nx, ny = self.specialRoomManager:npcPosition(self.mapW, self.mapH)
+        VFX.addSparks(nx, ny, 16, (self.roomType == "angel") and { 1, 0.9, 0.4, 1 } or { 1, 0.3, 0.1, 1 })
+    end
+    self:triggerShake(0.18, 2.5)
+end
+
 function GameState:touchreleased(id, tx, ty)
-    if self.specialRoomManager and self.specialRoomManager.isActive then
-        self.specialRoomManager:touchreleased(id, tx, ty, self.player, self.fctPool, function()
-            if self.phase == "wheel" then
-                self.phase = "combat"
-                self.spawnWarningTimer = 0.55
-                -- Si le talent Gloire était en attente, ouvrir le draft maintenant que la roue est résolue
-                if self.pendingGloryDraft then
-                    self.pendingGloryDraft = false
-                    self:openDraft()
-                end
-            else
-                self.isGateOpen = true
-                self.phase = "clear"
-            end
-            self:triggerShake(0.18, 2.5)
-        end)
+    if self.specialRoomManager and self.specialRoomManager:isOfferOpen() then
+        self.specialRoomManager:touchreleased(id, tx, ty, self.player, self.fctPool, function() self:specialRoomDone() end)
         return
     end
 end
@@ -1585,7 +1612,7 @@ function GameState:gamepadpressed(joystick, button)
         return
     end
 
-    if self.specialRoomManager and self.specialRoomManager.isActive then
+    if self.specialRoomManager and self.specialRoomManager:isOfferOpen() then
         local key = ({ a = "a", b = "b", x = "x", y = "b" })[button]
         if key then self:keypressed(key) end
         return
@@ -1615,27 +1642,14 @@ end
 
 function GameState:keypressed(key)
     if key == "return" or key == "start" or key == "p" or key == "escape" then
-        if not (self.specialRoomManager and self.specialRoomManager.isActive and (key == "return" or key == "space")) then
+        if not (self.specialRoomManager and self.specialRoomManager:isOfferOpen() and (key == "return" or key == "space")) then
             self:triggerPause()
             return
         end
     end
 
-    if self.specialRoomManager and self.specialRoomManager.isActive then
-        local onDone = function()
-            if self.phase == "wheel" then
-                self.phase = "combat"
-                self.spawnWarningTimer = 0.55
-                if self.pendingGloryDraft then
-                    self.pendingGloryDraft = false
-                    self:openDraft()
-                end
-            else
-                self.isGateOpen = true
-                self.phase = "clear"
-            end
-            self:triggerShake(0.18, 2.5)
-        end
+    if self.specialRoomManager and self.specialRoomManager:isOfferOpen() then
+        local onDone = function() self:specialRoomDone() end
 
         if key == "1" or key == "a" or key == "space" or key == "return" then
             if self.specialRoomManager.activeType == "angel" then

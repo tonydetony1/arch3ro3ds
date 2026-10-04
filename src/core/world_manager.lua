@@ -1,5 +1,8 @@
 -- src/core/world_manager.lua
--- Gestionnaire des Biomes, Chapitres, Palettes procédurales et Tables de monstres
+-- Worlds (biomes), chapters, procedural palettes, monster pools and the difficulty curve
+
+local Balance = require("src.data.balance")
+local Encounters = require("src.data.encounters")
 
 local WorldManager = {
     CHAPTERS = {
@@ -7,8 +10,6 @@ local WorldManager = {
             id = "forest",
             name = "Verdant Forest",
             roomCount = 50,
-            baseHp = 50,
-            hpScaling = 14,
             goldMultiplier = 1.0,
             monsterPool = { "slime", "bat", "wolf", "skeleton", "plant", "splitter", "bomber", "burrower" },
             boss = "golem",
@@ -37,8 +38,6 @@ local WorldManager = {
             id = "desert",
             name = "Arid Desert",
             roomCount = 50,
-            baseHp = 90,
-            hpScaling = 22,
             goldMultiplier = 1.4,
             monsterPool = { "wolf", "skeleton", "bomber", "burrower", "plant", "summoner", "turret" },
             boss = "skeleton_king",
@@ -57,8 +56,6 @@ local WorldManager = {
             id = "crystal",
             name = "Crystal Caverns",
             roomCount = 50,
-            baseHp = 140,
-            hpScaling = 32,
             goldMultiplier = 1.9,
             monsterPool = { "bat", "skeleton", "bomber", "splitter", "burrower", "mage", "turret" },
             boss = "witch",
@@ -77,8 +74,6 @@ local WorldManager = {
             id = "inferno",
             name = "Volcanic Inferno",
             roomCount = 50,
-            baseHp = 220,
-            hpScaling = 45,
             goldMultiplier = 2.6,
             monsterPool = { "wolf", "skeleton", "splitter", "bomber", "golem", "summoner", "mage" },
             boss = "lava_titan",
@@ -97,8 +92,6 @@ local WorldManager = {
             id = "skyward",
             name = "Skyward Isles",
             roomCount = 50,
-            baseHp = 320,
-            hpScaling = 62,
             goldMultiplier = 3.2,
             monsterPool = { "raven", "wisp", "gargoyle", "bat", "skeleton", "mage", "turret" },
             boss = "storm_drake",
@@ -127,8 +120,6 @@ local WorldManager = {
             id = "void",
             name = "Void City",
             roomCount = 50,
-            baseHp = 460,
-            hpScaling = 88,
             goldMultiplier = 4.0,
             monsterPool = { "frost_wraith", "wisp", "gargoyle", "mage", "summoner", "splitter", "turret" },
             boss = "void_watcher",
@@ -215,7 +206,28 @@ WorldManager.THEMES = {
         patchLight = "patch_dark", patchDark = "patch_dirt", patchExtra = "patch_dark",
         hazard = "void",                      -- failles du Vide : dégâts et ralentissement
     },
+    [7] = { -- Sanctuaire de l'Ange (salles 5, 15…) : marbre, nuages, lumière dorée
+        variant = "sky",
+        ground = "dfe8f5", groundLight = "f4f8ff", groundDark = "c3d0e3", edge = "8b9bb4",
+        skyTop = "f2c14e", skyBottom = "fff4d6",
+        wallTree = "marble_column", wallTreeSmall = "cloud_bank",
+        decals = { "feather", "sparkle", "cloud_wisp" },
+        patchLight = "patch_light", patchDark = "patch_light", patchExtra = "patch_light",
+        hazard = nil,
+    },
+    [8] = { -- Antre du Démon (salles 9, 19…) : basalte, braises, ciel rouge
+        variant = "lava",
+        ground = "2b1d1d", groundLight = "3d2828", groundDark = "1f1414", edge = "120b0b",
+        skyTop = "1a0505", skyBottom = "8a1d0e",
+        wallTree = "obsidian_spire", wallTreeSmall = "obsidian_spire",
+        decals = { "lava_crack", "skull", "ember_rock", "lava_crack" },
+        patchLight = "patch_dark", patchDark = "patch_dirt", patchExtra = "patch_dark",
+        hazard = nil,
+    },
 }
+
+-- Thèmes des sanctuaires (src/render/sanctuary.lua ajoute autel, braseros et animations)
+WorldManager.SANCTUARY_THEME = { angel = 7, devil = 8 }
 
 function WorldManager.getTheme(chapterIndex)
     return WorldManager.THEMES[chapterIndex or 1] or WorldManager.THEMES[1]
@@ -227,20 +239,92 @@ function WorldManager.getChapter(chapterIndex)
 end
 
 -- ============================================================================
--- MODES ÉVÉNEMENT
+-- WORLDS OF A RUN: 10 floors per world, the last world (Abyss only) is endless
+-- ============================================================================
+WorldManager.ROOMS_PER_WORLD = 10
+
+function WorldManager.worldOfRoom(roomNumber)
+    local world = math.floor((math.max(1, roomNumber or 1) - 1) / WorldManager.ROOMS_PER_WORLD) + 1
+    return math.min(#WorldManager.CHAPTERS, world)
+end
+
+-- First and last floor of a world (last = nil for the endless world)
+function WorldManager.worldFloors(world)
+    local first = (world - 1) * WorldManager.ROOMS_PER_WORLD + 1
+    if world >= #WorldManager.CHAPTERS then return first, nil end
+    return first, first + WorldManager.ROOMS_PER_WORLD - 1
+end
+
+-- Hub progress of a world from the best floor ever reached:
+-- { first, last, total (nil if endless), reached, unlocked, cleared }
+function WorldManager.worldProgress(world, bestFloor)
+    local first, last = WorldManager.worldFloors(world)
+    local best = math.max(1, bestFloor or 1)
+    local reached = math.max(0, best - first + 1)
+    local total = last and (last - first + 1) or nil
+    if total then reached = math.min(total, reached) end
+    return {
+        first = first, last = last, total = total, reached = reached,
+        unlocked = best >= first,
+        cleared = total ~= nil and best > last,
+    }
+end
+
+-- ============================================================================
+-- DIFFICULTY CURVE
+-- ============================================================================
+-- One continuous curve over the whole run, whatever the world: the world only changes the
+-- scenery and the monster pool. (Each world used to restart from its own, higher base HP
+-- while keeping the absolute room number: HP doubled when entering a new world.)
+--   room 1: 50 | room 10: 185 | room 20: 397 | room 30: 675 | room 50: 1430
+WorldManager.HP_CURVE = {
+    base = 50,         -- base HP of room 1
+    perRoom = 12,      -- linear growth per room
+    perRoomSq = 0.33,  -- quadratic growth: deep rooms keep getting tougher
+}
+
+-- A boss holds BOSS_ROOM_RATIO times the HP of a combat room of the same depth
+WorldManager.BOSS_ROOM_RATIO = 1.6
+
+-- Normal monster damage: +2% per room (x1.98 in room 50). Bosses scale on their own
+-- (src/data/bosses.lua, DAMAGE_PER_CHAPTER).
+WorldManager.DAMAGE_PER_ROOM = 0.02
+
+-- Boss Rush guards: HP relative to the room base HP
+local BOSS_RUSH_GUARD_HP = 1.44
+
+function WorldManager.baseHp(roomNumber)
+    local n = math.max(1, roomNumber or 1) - 1
+    local c = WorldManager.HP_CURVE
+    return c.base + c.perRoom * n + c.perRoomSq * n * n
+end
+
+function WorldManager.bossHp(roomNumber)
+    local count = WorldManager.monsterCount(roomNumber)
+    local roomHp = Balance.ENCOUNTER.hpMult * WorldManager.hpBudget(WorldManager.baseHp(roomNumber), count)
+    local overflow = Encounters.hpOverflow(Encounters.budget(roomNumber))
+    return math.floor(WorldManager.BOSS_ROOM_RATIO * roomHp * overflow + 0.5)
+end
+
+function WorldManager.damageMult(roomNumber)
+    return 1 + WorldManager.DAMAGE_PER_ROOM * (math.max(1, roomNumber or 1) - 1)
+end
+
+-- ============================================================================
+-- EVENT MODES
 -- ============================================================================
 
--- BOSS RUSH : chaque salle est un boss entouré de sa garde rapprochée
+-- BOSS RUSH: every room is a boss surrounded by its guards
 function WorldManager.generateBossRush(chapterIndex, roomNumber, mapW, mapH)
     local chap = WorldManager.getChapter(chapterIndex)
-    local baseHp = math.floor((chap.baseHp + (roomNumber - 1) * chap.hpScaling) * 1.6)
+    local guardHp = math.floor(WorldManager.baseHp(roomNumber) * BOSS_RUSH_GUARD_HP)
     local cx = mapW and (mapW / 2) or 320
     local cy = mapH and (mapH / 2) or 240
     local spawns = {}
 
     local bossTypes = { chap.boss or "golem", "splitter", "skeleton_king", "witch", "lava_titan" }
     local bossType = bossTypes[((roomNumber - 1) % #bossTypes) + 1]
-    table.insert(spawns, { x = cx, y = cy - 70, hp = math.floor(baseHp * 4.2), type = bossType, isBoss = true })
+    table.insert(spawns, { x = cx, y = cy - 70, hp = WorldManager.bossHp(roomNumber), type = bossType, isBoss = true })
 
     local guards = { "skeleton", "bomber", "plant", "wolf" }
     local guardCount = math.min(5, 2 + math.floor(roomNumber / 3))
@@ -249,17 +333,17 @@ function WorldManager.generateBossRush(chapterIndex, roomNumber, mapW, mapH)
         table.insert(spawns, {
             x = cx + side * (120 + i * 12),
             y = cy + 30 + i * 16,
-            hp = math.floor(baseHp * 0.9),
+            hp = guardHp,
             type = guards[((roomNumber + i) % #guards) + 1],
         })
     end
     return spawns, chap
 end
 
--- ARÈNE DE SURVIE : vagues successives dans une salle unique, boss toutes les 5 vagues
+-- SURVIVAL ARENA: successive waves in a single room, a boss every 5 waves
 function WorldManager.generateSurvivalWave(chapterIndex, waveNumber, mapW, mapH)
     local chap = WorldManager.getChapter(chapterIndex)
-    local baseHp = math.floor(chap.baseHp * (1 + (waveNumber - 1) * 0.28))
+    local baseHp = math.floor(WorldManager.HP_CURVE.base * (1 + (waveNumber - 1) * 0.28))
     local cx = mapW and (mapW / 2) or 320
     local cy = mapH and (mapH / 2) or 240
     local spawns = {}
@@ -281,12 +365,16 @@ function WorldManager.generateSurvivalWave(chapterIndex, waveNumber, mapW, mapH)
     return spawns, chap
 end
 
--- Détermine le type de salle : "angel" (sanctuaire), "boss" (palier) ou "combat" (vague)
+-- Détermine le type de salle : "angel" (sanctuaire du ciel, salles 5, 15…), "devil" (antre
+-- du Démon juste avant le boss, salles 9, 19…), "boss" (palier) ou "combat" (vague)
 function WorldManager.getRoomType(roomNumber)
-    if roomNumber % 10 == 0 then
+    local slot = roomNumber % 10
+    if slot == 0 then
         return "boss"
-    elseif roomNumber % 10 == 5 then
+    elseif slot == 5 then
         return "angel"
+    elseif slot == 9 then
+        return "devil"
     else
         return "combat"
     end
@@ -370,22 +458,22 @@ end
 
 function WorldManager.generateWave(chapterIndex, roomNumber, mapW, mapH)
     local chap = WorldManager.getChapter(chapterIndex)
-    local baseHp = chap.baseHp + (roomNumber - 1) * chap.hpScaling
+    local baseHp = WorldManager.baseHp(roomNumber)
     local spawns = {}
     local cx = mapW and (mapW / 2) or 200
     local cy = mapH and (mapH / 2) or 120
 
-    -- 1. SANCTUAIRE DE L'ANGE (Salles 5, 15, 25, 35, 45 : aucun monstre)
+    -- 1. ANGEL SANCTUARY (rooms 5, 15, 25, 35, 45: no monster)
     if roomNumber % 10 == 5 then
         return spawns, chap
     end
 
     if roomNumber % 10 == 0 then
-        -- GRAND BOSS DE PALIER : le boss concentre les PV, sa garde est plus nombreuse en profondeur
-        table.insert(spawns, { x = cx, y = cy - 80, hp = math.floor(baseHp * 4.5), type = chap.boss or "golem", isBoss = true })
+        -- MILESTONE BOSS: tougher than a full combat room (see WorldManager.bossHp)
+        table.insert(spawns, { x = cx, y = cy - 80, hp = WorldManager.bossHp(roomNumber), type = chap.boss or "golem", isBoss = true })
 
-        -- Escorte légère : les boss ont leurs propres attaques et invocations (src/data/bosses.lua),
-        -- et chaque monstre de plus coûte cher sur Old 3DS
+        -- Light escort: bosses have their own attacks and summons (src/data/bosses.lua),
+        -- and every extra monster is expensive on Old 3DS
         local guardCount = math.min(3, 1 + math.floor(roomNumber / 20))
         local guardTypes = pickTypes(chap, roomNumber + 1, guardCount)
         local guardHps = WorldManager.distributeHp(guardTypes, baseHp * 2.4)
@@ -413,11 +501,11 @@ end
 -- RENCONTRES (salles de combat de l'Ascension et de l'Abysse) : 1 à 3 vagues composées
 -- par src/core/encounter_director.lua. PV totaux = Balance.ENCOUNTER.hpMult x l'ancien
 -- budget de salle, répartis selon le poids de chaque monstre (archétype, élite, champion).
--- Salles d'ange : aucune vague ; salles de boss : génération historique, vague unique.
+-- Sanctuaires (Ange, Démon) : aucune vague ; salles de boss : génération historique, vague unique.
 -- ============================================================================
 function WorldManager.generateEncounter(chapterIndex, roomNumber, mapW, mapH)
     local roomType = WorldManager.getRoomType(roomNumber)
-    if roomType == "angel" then
+    if roomType == "angel" or roomType == "devil" then
         return { waves = {} }, WorldManager.getChapter(chapterIndex)
     end
     if roomType == "boss" then
@@ -426,8 +514,6 @@ function WorldManager.generateEncounter(chapterIndex, roomNumber, mapW, mapH)
     end
 
     local Director = require("src.core.encounter_director")
-    local Encounters = require("src.data.encounters")
-    local Balance = require("src.data.balance")
     local chap = WorldManager.getChapter(chapterIndex)
     local enc = Director.compose(chapterIndex, roomNumber)
 
@@ -443,7 +529,7 @@ function WorldManager.generateEncounter(chapterIndex, roomNumber, mapW, mapH)
         end
     end
     local count = #refs
-    local baseHp = chap.baseHp + (roomNumber - 1) * chap.hpScaling
+    local baseHp = WorldManager.baseHp(roomNumber)
     local budget = Balance.ENCOUNTER.hpMult * WorldManager.hpBudget(baseHp, math.max(4, math.min(10, count)))
         * enc.hpMult * require("src.data.admin").get("hpMult")
     local totalWeight = 0

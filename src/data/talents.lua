@@ -1,18 +1,18 @@
 -- src/data/talents.lua
--- Talents permanents du Sceau sacré. Une seule table décrit l'effet affiché dans l'onglet
--- TALENTS (src/states/menu.lua) et l'effet appliqué en combat (src/states/game.lua) :
--- le libellé ne peut plus promettre autre chose que ce que le talent donne.
+-- Permanent talents of the Sacred Seal. One table describes both the effect shown in the
+-- TALENTS tab (src/states/menu.lua) and the effect applied in combat (src/states/game.lua),
+-- so a label can no longer promise something the talent does not give.
 
 local Talents = {}
 
--- Effet par niveau
-Talents.DAMAGE_PER_LEVEL = 0.05 -- force : multiplicateur de dégâts
-Talents.HP_PER_LEVEL = 30       -- vitalité : PV max
-Talents.DODGE_PER_LEVEL = 0.02  -- agilité : chance d'esquive
-Talents.HEAL_PER_LEVEL = 0.10   -- récupération : soins reçus (cœurs, montée de niveau)
+-- Effect per level
+Talents.DAMAGE_PER_LEVEL = 0.05 -- strength: damage multiplier
+Talents.HP_PER_LEVEL = 30       -- vitality: max HP
+Talents.DODGE_PER_LEVEL = 0.02  -- agility: dodge chance
+Talents.HEAL_PER_LEVEL = 0.10   -- recovery: healing received (hearts, level-up)
 
--- Talents améliorables sans limite (grille 2 x 2 de l'onglet TALENTS, dans cet ordre).
--- `step` / `unit` : effet d'un niveau tel qu'affiché (même valeur que ci-dessus).
+-- Talents with unlimited levels (2 x 2 grid of the TALENTS tab, in this order).
+-- `step` / `unit`: effect of one level as displayed (same values as above).
 local function pct(x) return math.floor(x * 100 + 0.5) end
 Talents.LIST = {
     { id = "strength", name = "STRENGTH", step = pct(Talents.DAMAGE_PER_LEVEL), unit = "% DMG",
@@ -25,7 +25,7 @@ Talents.LIST = {
       icon = "hero",     color = { 1.0, 0.85, 0.30, 1.0 } },
 }
 
--- Gloire : achat unique, une compétence offerte au début de chaque partie
+-- Glory: one-time purchase, a free skill at the start of every run
 Talents.GLORY = { id = "glory", name = "GLORY", maxLevel = 1, desc = "A FREE SKILL AT THE START OF EVERY RUN" }
 
 local BY_ID = { glory = Talents.GLORY }
@@ -34,7 +34,7 @@ for _, t in ipairs(Talents.LIST) do
     t.effect = string.format("+%d%s", t.step, t.unit)
 end
 
--- Effet cumulé des niveaux achetés, ex. "+15% DMG" (talents de la grille)
+-- Total effect of the purchased levels, e.g. "+15% DMG" (grid talents)
 function Talents.totalText(t, level)
     return string.format("+%d%s", math.floor(t.step * (level or 0) + 0.5), t.unit)
 end
@@ -43,7 +43,7 @@ function Talents.get(id)
     return id and BY_ID[id] or nil
 end
 
--- Somme des niveaux achetés (sert au coût du talent suivant)
+-- Sum of purchased levels (drives the cost of the next talent)
 function Talents.totalLevel(levels)
     local total = 0
     for id in pairs(BY_ID) do total = total + ((levels and levels[id]) or 0) end
@@ -59,7 +59,7 @@ function Talents.canUpgrade(id, levels)
     return BY_ID[id] ~= nil and not Talents.isMaxed(id, levels)
 end
 
--- Multiplicateur de dégâts et PV bonus (aussi affichés dans la fiche de puissance du hub)
+-- Damage multiplier and bonus HP (also shown on the hub power card)
 function Talents.damageBonus(levels)
     return ((levels and levels.strength) or 0) * Talents.DAMAGE_PER_LEVEL
 end
@@ -68,7 +68,7 @@ function Talents.hpBonus(levels)
     return ((levels and levels.vitality) or 0) * Talents.HP_PER_LEVEL
 end
 
--- Applique les talents au héros en début de partie
+-- Applies the talents to the hero at the start of a run
 function Talents.apply(player, levels)
     if not levels then return end
     player.damageMult = (player.damageMult or 1) + Talents.damageBonus(levels)

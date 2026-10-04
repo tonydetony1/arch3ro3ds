@@ -21,6 +21,7 @@ import struct
 import zipfile
 import subprocess
 import shutil
+import tempfile
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS_DIR = os.path.join(ROOT_DIR, "tools")
@@ -348,11 +349,20 @@ with open(cia_elf_path, "wb") as f:
 
 # Exécution de makerom
 out_cia = os.path.join(ROOT_DIR, "Arch3ro.cia")
+# RomFS du CIA : app.rsf contient un chemin absolu ; on le remplace par le romfs_dir de CE
+# dépôt (sinon un clone ou un worktree empaquette le game.love d'un autre dossier)
+with open(os.path.join(TOOLS_DIR, "app.rsf"), encoding="utf-8") as f:
+    rsf_text = re.sub(r"(?m)^(\s*RootPath\s*:).*$",
+                      lambda m: m.group(1) + " " + os.path.join(TOOLS_DIR, "romfs_dir"), f.read())
+rsf_fd, rsf_build = tempfile.mkstemp(suffix=".rsf")
+with os.fdopen(rsf_fd, "w", encoding="utf-8") as f:
+    f.write(rsf_text)
+
 cmd_makerom = [
     os.path.join(TOOLS_DIR, "makerom"),
     "-f", "cia",
     "-o", out_cia,
-    "-rsf", os.path.join(TOOLS_DIR, "app.rsf"),
+    "-rsf", rsf_build,
     "-elf", cia_elf_path,
     "-icon", smdh_path,
     "-target", "t",
@@ -362,6 +372,7 @@ if os.path.exists(banner_path):
     cmd_makerom.extend(["-banner", banner_path])
 
 res_make = subprocess.run(cmd_makerom, capture_output=True, text=True)
+os.remove(rsf_build)
 if res_make.returncode != 0:
     print("ERREUR makerom :", res_make.stderr)
     sys.exit(1)
