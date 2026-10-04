@@ -266,69 +266,82 @@ function SelfTest.update(gameStateMachine, testFrames)
             g.player.hp = g.player.maxHp
 
         elseif testFrames == 52 then
-            -- 3b. VALIDATION DU SANCTUAIRE DE L'ANGE (Salles 5, 15, 25...)
+            -- 3b. SANCTUAIRE DE L'ANGE (salles 5, 15…) : un écran, porte ouverte, offre
+            -- ouverte seulement quand le héros s'approche de l'Ange, jeu figé pendant le choix
             local g = gameStateMachine.current
             g:setupRoom(5)
+            local srm = g.specialRoomManager
             assert(g.roomType == "angel", "Room 5 must be an angel room")
-            assert(g.phase == "angel", "Phase must be 'angel'")
-            assert(g.specialRoomManager ~= nil and g.specialRoomManager.isActive == true, "SpecialRoomManager must be active")
-            assert(g.specialRoomManager.activeType == "angel", "Special room type must be 'angel'")
+            assert(g.mapW == 400 and g.mapH == 240, "Sanctuary must be a single screen (400x240)")
+            assert(g.phase == "clear" and g.isGateOpen == true, "Sanctuary gate must be open on entry")
             assert(#g.pendingSpawns == 0 and g.dummyPool.activeCount == 0, "Angel room must NOT have any enemies")
-            assert(#g.specialRoomManager.angelChoices == 2, "Angel must offer exactly 2 choices (Heal vs Blessing)")
-            assert(g.isGateOpen == false, "North gate must be closed until choice is made")
-
-            -- Test du rendu de l'Ange sans erreur
-            g.specialRoomManager:update(0.016)
+            assert(srm.isActive and srm.activeType == "angel", "Angel must be present")
+            assert(#srm.angelChoices == 2, "Angel must offer exactly 2 choices (Heal vs Blessing)")
+            assert(not srm:isOfferOpen(), "Offer must stay closed until the hero comes close")
+            g:update(0.016)
+            assert(not srm:isOfferOpen(), "Offer must stay closed while the hero is at the entrance")
             g:drawTop()
             g:drawBottom()
 
-            -- Test tactile : Choix 1 (Soin Vital +40% PV)
-            local preHp = g.player.hp
-            g:touchpressed(1, 40, 100) -- Sur la carte gauche (Soin Vital)
-            assert(g.specialRoomManager.pressedBtn == "angel_1", "Touch should press angel_1 button")
-            g:touchreleased(1, 40, 100)
+            -- Le héros rejoint l'Ange : l'offre s'ouvre et le jeu se fige
+            local nx, ny = srm:npcPosition(g.mapW, g.mapH)
+            g.player.x, g.player.y = nx, ny + 20
+            g:update(0.016)
+            assert(srm:isOfferOpen(), "Offer must open when the hero reaches the Angel")
+            local frozenY = g.player.y
+            g.player.vy = 200
+            g:update(0.016)
+            assert(g.player.y == frozenY, "Game must be paused while the offer is open")
+            g.player.vy = 0
+            g:drawTop()
+            g:drawBottom()
 
-            assert(g.specialRoomManager.isResolved == true, "Special room should be resolved")
-            assert(g.specialRoomManager.isActive == false, "SpecialRoomManager should no longer be active")
-            assert(g.isGateOpen == true, "North gate must open immediately upon making the choice")
-            assert(g.phase == "clear", "Phase must become 'clear'")
-            print(string.format("[TEST] Angel Sanctuary VALIDATED: Room 5 sacred sanctuary, 0 monsters, dual Gummy cards, healing applied (PV: %d -> %d), gate unlocked.", preHp, g.player.hp))
+            -- Choix 1 (Soin Vital +40% PV) au toucher
+            local preHp = g.player.hp
+            g:touchpressed(1, 40, 100)
+            assert(srm.pressedBtn == "angel_1", "Touch should press angel_1 button")
+            g:touchreleased(1, 40, 100)
+            assert(srm.isResolved == true and srm.isActive == false, "Angel offer must be resolved")
+            assert(g.isGateOpen == true and g.phase == "clear", "Gate must stay open after the choice")
+            print(string.format("[TEST] Angel Sanctuary VALIDATED: Room 5 one-screen sky shrine, offer on approach, game paused, healing applied (PV: %d -> %d).", preHp, g.player.hp))
 
         elseif testFrames == 58 then
-            -- 3c. VALIDATION DU PACTE AVEC LE DIABLE (Post-Boss Room 10)
+            -- 3c. BOSS (salle 10) : sa mort ouvre directement la roue de boss, sans Démon
             local g = gameStateMachine.current
             g:setupRoom(10)
             assert(g.roomType == "boss", "Room 10 must be a boss room")
-            assert(g.specialRoomManager.isActive == false, "Devil should NOT be active during boss combat")
-
-            -- Simulation de la mort du Boss
+            assert(g.specialRoomManager.isActive == false, "No special room during boss combat")
             g.dummyPool:clear()
             g.spawnWarningTimer = 0
             g:update(0.016)
+            assert(g.phase == "boss_wheel", "Boss death must open the boss wheel")
+            assert(g.specialRoomManager.activeType == "wheel", "Boss reward must be the wheel, not the Demon")
 
-            assert(g.devilEncountered == true, "Devil encounter must be flagged after boss death")
-            assert(g.phase == "devil", "Phase must become 'devil'")
-            assert(g.specialRoomManager.isActive == true, "SpecialRoomManager must be active for Devil")
-            assert(g.specialRoomManager.activeType == "devil", "Special room type must be 'devil'")
-            assert(g.specialRoomManager.devilPact ~= nil, "Devil must propose a forbidden pact")
-            local pact = g.specialRoomManager.devilPact
+            -- 3d. ANTRE DU DÉMON (salles 9, 19…) : juste avant le boss, pacte à l'approche
+            g:setupRoom(9)
+            local srm = g.specialRoomManager
+            assert(g.roomType == "devil", "Room 9 must be the Demon's lair")
+            assert(g.mapW == 400 and g.mapH == 240 and g.isGateOpen, "Demon lair: single screen, gate open")
+            assert(#g.pendingSpawns == 0, "Demon lair must NOT have any enemies")
+            assert(srm.activeType == "devil" and srm.devilPact ~= nil, "Demon must propose a forbidden pact")
+            local pact = srm.devilPact
             assert(pact.costHp > 0 and pact.skillId ~= nil, "Devil pact must require max HP sacrifice for forbidden skill")
-
-            -- Test du rendu du Démon sans erreur
-            g.specialRoomManager:update(0.016)
+            assert(not srm:isOfferOpen(), "Pact must wait for the hero to come close")
+            local nx, ny = srm:npcPosition(g.mapW, g.mapH)
+            g.player.x, g.player.y = nx, ny + 20
+            g:update(0.016)
+            assert(srm:isOfferOpen(), "Pact must open when the hero reaches the Demon")
             g:drawTop()
             g:drawBottom()
 
-            -- Test tactile : Acceptation du pacte (Bouton SCELLER LE PACTE)
+            -- Acceptation du pacte (bouton SCELLER LE PACTE)
             local preMaxHp = g.player.maxHp
-            g:touchpressed(1, 60, 200) -- Bouton Accepter
-            assert(g.specialRoomManager.pressedBtn == "devil_accept", "Touch should press devil_accept button")
+            g:touchpressed(1, 60, 200)
+            assert(srm.pressedBtn == "devil_accept", "Touch should press devil_accept button")
             g:touchreleased(1, 60, 200)
-
             assert(g.player.maxHp == preMaxHp - pact.costHp, "Player Max HP must be permanently reduced by 20%")
-            assert(g.specialRoomManager.isResolved == true, "Devil encounter should be resolved")
-            assert(g.isGateOpen == true, "North gate must open after pact resolution")
-            assert(g.phase == "clear", "Phase must become 'clear'")
+            assert(srm.isResolved == true, "Devil encounter should be resolved")
+            assert(g.isGateOpen == true and g.phase == "clear", "Gate must stay open after the pact")
 
             -- Vérification des compétences interdites du Diable
             local Skills = require("src.data.skills")
@@ -343,7 +356,7 @@ function SelfTest.update(gameStateMachine, testFrames)
             assert(obs:isBlocked(105, 105, 10, false, false) == true, "Rock must block normal player")
             assert(obs:isBlocked(105, 105, 10, false, true) == false, "Rock must NOT block player with allowGhost (Spectral Form)")
 
-            print(string.format("[TEST] Devil Encounter & Forbidden Pacts VALIDATED: Post-boss demon summon, -20%% Max HP sacrifice (%d -> %d), forbidden skill '%s' bound, Spectral Ghost-Walk through rocks verified.",
+            print(string.format("[TEST] Devil Encounter & Forbidden Pacts VALIDATED: Pre-boss demon lair (room 9), -20%% Max HP sacrifice (%d -> %d), forbidden skill '%s' bound, Spectral Ghost-Walk through rocks verified.",
                 preMaxHp, g.player.maxHp, pact.title))
 
         elseif testFrames == 65 then
