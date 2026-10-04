@@ -9,32 +9,45 @@ local Art = require("src.render.art")
 local Pet = {}
 Pet.__index = Pet
 
-function Pet.new(petType, slotIndex)
+-- Caractéristiques de chaque familier, indexées par l'identifiant d'objet de la Forge.
+-- `damage` est la valeur de l'objet de départ (niveau 1) : la Forge la multiplie.
+local DEFS = {
+    bat_companion = {
+        type = "laser_bat", damage = 16, cooldown = 1.2, speed = 300, radius = 2.5,
+        color = { 0.75, 0.30, 0.95, 1.0 }, sprite = "pet_bat", fps = 10,
+    },
+    ghost_familiar = {
+        type = "ghost_mage", damage = 14, cooldown = 1.2, speed = 300, radius = 2.5,
+        color = { 0.35, 0.85, 1.0, 1.0 }, sprite = "pet_ghost", fps = 3,
+    },
+    dragon_pet = {
+        type = "dragon_pet", damage = 22, cooldown = 1.4, speed = 260, radius = 3.5,
+        color = { 1.0, 0.45, 0.15, 1.0 }, sprite = "item_pet_dragon", fps = 0, variant = "ember", scale = 1.2,
+    },
+}
+-- Anciens noms internes, encore acceptés
+DEFS.laser_bat = DEFS.bat_companion
+DEFS.ghost_mage = DEFS.ghost_familiar
+
+function Pet.getDef(petId)
+    return DEFS[petId] or DEFS.bat_companion
+end
+
+-- `power` : puissance de l'objet équipé (Save.getItemPower), 1.0 pour un objet de départ
+function Pet.new(petId, slotIndex, power)
     local self = setmetatable({}, Pet)
+    local def = Pet.getDef(petId)
+    self.def = def
+    self.type = def.type
     self.slotIndex = slotIndex or 1
     self.x = Config.TOP_WIDTH / 2
     self.y = Config.TOP_HEIGHT / 2
-    self.fireCooldown = 1.2
+    self.fireCooldown = def.cooldown
     self.fireTimer = math.random() * 0.5
     self.animTime = math.random() * 5.0
+    self.damage = math.max(1, math.floor(def.damage * (power or 1) + 0.5))
     self.range = 260
     self.radius = 6
-
-    if petType == "bat_companion" or petType == "laser_bat" then
-        self.type = "laser_bat"
-        self.damage = 16
-    elseif petType == "ghost_familiar" or petType == "ghost_mage" then
-        self.type = "ghost_mage"
-        self.damage = 14
-    elseif petType == "dragon_pet" then
-        self.type = "dragon_pet"
-        self.damage = 22
-        self.fireCooldown = 1.4
-    else
-        self.type = petType or "laser_bat"
-        self.damage = 16
-    end
-
     return self
 end
 
@@ -81,15 +94,13 @@ function Pet:update(dt, player, projectilePool, dummyPool)
                 local dirY = bdy / dist
                 local proj = projectilePool:obtain()
                 if proj then
-                    local color = (self.type == "laser_bat") and {0.75, 0.30, 0.95, 1.0}
-                        or (self.type == "dragon_pet") and {1.0, 0.45, 0.15, 1.0}
-                        or {0.35, 0.85, 1.0, 1.0}
+                    local def = self.def
                     local pData = {
-                        projectile_speed = (self.type == "dragon_pet") and 260 or 300,
+                        projectile_speed = def.speed,
                         damage = self.damage,
                         range = self.range,
-                        radius = (self.type == "dragon_pet") and 3.5 or 2.5,
-                        color = color,
+                        radius = def.radius,
+                        color = def.color,
                     }
                     proj:spawn(self.x + dirX * 6, self.y + dirY * 6, dirX, dirY, pData, false, 0, false)
                 end
@@ -98,19 +109,25 @@ function Pet:update(dt, player, projectilePool, dummyPool)
     end
 end
 
+-- Dessine un familier (combat et vitrine du hub). Le miroir passe par une échelle
+-- négative : le 8ᵉ argument d'Art.drawEx est le flash blanc, pas un retournement.
+function Pet.drawSprite(petId, x, y, time, flipX, scale)
+    local def = Pet.getDef(petId)
+    local frame = (def.fps > 0) and (math.floor(time * def.fps) % 2 + 1) or 1
+    local s = (scale or 1) * (def.scale or 1)
+    if s == 1 then
+        Art.draw(def.sprite, frame, x, y, flipX, nil, def.variant)
+    else
+        Art.drawEx(def.sprite, frame, x, y, 0, flipX and -s or s, s, nil, def.variant)
+    end
+end
+
 function Pet:draw()
     local floatY = math.floor(math.sin(self.animTime * 3.5 + self.slotIndex) * 3 + 0.5)
     VFX.drawDynamicShadow(self.x, self.y + 10, 5, 2, math.abs(floatY) + 6, 0.30)
 
     love.graphics.setColor(1, 1, 1, 1)
-    if self.type == "dragon_pet" then
-        Art.drawEx("item_pet_dragon", 1, self.x, self.y + floatY, 0, 1.2, 1.2, self.slotIndex == 2, "ember")
-    else
-        local name = (self.type == "laser_bat") and "pet_bat" or "pet_ghost"
-        local fps = (self.type == "laser_bat") and 10 or 3
-        local frame = math.floor(self.animTime * fps) % 2 + 1
-        Art.draw(name, frame, self.x, self.y + floatY, self.slotIndex == 2)
-    end
+    Pet.drawSprite(self.type, self.x, self.y + floatY, self.animTime, self.slotIndex == 2)
 end
 
 return Pet

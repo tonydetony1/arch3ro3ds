@@ -1,356 +1,539 @@
-if not love then
-    love = {
-        timer = { getTime = function() return 0 end },
-        filesystem = {
-            write = function() return true end,
-            read = function() return nil end,
-        },
-        graphics = {
-            getFont = function() return { getWidth = function() return 10 end, getHeight = function() return 10 end } end,
-            setFont = function() end,
-            newImage = function() return {} end,
-            newQuad = function() return {} end,
-            setColor = function() end,
-            rectangle = function() end,
-            circle = function() end,
-            line = function() end,
-            print = function() end,
-            printf = function() end,
-            push = function() end,
-            pop = function() end,
-            translate = function() end,
-            scale = function() end,
-            rotate = function() end,
-            setScissor = function() end,
-        },
-        image = {
-            newImageData = function() return {} end,
-        }
-    }
+-- tests/test_save_equipment.lua
+-- Forge (équiper / déséquiper armes, armures, anneaux, familiers), talents, quêtes et
+-- navigation du hub. Les interactions passent par de vrais appuis (touchpressed puis
+-- touchreleased) aux coordonnées des éléments dessinés, comme sur l'écran tactile.
+
+-- Environnement LÖVE minimal + système de fichiers en mémoire (aucune vraie sauvegarde touchée)
+local files = {}
+love = love or {}
+love.timer = love.timer or { getTime = function() return 0 end }
+love.filesystem = {
+    write = function(path, content) files[path] = content; return true end,
+    read = function(path) return files[path] end,
+}
+love.graphics = love.graphics or {}
+for _, name in ipairs({ "setFont", "setColor", "rectangle", "circle", "line", "print", "printf", "push", "pop",
+    "translate", "scale", "rotate", "setScissor", "ellipse", "setLineWidth", "polygon" }) do
+    love.graphics[name] = love.graphics[name] or function() end
 end
+love.graphics.getFont = love.graphics.getFont or function()
+    return { getWidth = function() return 10 end, getHeight = function() return 10 end }
+end
+love.graphics.newImage = love.graphics.newImage or function() return {} end
+love.graphics.newQuad = love.graphics.newQuad or function() return {} end
+love.image = love.image or { newImageData = function() return {} end }
 
 local Save = require("src.data.save")
+local Items = require("src.data.items")
+local Talents = require("src.data.talents")
+local Quests = require("src.data.quests")
 local Balance = require("src.data.balance")
+-- Mesure de texte sans atlas graphique : 6 px par caractère (police principale)
+require("src.ui.pixel_font").getWidth = function(text) return #tostring(text) * 6 end
 
 local T = {}
 
-local function resetSave()
+local BACKPACK = {
+    "starter_bow", "rapid_daggers", "vest_dexterity", "phantom_cloak",
+    "wolf_ring", "bear_ring", "bat_companion", "ghost_familiar",
+}
+
+local function resetSave(inventory)
     Save.reset()
     local d = Save.get()
     d.gold = 50000
     d.gems = 1000
-    d.inventory = {
-        "starter_bow",
-        "rapid_daggers",
-        "vest_dexterity",
-        "phantom_cloak",
-        "wolf_ring",
-        "bear_ring",
-        "falcon_ring",
-        "bat_companion",
-        "ghost_familiar",
-    }
+    d.inventory = {}
+    for i, id in ipairs(inventory or BACKPACK) do d.inventory[i] = id end
     return d
 end
 
-T["equip into empty slots (ring2, pet2) succeeds"] = function()
-    local d = resetSave()
-    assert(d.equipped.ring2 == nil, "ring2 should start nil")
-    assert(d.equipped.pet2 == nil, "pet2 should start nil")
-
-    local okRing = Save.equip("ring2", "bear_ring")
-    assert(okRing == true, "Save.equip('ring2') must succeed")
-    assert(d.equipped.ring2 == "bear_ring", "ring2 must contain bear_ring")
-
-    local okPet = Save.equip("pet2", "ghost_familiar")
-    assert(okPet == true, "Save.equip('pet2') must succeed")
-    assert(d.equipped.pet2 == "ghost_familiar", "pet2 must contain ghost_familiar")
+-- Relit la sauvegarde depuis le « disque » (comme au redémarrage de la console)
+local function reloadSave()
+    Save.data = nil
+    return Save.load()
 end
 
-T["unequip slots and re-equip succeeds"] = function()
-    local d = resetSave()
-    -- Initial: weapon = starter_bow, ring1 = wolf_ring, pet1 = bat_companion
-    assert(d.equipped.weapon == "starter_bow")
-    assert(d.equipped.ring1 == "wolf_ring")
-    assert(d.equipped.pet1 == "bat_companion")
-
-    -- Unequip weapon
-    local okW = Save.unequip("weapon")
-    assert(okW == true, "Save.unequip('weapon') must succeed")
-    assert(d.equipped.weapon == nil, "weapon must now be nil")
-
-    -- Re-equip weapon
-    local okW2 = Save.equip("weapon", "rapid_daggers")
-    assert(okW2 == true, "Save.equip('weapon') must succeed after unequip")
-    assert(d.equipped.weapon == "rapid_daggers")
-
-    -- Unequip ring1
-    local okR = Save.unequip("ring1")
-    assert(okR == true, "Save.unequip('ring1') must succeed")
-    assert(d.equipped.ring1 == nil, "ring1 must now be nil")
-    assert(d.equipped.ring == nil, "legacy ring mirror must be nil when ring1 is nil")
-
-    -- Re-equip ring1
-    local okR2 = Save.equip("ring1", "falcon_ring")
-    assert(okR2 == true, "Save.equip('ring1') must succeed after unequip")
-    assert(d.equipped.ring1 == "falcon_ring")
-    assert(d.equipped.ring == "falcon_ring", "legacy ring mirror must sync with ring1")
-
-    -- Unequip pet1
-    local okP = Save.unequip("pet1")
-    assert(okP == true, "Save.unequip('pet1') must succeed")
-    assert(d.equipped.pet1 == nil, "pet1 must now be nil")
-    assert(d.equipped.pet == nil, "legacy pet mirror must be nil when pet1 is nil")
-
-    -- Re-equip pet1
-    local okP2 = Save.equip("pet1", "ghost_familiar")
-    assert(okP2 == true, "Save.equip('pet1') must succeed after unequip")
-    assert(d.equipped.pet1 == "ghost_familiar")
-    assert(d.equipped.pet == "ghost_familiar", "legacy pet mirror must sync with pet1")
+local function tap(obj, x, y)
+    obj:touchpressed(1, x, y)
+    obj:touchreleased(1, x, y)
 end
 
-T["Save.isEquipped detects slot accurately"] = function()
-    local d = resetSave()
-    Save.equip("ring2", "bear_ring")
-
-    local eq, slot = Save.isEquipped("starter_bow")
-    assert(eq == true and slot == "weapon")
-
-    local eqRing2, slotRing2 = Save.isEquipped("bear_ring")
-    assert(eqRing2 == true and slotRing2 == "ring2")
-
-    local eqNone, slotNone = Save.isEquipped("falcon_ring")
-    assert(eqNone == false and slotNone == nil)
-
-    -- After unequipping ring1:
-    Save.unequip("ring1")
-    local eqWolf, slotWolf = Save.isEquipped("wolf_ring")
-    assert(eqWolf == false and slotWolf == nil, "wolf_ring must not be equipped after unequip")
+local function center(r)
+    return r.x + math.floor(r.w / 2), r.y + math.floor(r.h / 2)
 end
 
-T["invalid slots are rejected by Save.equip and Save.unequip"] = function()
+local function newInventory()
+    local inv = require("src.states.inventory").new()
+    inv:refresh()
+    return inv
+end
+
+-- Centre de la carte d'un objet dans la grille du sac (sans défilement)
+local function cardCenter(inv, itemId)
+    for i, id in ipairs(inv.saveData.inventory) do
+        if id == itemId then
+            local col, row = (i - 1) % 4, math.floor((i - 1) / 4)
+            local x, y = 11 + col * 76 + 35, 108 + row * 54 + 24
+            assert(y <= 194, "card not visible without scrolling: " .. itemId)
+            return x, y
+        end
+    end
+    error("item not in backpack: " .. tostring(itemId))
+end
+
+local function tapCard(inv, itemId) tap(inv, cardCenter(inv, itemId)) end
+local function tapSlot(inv, slotId) tap(inv, center(inv:getSlot(slotId))) end
+
+local function buttonIds(inv)
+    local ids = {}
+    for i, b in ipairs(inv.modalButtons) do ids[i] = b.id end
+    return table.concat(ids, ",")
+end
+
+local function tapButton(inv, id)
+    local b = inv:getModalButton(id)
+    assert(b, "button '" .. id .. "' missing, got: " .. buttonIds(inv))
+    tap(inv, center(b))
+end
+
+-- ============================================================================
+-- SAUVEGARDE : emplacements, migration, validation
+-- ============================================================================
+T["new save only uses the six slot keys"] = function()
+    local d = resetSave()
+    for key in pairs(d.equipped) do
+        assert(Save.EQUIP_SLOTS[key], "unexpected equipped key: " .. key)
+    end
+    assert(d.equipped.ring1 == "wolf_ring" and d.equipped.pet1 == "bat_companion")
+end
+
+T["legacy ring/pet keys migrate to ring1/pet1 and disappear"] = function()
+    files[Save.SAVE_FILE] = "return { saveSeq = 1, gold = 10, inventory = { \"starter_bow\", \"wolf_ring\", \"bat_companion\" },"
+        .. " equipped = { weapon = \"starter_bow\", ring = \"wolf_ring\", pet = \"bat_companion\" } }\n-- fin arch3ro\n"
+    files[Save.BACKUP_FILE] = nil
+    local d = reloadSave()
+    assert(d.equipped.ring1 == "wolf_ring", "ring must move to ring1")
+    assert(d.equipped.pet1 == "bat_companion", "pet must move to pet1")
+    assert(d.equipped.ring == nil and d.equipped.pet == nil, "legacy keys must be removed")
+end
+
+T["loading an unchanged save does not rewrite it"] = function()
     resetSave()
-    assert(Save.equip("nonexistent_slot", "wolf_ring") == false)
-    assert(Save.unequip("nonexistent_slot") == false)
+    Save.save()
+    local seq = Save.get().saveSeq
+    local d = reloadSave()
+    assert(d.saveSeq == seq, "a clean save must not be rewritten at boot (SD write)")
 end
 
-T["talents: upgrade specific stat"] = function()
+T["sanitize drops duplicates, wrong types and unowned items"] = function()
     local d = resetSave()
-    d.talents = { strength = 0, vitality = 0, recovery = 0, agility = 0, glory = 0 }
-    d.gold = 50000
-
-    -- Upgrade strength specifically
-    local okS, chosenS, lvlS = Save.upgradeTalent("strength")
-    assert(okS == true, "upgradeTalent('strength') must succeed")
-    assert(chosenS == "strength", "chosen stat must be strength")
-    assert(d.talents.strength == 1, "strength must be 1")
-    assert(d.talents.vitality == 0, "vitality must still be 0")
-
-    -- Upgrade agility specifically
-    local okA, chosenA, lvlA = Save.upgradeTalent("agility")
-    assert(okA == true, "upgradeTalent('agility') must succeed")
-    assert(chosenA == "agility", "chosen stat must be agility")
-    assert(d.talents.agility == 1, "agility must be 1")
-    assert(d.talents.vitality == 0, "vitality must still be 0")
-
-    -- Upgrade recovery specifically
-    local okR, chosenR, lvlR = Save.upgradeTalent("recovery")
-    assert(okR == true, "upgradeTalent('recovery') must succeed")
-    assert(chosenR == "recovery", "chosen stat must be recovery")
-    assert(d.talents.recovery == 1, "recovery must be 1")
-    assert(d.talents.vitality == 0, "vitality must still be 0")
-
-    -- Upgrade vitality specifically
-    local okV, chosenV, lvlV = Save.upgradeTalent("vitality")
-    assert(okV == true, "upgradeTalent('vitality') must succeed")
-    assert(chosenV == "vitality", "chosen stat must be vitality")
-    assert(d.talents.vitality == 1, "vitality must be 1")
+    d.equipped = { weapon = "starter_bow", ring1 = "wolf_ring", ring2 = "wolf_ring", pet1 = "wolf_ring", armor = "falcon_ring" }
+    Save.sanitizeEquipment()
+    d = Save.get()
+    assert(d.equipped.ring1 == "wolf_ring")
+    assert(d.equipped.ring2 == nil, "same ring cannot be worn twice")
+    assert(d.equipped.pet1 == nil, "a ring cannot sit in a pet slot")
+    -- falcon_ring n'est pas possédé : remplacé par l'armure de départ possédée
+    assert(d.equipped.armor == "vest_dexterity", "unowned item falls back to the starter piece")
 end
 
-T["talents: cost formula is consistent with Save.getTalentCost"] = function()
+T["equip rejects wrong slot types and unowned items"] = function()
     local d = resetSave()
-    d.talents = { strength = 2, vitality = 1, recovery = 1, agility = 1, glory = 0 }
-    local totalLevel = 5
-    local expectedCost = Balance.COSTS.talentBase + totalLevel * Balance.COSTS.talentStep
-    assert(Save.getTalentCost() == expectedCost, "Save.getTalentCost() must match Balance.COSTS formula")
+    assert(Save.equip("pet2", "bear_ring") == false, "ring into pet slot must fail")
+    assert(Save.equip("weapon", "vest_dexterity") == false, "armor into weapon slot must fail")
+    assert(Save.equip("ring2", "falcon_ring") == false, "unowned item must fail")
+    assert(Save.equip("bogus", "wolf_ring") == false)
+    assert(d.equipped.pet2 == nil and d.equipped.ring2 == nil)
 end
 
-T["talents: upgrade with no arg picks from pool"] = function()
+T["moving a ring from ring1 to ring2 frees ring1"] = function()
     local d = resetSave()
-    d.talents = { strength = 0, vitality = 0, recovery = 0, agility = 0, glory = 0 }
-    d.gold = 10000
-
-    local ok, chosen, lvl = Save.upgradeTalent()
-    assert(ok == true, "random upgrade must succeed")
-    assert(chosen == "strength" or chosen == "vitality" or chosen == "recovery" or chosen == "agility" or chosen == "glory")
-    assert(d.talents[chosen] == 1)
+    assert(Save.equip("ring2", "wolf_ring"))
+    assert(d.equipped.ring2 == "wolf_ring" and d.equipped.ring1 == nil)
 end
 
-T["inventory toggleEquip equips and unequips weapons, armor, rings, pets"] = function()
-    local d = resetSave()
-    local Inventory = require("src.states.inventory")
-    local inv = Inventory.new()
-    inv:refresh()
-
-    -- Initial: weapon = starter_bow, armor = vest_dexterity, ring1 = wolf_ring, pet1 = bat_companion
-    assert(inv:isEquipped("starter_bow") == true)
-    assert(inv:isEquipped("vest_dexterity") == true)
-    assert(inv:isEquipped("wolf_ring") == true)
-    assert(inv:isEquipped("bat_companion") == true)
-    assert(inv:isEquipped("bear_ring") == false)
-    assert(inv:isEquipped("ghost_familiar") == false)
-
-    -- 1. Unequip weapon
-    inv:toggleEquip("starter_bow", "weapon")
-    assert(inv:isEquipped("starter_bow") == false, "starter_bow should now be unequipped")
-    assert(d.equipped.weapon == nil)
-
-    -- 2. Equip another weapon
-    inv:toggleEquip("rapid_daggers", nil)
-    assert(inv:isEquipped("rapid_daggers") == true, "rapid_daggers should now be equipped")
-    assert(d.equipped.weapon == "rapid_daggers")
-
-    -- 3. Unequip armor
-    inv:toggleEquip("vest_dexterity", "armor")
-    assert(inv:isEquipped("vest_dexterity") == false, "vest_dexterity should now be unequipped")
-    assert(d.equipped.armor == nil)
-
-    -- 4. Equip second ring (ring2)
-    assert(d.equipped.ring2 == nil)
-    inv:toggleEquip("bear_ring", nil)
-    assert(inv:isEquipped("bear_ring") == true, "bear_ring should be equipped")
-    assert(d.equipped.ring2 == "bear_ring", "bear_ring should be in ring2")
-    assert(d.equipped.ring1 == "wolf_ring", "ring1 should still be wolf_ring")
-
-    -- 5. Unequip ring1
-    inv:toggleEquip("wolf_ring", "ring1")
-    assert(inv:isEquipped("wolf_ring") == false, "wolf_ring should now be unequipped")
-    assert(d.equipped.ring1 == nil)
-    assert(d.equipped.ring2 == "bear_ring", "ring2 should still have bear_ring")
-
-    -- 6. Equip third ring into freed ring1
-    inv:toggleEquip("falcon_ring", nil)
-    assert(inv:isEquipped("falcon_ring") == true)
-    assert(d.equipped.ring1 == "falcon_ring", "falcon_ring should occupy empty ring1")
-
-    -- 7. Equip second pet (pet2)
-    assert(d.equipped.pet2 == nil)
-    inv:toggleEquip("ghost_familiar", nil)
-    assert(inv:isEquipped("ghost_familiar") == true)
-    assert(d.equipped.pet2 == "ghost_familiar", "ghost_familiar should occupy pet2")
-    assert(d.equipped.pet1 == "bat_companion", "pet1 should still be bat_companion")
-
-    -- 8. Unequip pet1
-    inv:toggleEquip("bat_companion", "pet1")
-    assert(inv:isEquipped("bat_companion") == false, "bat_companion should now be unequipped")
-    assert(d.equipped.pet1 == nil)
-    assert(d.equipped.pet2 == "ghost_familiar")
+T["unequipped slots survive a reload"] = function()
+    resetSave()
+    assert(Save.unequip("weapon"))
+    assert(Save.unequip("ring1"))
+    assert(Save.unequip("pet1"))
+    assert(Save.equip("pet2", "ghost_familiar"))
+    local d = reloadSave()
+    assert(d.equipped.weapon == nil, "weapon must stay empty")
+    assert(d.equipped.ring1 == nil, "ring1 must stay empty")
+    assert(d.equipped.pet1 == nil, "pet1 must stay empty")
+    assert(d.equipped.pet2 == "ghost_familiar", "pet2 must stay equipped")
+    assert(Save.unequip("ring1") == false, "unequipping an empty slot reports false")
 end
 
-T["inventory: tapping empty slot opens candidate modal with targeted slot"] = function()
+T["forge upgrade uses the displayed cost and counts for upgrade quests"] = function()
     local d = resetSave()
-    local Inventory = require("src.states.inventory")
-    local inv = Inventory.new()
-    inv:refresh()
-
-    -- pet2 starts empty. Tapping slot pet2 (x=218, y=46, w=46, h=37)
-    assert(d.equipped.pet2 == nil)
-    -- ghost_familiar is in inventory and unequipped
-    inv:touchpressed(1, 230, 55)
-    assert(inv.modalItem ~= nil, "Modal must open for available pet")
-    assert(inv.modalItemId == "ghost_familiar", "Available unequipped pet should be loaded")
-    assert(inv.modalSourceSlot == "pet2", "Target slot must be pet2")
-
-    -- Now confirm equip
-    inv.pressedBtn = "equip"
-    inv:touchreleased(1, 40, 160)
-    assert(d.equipped.pet2 == "ghost_familiar", "pet2 should now be equipped with ghost_familiar")
+    local cost = Items.getUpgradeCost(1, Save.getItemRarity("starter_bow"))
+    local before = Save.getDailyQuests().progress.upgrades or 0
+    local gold = d.gold
+    local ok, lvl, paid = Save.upgradeItem("starter_bow")
+    assert(ok and lvl == 2 and paid == cost)
+    assert(d.gold == gold - cost)
+    assert((Save.getDailyQuests().progress.upgrades or 0) == before + 1, "daily upgrade quest must progress")
 end
 
-T["inventory: choosing slot1 or slot2 explicitly replaces target slot"] = function()
+T["legendary items can still fuse for stars"] = function()
     local d = resetSave()
-    local Inventory = require("src.states.inventory")
-    local inv = Inventory.new()
-    -- Equip ring1 (wolf_ring) and ring2 (bear_ring)
-    Save.equip("ring1", "wolf_ring")
-    Save.equip("ring2", "bear_ring")
-    inv:refresh()
-
-    -- Open unequipped falcon_ring from backpack
-    inv:openModal("falcon_ring", nil)
-    assert(inv.modalItem ~= nil)
-
-    -- Player taps SLOT 2 button (equip2)
-    inv.pressedBtn = "equip2"
-    inv:touchreleased(1, 100, 160)
-    assert(d.equipped.ring2 == "falcon_ring", "ring2 should be replaced by falcon_ring")
-    assert(d.equipped.ring1 == "wolf_ring", "ring1 should remain wolf_ring")
+    d.itemRarities.starter_bow = "legendary"
+    d.itemCopies.starter_bow = 3
+    assert(Save.canFuse("starter_bow"), "legendary with < 5 stars can fuse")
+    d.itemStars.starter_bow = Save.MAX_ITEM_STARS
+    assert(not Save.canFuse("starter_bow"), "max stars cannot fuse")
 end
 
-T["save load preserves unequipped slots without forced reset"] = function()
+T["item power ratio follows level, rarity and stars"] = function()
+    assert(math.abs(Items.powerRatio("starter_bow", 1, "common", 0) - 1) < 1e-9)
+    assert(math.abs(Items.powerRatio("starter_bow", 2, "common", 0) - 1.16) < 1e-9)
+    assert(Items.powerRatio("starter_bow", 1, "rare", 0) > 1.5)
+    assert(Items.powerRatio("starter_bow", 1, "common", 1) > 1.05)
+end
+
+-- ============================================================================
+-- TALENTS
+-- ============================================================================
+T["talents: the chosen talent is the one upgraded"] = function()
     local d = resetSave()
-    Save.unequip("weapon")
+    for _, t in ipairs(Talents.LIST) do
+        local before = d.talents[t.id] or 0
+        local ok, chosen = Save.upgradeTalent(t.id)
+        assert(ok and chosen == t.id, "upgrade must hit " .. t.id)
+        assert(d.talents[t.id] == before + 1)
+    end
+end
+
+T["talents: no choice, unknown talent or no gold spends nothing"] = function()
+    local d = resetSave()
+    local gold = d.gold
+    assert(Save.upgradeTalent(nil) == false)
+    assert(Save.upgradeTalent("luck") == false)
+    d.gold = 0
+    assert(Save.upgradeTalent("strength") == false)
+    assert(d.talents.strength == 0)
+    d.gold = gold
+end
+
+T["talents: glory is bought once and costs follow the total"] = function()
+    local d = resetSave()
+    local cost0 = Save.getTalentCost()
+    assert(cost0 == Balance.COSTS.talentBase)
+    assert(Save.upgradeTalent("glory"))
+    assert(Save.upgradeTalent("glory") == false, "glory is a one-time purchase")
+    assert(Save.getTalentCost() == Balance.COSTS.talentBase + Balance.COSTS.talentStep)
+end
+
+T["talents: combat effects match the displayed values"] = function()
+    local player = { damageMult = 1, maxHp = 100, hp = 100, dodgeChance = 0 }
+    Talents.apply(player, { strength = 2, vitality = 3, agility = 1, recovery = 2, glory = 0 })
+    assert(math.abs(player.damageMult - 1.10) < 1e-9)
+    assert(player.maxHp == 190 and player.hp == 190)
+    assert(math.abs(player.dodgeChance - 0.02) < 1e-9)
+    assert(math.abs(player.healMult - 1.20) < 1e-9)
+    assert(Talents.LIST[1].effect == "+5% DMG" and Talents.LIST[2].effect == "+30 HP")
+    assert(Talents.LIST[3].effect == "+2% DODGE" and Talents.LIST[4].effect == "+10% HEAL")
+end
+
+-- ============================================================================
+-- FORGE : appuis réels sur la grille, les emplacements et les boutons
+-- ============================================================================
+T["forge: equip a second ring from the backpack"] = function()
+    local d = resetSave()
+    local inv = newInventory()
+    tapCard(inv, "bear_ring")
+    assert(inv.modalItemId == "bear_ring", "tapping a card opens its sheet")
+    tapButton(inv, "equip")
+    assert(d.equipped.ring2 == "bear_ring", "first free ring slot is ring2")
+    assert(d.equipped.ring1 == "wolf_ring")
+    assert(inv.modalItem == nil, "sheet closes after equipping")
+end
+
+T["forge: unequip from the slot, then re-equip from the backpack"] = function()
+    local d = resetSave()
+    local inv = newInventory()
+    tapSlot(inv, "pet1")
+    assert(inv.modalItemId == "bat_companion")
+    tapButton(inv, "unequip")
+    assert(d.equipped.pet1 == nil, "pet1 must be empty")
+    assert(Save.ownsItem("bat_companion"), "unequipped item stays in the backpack")
+    tapCard(inv, "bat_companion")
+    tapButton(inv, "equip")
+    assert(d.equipped.pet1 == "bat_companion", "pet goes back to the first free slot")
+end
+
+T["forge: weapons and armor swap and unequip"] = function()
+    local d = resetSave()
+    local inv = newInventory()
+    tapCard(inv, "rapid_daggers")
+    tapButton(inv, "equip")
+    assert(d.equipped.weapon == "rapid_daggers", "weapon replaced")
+    tapCard(inv, "phantom_cloak")
+    tapButton(inv, "equip")
+    assert(d.equipped.armor == "phantom_cloak", "armor replaced")
+    tapSlot(inv, "armor")
+    tapButton(inv, "unequip")
+    assert(d.equipped.armor == nil, "armor slot empty")
+end
+
+T["forge: both ring slots taken -> player picks which one to replace"] = function()
+    local d = resetSave()
+    table.insert(d.inventory, 5, "serpent_ring")
+    assert(Save.equip("ring2", "bear_ring"))
+    local inv = newInventory()
+    tapCard(inv, "serpent_ring")
+    assert(buttonIds(inv) == "equip_ring1,equip_ring2,upgrade", "got " .. buttonIds(inv))
+    tapButton(inv, "equip_ring2")
+    assert(d.equipped.ring2 == "serpent_ring" and d.equipped.ring1 == "wolf_ring")
+    assert(not Save.isEquipped("bear_ring"), "replaced ring returns to the backpack")
+end
+
+T["forge: empty slot with several candidates waits for a backpack pick"] = function()
+    local d = resetSave()
+    table.insert(d.inventory, 5, "serpent_ring")
+    local inv = newInventory()
+    tapSlot(inv, "ring2")
+    assert(inv.targetSlot == "ring2" and inv.modalItem == nil, "slot armed, no sheet yet")
+    tapCard(inv, "serpent_ring")
+    assert(inv.modalSourceSlot == "ring2")
+    tapButton(inv, "equip")
+    assert(d.equipped.ring2 == "serpent_ring")
+    -- Second appui sur l'emplacement visé : annulation
     Save.unequip("ring2")
-    Save.unequip("pet2")
-    assert(d.equipped.weapon == nil)
-    assert(d.equipped.ring2 == nil)
-    assert(d.equipped.pet2 == nil)
-
-    -- Re-load save
-    Save.load()
-    local loaded = Save.get()
-    assert(loaded.equipped.weapon == nil, "weapon should stay nil")
-    assert(loaded.equipped.ring2 == nil, "ring2 should stay nil")
-    assert(loaded.equipped.pet2 == nil, "pet2 should stay nil")
+    tapSlot(inv, "ring2")
+    tapSlot(inv, "ring2")
+    assert(inv.targetSlot == nil)
 end
 
-T["inventory: gamepad and keyboard support"] = function()
+T["forge: empty slot with one candidate opens it, with none shows a hint"] = function()
     local d = resetSave()
-    local Inventory = require("src.states.inventory")
-    local inv = Inventory.new()
+    local inv = newInventory()
+    -- pet2 vide, seul ghost_familiar est libre : sa fiche s'ouvre, ciblée sur pet2
+    tapSlot(inv, "pet2")
+    assert(inv.modalItemId == "ghost_familiar" and inv.modalSourceSlot == "pet2")
+    tapButton(inv, "equip")
+    assert(d.equipped.pet2 == "ghost_familiar")
+
+    -- Aucune armure libre dans le sac : message au lieu d'une fiche
+    Save.unequip("armor")
+    d.inventory = { "starter_bow", "wolf_ring", "bat_companion", "ghost_familiar" }
     inv:refresh()
-
-    -- Open modal
-    inv:openModal("wolf_ring", "ring1")
-    assert(inv.modalItem ~= nil)
-
-    -- Gamepad B closes modal
-    inv:gamepadpressed("b")
-    assert(inv.modalItem == nil, "Gamepad B should close modal")
-
-    -- Open modal again and test Gamepad A (toggle equip)
-    inv:openModal("wolf_ring", "ring1")
-    assert(inv:isEquipped("wolf_ring") == true)
-    inv:gamepadpressed("a")
-    assert(inv:isEquipped("wolf_ring") == false, "Gamepad A should unequip wolf_ring")
-
-    -- Re-open and test Keyboard Space/Return to re-equip
-    inv:openModal("wolf_ring", "ring1")
-    inv:keypressed("return")
-    assert(inv:isEquipped("wolf_ring") == true, "Keyboard return should re-equip wolf_ring")
+    tapSlot(inv, "armor")
+    assert(inv.modalItem == nil and inv.targetSlot == nil, "no candidate: no sheet")
+    assert(inv.toastTimer > 0 and inv.toastText:find("ARMOR"), "hint names the missing type")
 end
 
-T["quests and achievements subpage switching"] = function()
+T["forge: a drag in the backpack does not open a sheet"] = function()
+    resetSave()
+    local inv = newInventory()
+    local x, y = cardCenter(inv, "bear_ring")
+    inv:touchpressed(1, x, y)
+    inv:touchmoved(1, x, y - 30, 0, -30)
+    inv:touchreleased(1, x, y - 30)
+    assert(inv.modalItem == nil)
+end
+
+T["forge: releasing away from a button cancels it"] = function()
+    local d = resetSave()
+    local inv = newInventory()
+    tapCard(inv, "bear_ring")
+    local b = inv:getModalButton("equip")
+    inv:touchpressed(1, center(b))
+    inv:touchreleased(1, b.x + b.w + 40, b.y - 40)
+    assert(d.equipped.ring2 == nil, "no action when the stylus slides off")
+end
+
+T["forge: upgrade button levels the item and keeps the sheet open"] = function()
+    local d = resetSave()
+    local inv = newInventory()
+    tapCard(inv, "starter_bow")
+    local gold = d.gold
+    tapButton(inv, "upgrade")
+    assert(Save.getItemLevel("starter_bow") == 2)
+    assert(d.gold < gold)
+    assert(inv.modalItemId == "starter_bow", "sheet stays open for more upgrades")
+end
+
+T["forge: modal buttons fit inside the sheet without overlapping"] = function()
+    local d = resetSave()
+    table.insert(d.inventory, 5, "serpent_ring")
+    d.itemCopies.serpent_ring = 3
+    assert(Save.equip("ring2", "bear_ring"))
+    local inv = newInventory()
+    for _, id in ipairs({ "wolf_ring", "serpent_ring", "starter_bow", "rapid_daggers" }) do
+        inv:openModal(id, nil)
+        local prevRight = 22
+        for _, b in ipairs(inv.modalButtons) do
+            assert(b.x >= prevRight, "buttons overlap for " .. id)
+            prevRight = b.x + b.w
+        end
+        assert(prevRight <= 22 + 276, "buttons overflow the sheet for " .. id)
+    end
+    inv:openModal("serpent_ring", nil)
+    assert(buttonIds(inv) == "equip_ring1,equip_ring2,upgrade,fuse", "got " .. buttonIds(inv))
+end
+
+T["forge: console buttons A / X / B in the sheet"] = function()
+    local d = resetSave()
+    local inv = newInventory()
+    inv:openModal("ghost_familiar", nil)
+    assert(inv:gamepadpressed("x"))
+    assert(Save.getItemLevel("ghost_familiar") == 2, "X upgrades")
+    assert(inv:gamepadpressed("a"))
+    assert(d.equipped.pet2 == "ghost_familiar", "A equips")
+    inv:openModal("ghost_familiar", "pet2")
+    assert(inv:gamepadpressed("b") and inv.modalItem == nil, "B closes")
+    inv:openModal("ghost_familiar", "pet2")
+    inv:gamepadpressed("a")
+    assert(d.equipped.pet2 == nil, "A unequips an equipped item")
+end
+
+-- ============================================================================
+-- COMBAT : l'équipement réel est appliqué
+-- ============================================================================
+T["combat uses each equipped slot exactly once"] = function()
+    local d = resetSave()
+    Save.unequip("pet1")
+    Save.equip("pet2", "ghost_familiar")
+    Save.equip("ring2", "bear_ring")
+    d.itemLevels.starter_bow = 3
+    local GameState = require("src.states.game")
+    local player = { damageMult = 1, critChance = 0, maxHp = 100, hp = 100, dodgeChance = 0,
+        equipWeapon = function(p, id) p.weaponId = id end }
+    GameState.applyEquipment({ player = player }, d.equipped)
+    assert(#player.pets == 1, "only pet2 is equipped")
+    assert(player.pets[1].type == "ghost_mage" and player.pets[1].slotIndex == 2)
+    local wolf = Save.getItemStats("wolf_ring")
+    local bear = Save.getItemStats("bear_ring")
+    local vest = Save.getItemStats("vest_dexterity")
+    assert(player.maxHp == 100 + vest.hp + bear.hp, "ring HP counted once")
+    local expected = 1 + (Save.getItemPower("starter_bow") - 1) + wolf.atk / 30
+    assert(math.abs(player.damageMult - expected) < 1e-9, "weapon level and ring ATK applied once")
+end
+
+-- ============================================================================
+-- HUB : talents, quêtes, coffres, modes
+-- ============================================================================
+local function newMenu()
     local MenuState = require("src.states.menu")
-    local menu = MenuState.new({})
-    menu.currentTab = "quests"
-    menu.questSubPage = "quests"
+    local menu = MenuState.new({ switch = function() end })
+    menu.saveData = Save.get()
+    menu.inventory:refresh()
+    return menu
+end
 
-    -- 1. Switch to achievements using subtab_achievements
-    menu.pressedBtn = "subtab_achievements"
-    menu:touchreleased(1, 280, 10)
-    assert(menu.questSubPage == "achievements", "Should switch to achievements")
+local TALENT_CENTERS = { strength = { 81, 80 }, vitality = { 239, 80 }, agility = { 81, 120 }, recovery = { 239, 120 }, glory = { 244, 41 } }
+local UPGRADE_BTN = { 160, 167 }
 
-    -- 2. Switch back to quests using subtab_quests
-    menu.pressedBtn = "subtab_quests"
-    menu:touchreleased(1, 220, 10)
-    assert(menu.questSubPage == "quests", "Should switch back to quests via subtab_quests")
+T["hub talents: tap a card, then upgrade exactly that talent"] = function()
+    local d = resetSave()
+    local menu = newMenu()
+    menu.currentTab = "talents"
+    for _, id in ipairs({ "agility", "recovery", "strength", "vitality" }) do
+        local before = d.talents[id]
+        tap(menu, TALENT_CENTERS[id][1], TALENT_CENTERS[id][2])
+        assert(menu.selectedTalent == id, "card tap selects " .. id)
+        tap(menu, UPGRADE_BTN[1], UPGRADE_BTN[2])
+        assert(d.talents[id] == before + 1, id .. " must be the upgraded talent")
+    end
+end
 
-    -- 3. If on achievements and user taps the dock tab_quests, should also reset to quests
+T["hub talents: glory badge, d-pad and failure feedback"] = function()
+    local d = resetSave()
+    local menu = newMenu()
+    menu.currentTab = "talents"
+    tap(menu, TALENT_CENTERS.glory[1], TALENT_CENTERS.glory[2])
+    assert(menu.selectedTalent == "glory")
+    tap(menu, UPGRADE_BTN[1], UPGRADE_BTN[2])
+    assert(d.talents.glory == 1 and menu.selectedTalent == "strength", "glory bought, selection back to strength")
+    tap(menu, TALENT_CENTERS.glory[1], TALENT_CENTERS.glory[2])
+    assert(menu.selectedTalent == "strength", "owned glory cannot be selected again")
+
+    menu:gamepadpressed(nil, "dpdown")
+    assert(menu.selectedTalent == "agility")
+    menu:gamepadpressed(nil, "dpright")
+    assert(menu.selectedTalent == "recovery")
+    menu:gamepadpressed(nil, "a")
+    assert(d.talents.recovery == 1, "A upgrades the selected talent")
+
+    d.gold = 0
+    menu:gamepadpressed(nil, "a")
+    assert(d.talents.recovery == 1 and menu.talentFailTimer > 0, "no gold: nothing bought, message shown")
+end
+
+local QUEST_SUBTAB_CENTERS = { quests = { 169, 13 }, weekly = { 227, 13 }, achievements = { 285, 13 } }
+
+T["hub quests: every subtab is reachable from every page"] = function()
+    resetSave()
+    local menu = newMenu()
+    tap(menu, 26 + 44, 220) -- onglet QUESTS
+    assert(menu.currentTab == "quests" and menu.questSubPage == "quests")
+    for _, from in ipairs({ "quests", "weekly", "achievements" }) do
+        for _, to in ipairs({ "quests", "weekly", "achievements" }) do
+            menu.questSubPage = from
+            tap(menu, QUEST_SUBTAB_CENTERS[to][1], QUEST_SUBTAB_CENTERS[to][2])
+            assert(menu.questSubPage == to, from .. " -> " .. to)
+        end
+    end
     menu.questSubPage = "achievements"
-    menu.pressedBtn = "tab_quests"
-    menu:touchreleased(1, 50, 220)
-    assert(menu.questSubPage == "quests", "Tapping dock tab_quests should reset questSubPage to quests")
+    menu:gamepadpressed(nil, "b")
+    assert(menu.questSubPage == "quests", "B goes back to daily quests")
+    menu:gamepadpressed(nil, "b")
+    assert(menu.currentTab == "play", "B again goes back to PLAY")
+end
+
+T["hub quests: a finished weekly mission can be claimed"] = function()
+    local d = resetSave()
+    local menu = newMenu()
+    menu.currentTab = "quests"
+    menu.questSubPage = "weekly"
+    local list, w = Save.getWeeklyQuestList()
+    local quest = list[1]
+    w.progress[quest.kind] = quest.goal
+    local gold, gems = d.gold, d.gems
+    tap(menu, 281, 32 + 14)
+    assert(w.claimed[quest.id], "weekly mission claimed")
+    assert(d.gold > gold or d.gems > gems, "reward granted")
+end
+
+T["hub chests: SHOP subtab, chest quest progress"] = function()
+    local d = resetSave()
+    local menu = newMenu()
+    tap(menu, 26 + 5 * 44, 220) -- onglet CHESTS
+    assert(menu.currentTab == "chests" and menu.chestSubPage == "chests")
+    tap(menu, 285, 13)
+    assert(menu.chestSubPage == "shop")
+    tap(menu, 227, 13)
+    assert(menu.chestSubPage == "chests")
+    local before = Save.getDailyQuests().progress.chests or 0
+    tap(menu, 81, 150) -- coffre doré
+    assert(menu.openingChest == "gold")
+    assert((Save.getDailyQuests().progress.chests or 0) == before + 1, "opening a chest counts for chest quests")
+end
+
+T["hub play: every mode card is selectable, including Arena"] = function()
+    resetSave()
+    local menu = newMenu()
+    local modes = { "ascension", "infinite", "boss_rush", "survival" }
+    for i, mode in ipairs(modes) do
+        tap(menu, 60, 100 + (i - 1) * 24 + 11)
+        assert(menu.selectedMode == mode, "mode card " .. i .. " selects " .. mode)
+    end
+    menu:gamepadpressed(nil, "dpdown")
+    assert(menu.selectedMode == "ascension", "d-pad cycles modes")
+end
+
+T["hub: leaving the forge closes the item sheet"] = function()
+    resetSave()
+    local menu = newMenu()
+    tap(menu, 26 + 3 * 44, 220) -- onglet FORGE
+    assert(menu.currentTab == "equipment")
+    menu.inventory:openModal("bear_ring", nil)
+    tap(menu, 26 + 4 * 44, 220) -- onglet TALENTS
+    assert(menu.currentTab == "talents" and menu.inventory.modalItem == nil)
 end
 
 return T

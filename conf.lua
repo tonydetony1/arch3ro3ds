@@ -1,12 +1,12 @@
 function love.conf(t)
     t.identity = "arch3ro"
-    -- Fichiers du jeu cherchés AVANT le dossier de sauvegarde : sinon chaque require et
-    -- chaque ressource commence par une recherche sur la carte SD (~85 ms par fichier sur
-    -- 3DS, soit plusieurs secondes au démarrage). Les noms des fichiers de sauvegarde
-    -- n'existent pas dans le jeu, ils restent trouvés dans le dossier de sauvegarde.
+    -- Game files searched BEFORE the save directory: otherwise every require and
+    -- asset lookup checks the SD card first (~85 ms per file on 3DS, taking
+    -- multiple seconds on boot). Save file names do not exist in the game archive,
+    -- so they are still found in the save directory.
     t.appendidentity = true
 
-    -- IMPORTANT : Sur 3DS LÖVE-Potion, t.window DOIT exister pour que love.window.setMode() initialise le GPU PICA200
+    -- IMPORTANT: On 3DS LÖVE-Potion, t.window MUST exist for love.window.setMode() to initialize the PICA200 GPU
     if t.window then
         t.window.title = "Arch3ro"
         t.window.width = 400
@@ -21,13 +21,13 @@ function love.conf(t)
         end
     end
 
-    -- Optimisation mémoire Old 3DS : désactiver les modules lourds inutilisés
+    -- Old 3DS memory optimization: disable unused heavy modules
     if t.modules then
         t.modules.physics = false
         t.modules.video = false
         t.modules.thread = false
-        -- Sans le firmware DSP (sdmc:/3ds/dspfirm.cdc, dump DSP1), le module audio échoue et
-        -- LÖVE Potion s'arrête avant d'ouvrir la fenêtre : on démarre alors sans son
+        -- Without DSP firmware (sdmc:/3ds/dspfirm.cdc, DSP1 dump), the audio module fails
+        -- and LÖVE Potion exits before opening the window: boot without sound in that case
         if love._console or love._os == "3DS" then
             local dsp = io.open("sdmc:/3ds/dspfirm.cdc", "rb")
             if dsp then dsp:close() else t.modules.audio = false end

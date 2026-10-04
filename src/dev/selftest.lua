@@ -64,8 +64,13 @@ function SelfTest.update(gameStateMachine, testFrames)
             local upgradeCost = ItemsData.getUpgradeCost(preLvl, Save.getItemRarity and Save.getItemRarity(bow) or "common")
             Save.addGold(upgradeCost + 1000) -- solde garanti pour des tests idempotents
             local preGold = menu.saveData.gold
-            menu.inventory.pressedBtn = "upgrade"
-            menu.inventory:touchreleased(1, 150, 150)
+            -- Vrai appui sur le bouton dessiné (la Forge n'agit que si le stylet est relâché dessus)
+            menu.inventory:refresh()
+            local upBtn = menu.inventory:getModalButton("upgrade")
+            assert(upBtn, "Forge modal must offer an upgrade button")
+            local ux, uy = upBtn.x + upBtn.w / 2, upBtn.y + upBtn.h / 2
+            menu.inventory:touchpressed(1, ux, uy)
+            menu.inventory:touchreleased(1, ux, uy)
             local postLvl = menu.saveData.itemLevels[bow]
             assert(postLvl == preLvl + 1, "Item level should increment after forge upgrade")
             assert(menu.saveData.gold < preGold, "Gold should be deducted for upgrade")
@@ -256,6 +261,9 @@ function SelfTest.update(gameStateMachine, testFrames)
             -- 1 free, 2 obtained -> activeCount = preActiveCount + 1
             assert(g.dummyPool.activeCount == preActiveCount + 1, "Splitter must spawn 2 mini_slimes on death")
             print(string.format("[TEST] Archetype 6 'Splitter' VALIDATED: Death Hook successfully spawned 2 Mini-Slimes without GC allocations."))
+            g.dummyPool:clear()
+            g.projectilePool:clear()
+            g.player.hp = g.player.maxHp
 
         elseif testFrames == 52 then
             -- 3b. VALIDATION DU SANCTUAIRE DE L'ANGE (Salles 5, 15, 25...)
@@ -662,10 +670,19 @@ function SelfTest.update(gameStateMachine, testFrames)
 
         elseif testFrames == 108 then
             local g = gameStateMachine.current
-            assert(#g.player.pets == 2, "Player must have 2 companion pets (laser_bat & ghost_mage)")
+            -- Les familiers en combat sont exactement ceux des emplacements Familier 1 / 2
+            local Pet = require("src.entities.pet")
+            local eq = Save.get().equipped
+            local expected = {}
+            for _, slot in ipairs({ "pet1", "pet2" }) do
+                if eq[slot] then expected[#expected + 1] = Pet.getDef(eq[slot]).type end
+            end
+            assert(#expected >= 1, "Starter kit must equip at least one pet")
+            assert(#g.player.pets == #expected, "Combat pets must match the equipped pet slots")
+            for i, petType in ipairs(expected) do
+                assert(g.player.pets[i].type == petType, "Pet " .. i .. " must be " .. petType)
+            end
             local pet1 = g.player.pets[1]
-            local pet2 = g.player.pets[2]
-            assert(pet1.type == "laser_bat" and pet2.type == "ghost_mage", "Pets must be Laser Bat and Ghost Mage")
         
             -- Déplacement du joueur
             g.player.x = 350
@@ -1125,6 +1142,8 @@ function SelfTest.update(gameStateMachine, testFrames)
                 gameStateMachine:switch("game", { mode = "ascension", startRoom = chapter * 10 })
                 local bg = gameStateMachine.current
                 bg.player.maxHp, bg.player.hp = 1e9, 1e9
+                bg.bossIntroTimer = 0
+                bg.player.damageMult = 0
                 local boss, maxPhase, hitTimer = nil, 0, 0
                 for _ = 1, 9000 do
                     bg.isDrafting = false

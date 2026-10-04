@@ -19,6 +19,8 @@ local Admin = require("src.data.admin")
 local Palette = require("src.render.palette")
 local PixelFont = require("src.ui.pixel_font")
 local Player = require("src.entities.player")
+local Pet = require("src.entities.pet")
+local Talents = require("src.data.talents")
 local Projectile = require("src.entities.projectile")
 local Dummy = require("src.entities.dummy")
 local Loot = require("src.entities.loot")
@@ -62,6 +64,9 @@ end
 
 local GameState = {}
 GameState.__index = GameState
+
+local RING_SLOTS = { "ring1", "ring2" }
+local PET_SLOTS = { "pet1", "pet2" }
 
 local function checkAABB(x1, y1, w1, h1, x2, y2, w2, h2)
     return x1 < x2 + w2 and
@@ -121,45 +126,7 @@ function GameState:enter(params)
     Skills.checkSynergies(self.player, self.acquiredSkills)
 
     if saveData and saveData.equipped then
-        local wId = saveData.equipped.weapon or "starter_bow"
-        self.player:equipWeapon(wId)
-
-        local aId = saveData.equipped.armor
-        if aId then
-            local aStats = Items.getStats(aId, Save.getItemLevel(aId), Save.getItemRarity(aId), Save.getItemStars(aId))
-            self.player.maxHp = self.player.maxHp + aStats.hp
-            self.player.hp = self.player.maxHp
-            self.player.dodgeChance = (self.player.dodgeChance or 0) + (aStats.dodge or 0) / 100
-        end
-
-        -- Anneaux équipés : prise en compte de ring1 et ring2
-        local ringList = { saveData.equipped.ring1 or saveData.equipped.ring, saveData.equipped.ring2 }
-        for _, rId in ipairs(ringList) do
-            if rId then
-                local rStats = Items.getStats(rId, Save.getItemLevel(rId), Save.getItemRarity(rId), Save.getItemStars(rId))
-                self.player.critChance = self.player.critChance + ((rStats.crit or 0) / 100)
-                self.player.damageMult = self.player.damageMult + ((rStats.atk or 0) / 30)
-                if rStats.hp and rStats.hp > 0 then
-                    self.player.maxHp = self.player.maxHp + rStats.hp
-                    self.player.hp = self.player.hp + rStats.hp
-                end
-                if rStats.dodge and rStats.dodge > 0 then
-                    self.player.dodgeChance = (self.player.dodgeChance or 0) + (rStats.dodge / 100)
-                end
-            end
-        end
-
-        -- Familiers équipés : synchronisation stricte avec l'équipement réel
-        self.player.pets = {}
-        local Pet = require("src.entities.pet")
-        local p1Id = saveData.equipped.pet1 or saveData.equipped.pet
-        if p1Id then
-            table.insert(self.player.pets, Pet.new(p1Id, 1))
-        end
-        local p2Id = saveData.equipped.pet2
-        if p2Id then
-            table.insert(self.player.pets, Pet.new(p2Id, 2))
-        end
+        self:applyEquipment(saveData.equipped)
     end
 
     -- 3. Pools universels pré-alloués (Zéro allocation en combat)
@@ -198,21 +165,9 @@ function GameState:enter(params)
     self.gameOverTimer = 0
     self.hasSpunStartWheel = false
 
-    -- Application des Talents permanents
+    -- Application des Talents permanents (effets décrits dans src/data/talents.lua)
     local talents = Save.getTalents()
-    if talents then
-        if talents.strength and talents.strength > 0 then
-            self.player.damageMult = self.player.damageMult + talents.strength * 0.05
-        end
-        if talents.vitality and talents.vitality > 0 then
-            local bonusHp = talents.vitality * 30
-            self.player.maxHp = self.player.maxHp + bonusHp
-            self.player.hp = self.player.maxHp
-        end
-        if talents.agility and talents.agility > 0 then
-            self.player.dodgeChance = (self.player.dodgeChance or 0) + talents.agility * 0.02
-        end
-    end
+    Talents.apply(self.player, talents)
 
     -- Bouton tactile Pause
     self.pauseBtn = { x = 290, y = 2, w = 28, h = 21 }
@@ -238,6 +193,50 @@ function GameState:enter(params)
             self.pendingGloryDraft = true
         else
             self:openDraft()
+        end
+    end
+end
+
+-- Équipement de la Forge : chacun des 6 emplacements compte une seule fois, et le niveau,
+-- la rareté et les étoiles de chaque objet s'appliquent en combat
+function GameState:applyEquipment(equipped)
+    local player = self.player
+
+    -- Arme : son type fixe le tir, sa puissance (Forge) multiplie les dégâts.
+    -- Emplacement vide : arc de départ, sans bonus.
+    player:equipWeapon(equipped.weapon or "starter_bow")
+    if equipped.weapon then
+        player.damageMult = player.damageMult + (Save.getItemPower(equipped.weapon) - 1)
+    end
+
+    local aId = equipped.armor
+    if aId then
+        local aStats = Save.getItemStats(aId)
+        player.maxHp = player.maxHp + aStats.hp
+        player.hp = player.maxHp
+        player.dodgeChance = (player.dodgeChance or 0) + (aStats.dodge or 0) / 100
+    end
+
+    for _, slot in ipairs(RING_SLOTS) do
+        local rId = equipped[slot]
+        if rId then
+            local rStats = Save.getItemStats(rId)
+            player.critChance = player.critChance + ((rStats.crit or 0) / 100)
+            player.damageMult = player.damageMult + ((rStats.atk or 0) / 30)
+            if rStats.hp > 0 then
+                player.maxHp = player.maxHp + rStats.hp
+                player.hp = player.hp + rStats.hp
+            end
+            player.dodgeChance = (player.dodgeChance or 0) + (rStats.dodge or 0) / 100
+        end
+    end
+
+    -- Familiers : exactement ceux des emplacements Familier 1 / Familier 2
+    player.pets = {}
+    for i, slot in ipairs(PET_SLOTS) do
+        local pId = equipped[slot]
+        if pId then
+            table.insert(player.pets, Pet.new(pId, i, Save.getItemPower(pId)))
         end
     end
 end
@@ -825,7 +824,8 @@ function GameState:update(dt)
                     self:openDraft()
                 end
             elseif lType == "heart" then
-                self.player.hp = math.min(self.player.maxHp, self.player.hp + lVal)
+                local heal = math.floor(lVal * (self.player.healMult or 1) + 0.5)
+                self.player.hp = math.min(self.player.maxHp, self.player.hp + heal)
                 Audio.play("pickup_heart", 0.06, 0.7)
             end
             self.lootPool:free(loot)

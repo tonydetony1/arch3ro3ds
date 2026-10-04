@@ -1,9 +1,10 @@
 -- src/data/save.lua
--- Système de persistance des données joueur (Or, Gemmes, Inventaire, Équipement, Records)
--- Compatible 100% LÖVEPotion 3DS et LÖVE2D PC via love.filesystem
+-- Player data persistence system (Gold, Gems, Inventory, Equipment, Records)
+-- 100% compatible with Nintendo 3DS (LÖVE-Potion) and PC Desktop (LÖVE2D) via love.filesystem
 
 local Balance = require("src.data.balance")
 local Admin = require("src.data.admin")
+local Talents = require("src.data.talents")
 
 local Save = {
     SAVE_FILE = "arch3ro_save.lua",
@@ -11,10 +12,10 @@ local Save = {
     data = nil,
 }
 
--- Marqueur de fin : un fichier sans lui a été tronqué (coupure pendant l'écriture)
+-- End marker: a file without this was truncated (interrupted during write)
 local END_MARK = "-- fin arch3ro"
 
--- Données par défaut pour une nouvelle partie
+-- Default data for a new game
 local function getDefaultData()
     return {
         gold = 350,
@@ -45,7 +46,7 @@ local function getDefaultData()
         selectedChapter = 1,
         audio = { music = 0.55, sfx = 0.85 },
 
-        -- Quêtes journalières & passe de combat
+        -- Daily quests & battle pass
         dailyQuests = {
             day = "",
             points = 0,
@@ -53,17 +54,17 @@ local function getDefaultData()
             claimed = {},
             claimedTiers = {},
         },
-        -- Missions hebdomadaires (compteurs séparés des quotidiennes)
+        -- Weekly quests (tracked separately from daily quests)
         weeklyQuests = { week = "", progress = {}, claimed = {}, selected = {} },
-        -- Bestiaire : éliminations par type de monstre
+        -- Bestiary: kills per monster type
         bestiary = {},
-        -- Records des modes événement
+        -- Event mode records
         events = { bossRushBest = 0, survivalBest = 0 },
 
         patrolGold = 150,
         patrolMax = 500,
-        -- Équipement de départ : uniquement la panoplie commune du Rôdeur.
-        -- Tout le reste se débloque dans les coffres (voir Items.DROP_TABLES).
+        -- Starting equipment: only common Ranger gear.
+        -- Everything else unlocks via chests (see Items.DROP_TABLES).
         itemCopies = {
             starter_bow = 1,
             vest_dexterity = 1,
@@ -75,16 +76,14 @@ local function getDefaultData()
         achievements = {},
         shop = { day = "", bought = {} },
         energyStamp = 0,
+        -- Six slots (see Save.EQUIP_SLOTS); an empty slot is simply absent
         equipped = {
             weapon = "starter_bow",
             armor = "vest_dexterity",
-            ring = "wolf_ring",
             ring1 = "wolf_ring",
-            ring2 = nil,
-            pet = "bat_companion",
             pet1 = "bat_companion",
-            pet2 = nil,
         },
+        dualSlotsV2 = true, -- 6-slot equipment layout (see Save.migrateEquipment)
         itemLevels = {
             starter_bow = 1,
             vest_dexterity = 1,
@@ -97,20 +96,20 @@ local function getDefaultData()
             "wolf_ring",
             "bat_companion",
         },
-        -- Marqueur de migration : les anciennes sauvegardes possédaient tout le catalogue
+        -- Migration flag: older saves owned the entire catalog by default
         itemUnlockRework = true,
         settings = {
             debugMode = true,
             sound = true,
-            depth3d = 1.0,       -- intensité du relief stéréoscopique (0 à 1.5)
-            showDamage = true,   -- chiffres de dégâts flottants
-            lowPower = false,    -- mode économie : moins de particules (Old 3DS)
-            autoDash = false,    -- esquive automatique quand un projectile arrive
+            depth3d = 1.0,       -- stereoscopic 3D depth intensity (0 to 1.5)
+            showDamage = true,   -- floating combat damage numbers
+            lowPower = false,    -- power saving mode: fewer particles (Old 3DS)
+            autoDash = false,    -- automatic dodge dash when a projectile nears
         },
     }
 end
 
--- Sérialiseur Lua natif récursif (Zéro dépendance externe, infaillible sur Old 3DS)
+-- Native recursive Lua serializer (zero external dependencies, reliable on Old 3DS)
 local function serializeTable(val, indent)
     indent = indent or ""
     local t = type(val)
@@ -121,7 +120,14 @@ local function serializeTable(val, indent)
     elseif t == "table" then
         local parts = { "{\n" }
         local nextIndent = indent .. "  "
-        for k, v in pairs(val) do
+        local keys = {}
+        for k in pairs(val) do keys[#keys + 1] = k end
+        table.sort(keys, function(a, b)
+            if type(a) == type(b) then return a < b end
+            return type(a) < type(b)
+        end)
+        for _, k in ipairs(keys) do
+            local v = val[k]
             local keyStr = (type(k) == "string" and string.match(k, "^[a-zA-Z_][a-zA-Z0-9_]*$"))
                 and k or "[" .. serializeTable(k) .. "]"
             table.insert(parts, nextIndent .. keyStr .. " = " .. serializeTable(v, nextIndent) .. ",\n")
@@ -133,14 +139,14 @@ local function serializeTable(val, indent)
     end
 end
 
--- Lit un fichier de sauvegarde en sécurité : contenu complet (marqueur de fin) et exécuté
--- dans un environnement vide (une sauvegarde modifiée ne peut appeler aucune fonction).
+-- Safely reads a save file: complete content (end marker) executed in a sandbox
+-- (a modified save cannot invoke any external functions).
 local function readSaveFile(path)
-    -- Lecture directe (un fichier absent renvoie nil) : pas de getInfo préalable, chaque
-    -- recherche de fichier coûte cher sur la carte SD de la 3DS
+    -- Direct read (missing file returns nil): no prior getInfo call,
+    -- since each file lookup is costly on 3DS SD cards
     local okRead, content = pcall(love.filesystem.read, path)
     if not okRead or type(content) ~= "string" then return nil end
-    -- Les anciennes sauvegardes (avant le marqueur) restent acceptées si elles se terminent par "}"
+    -- Older saves (before the end marker) are still accepted if they end with "}"
     if not content:find(END_MARK, 1, true) and not content:match("}%s*$") then return nil end
     local chunk = loadstring(content, "=" .. path)
     if not chunk then return nil end
@@ -150,8 +156,8 @@ local function readSaveFile(path)
     return nil
 end
 
--- Des deux fichiers valides, celui qui porte le numéro de sauvegarde le plus élevé
--- (anciennes sauvegardes sans numéro : 0, le fichier principal l'emporte à égalité)
+-- Between the two valid save files, pick the one with the highest sequence number
+-- (legacy saves without a sequence number default to 0; main save wins on ties)
 local function newestSave()
     local main = readSaveFile(Save.SAVE_FILE)
     local backup = readSaveFile(Save.BACKUP_FILE)
@@ -163,33 +169,24 @@ local function newestSave()
     return main or backup
 end
 
--- Chargement depuis le stockage persistant (le plus récent des deux fichiers valides)
+-- Load from persistent storage (picks the newest valid slot)
 function Save.load()
     if Save.data then return Save.data end
 
     local loadedData = newestSave()
     if loadedData then
         Save.data = loadedData
-        -- Empreinte avant migrations : on ne réécrit la sauvegarde que si elles ont changé
-        -- quelque chose (une écriture sur carte SD coûte ~0,1 s au démarrage)
+        -- Fingerprint before migrations: only rewrite the save if a migration changed
+        -- something (writing to an SD card costs ~0.1 s on boot)
         local loadedText = serializeTable(loadedData)
-        -- Sécurité : injection des valeurs manquantes si mise à jour du schéma
+        -- Before default values: they would introduce the dualSlotsV2 flag
+        Save.migrateEquipment()
+        -- Safety: inject missing keys in case schema was updated
         local defaultData = getDefaultData()
         for k, v in pairs(defaultData) do
             if Save.data[k] == nil then
                 Save.data[k] = v
             end
-        end
-        if not Save.data.dualSlotsV2 then
-            if Save.data.equipped then
-                Save.data.equipped.ring1 = Save.data.equipped.ring1 or Save.data.equipped.ring
-                Save.data.equipped.pet1 = Save.data.equipped.pet1 or Save.data.equipped.pet
-            end
-            Save.data.dualSlotsV2 = true
-        end
-        if Save.data.equipped then
-            Save.data.equipped.ring = Save.data.equipped.ring1 or Save.data.equipped.ring2
-            Save.data.equipped.pet = Save.data.equipped.pet1 or Save.data.equipped.pet2
         end
         if Save.data.inventory then
             local existing = {}
@@ -219,8 +216,8 @@ function Save.load()
                 glory = 0,
             }
         end
-        -- Migration : les anciennes sauvegardes donnaient tout le catalogue d'entrée.
-        -- On ne garde que la panoplie de départ ; le reste se débloque en coffre.
+        -- Migration: older saves gave the entire item catalog up front.
+        -- We only keep the starter set; the rest unlocks via chests.
         if not Save.data.itemUnlockRework then
             Save.applyUnlockRework()
         end
@@ -230,16 +227,16 @@ function Save.load()
         return Save.data
     end
 
-    -- Première partie ou fichier corrompu : initialisation par défaut
+    -- First game or corrupted file: default initialization
     Save.data = getDefaultData()
     Admin.load(nil)
     Save.save()
     return Save.data
 end
 
--- Efface toute la progression et repart d'une sauvegarde neuve
+-- Clear all progress and start fresh
 function Save.reset()
-    -- Le numéro continue : l'ancienne progression (numéro plus élevé) ne doit pas revenir
+    -- Sequence number continues: older progress with higher seq must not overwrite
     local seq = Save.data and Save.data.saveSeq
     Save.data = getDefaultData()
     Save.data.saveSeq = seq
@@ -249,7 +246,7 @@ function Save.reset()
     return Save.data
 end
 
--- Applique les réglages de la page Paramètres aux modules concernés
+-- Apply Settings page configuration to relevant modules
 function Save.applySettings()
     local d = Save.get()
     local st = d.settings or {}
@@ -264,11 +261,11 @@ function Save.applySettings()
     end
 end
 
--- Équipement de départ conservé lors de la refonte des déblocages
+-- Starter equipment retained during the unlock rework
 Save.STARTER_ITEMS = { "starter_bow", "vest_dexterity", "wolf_ring", "bat_companion" }
 
--- Retire du sac tout ce qui n'a pas été gagné : seule la panoplie de départ reste.
--- Compense le joueur avec de l'or pour qu'il puisse ouvrir des coffres immédiatement.
+-- Remove unearned items from inventory: only starter equipment remains.
+-- Compensate player with gold so they can immediately open chests.
 function Save.applyUnlockRework()
     local d = Save.data
     if not d then return end
@@ -291,14 +288,29 @@ function Save.applyUnlockRework()
     end
     d.inventory = newInventory
 
-    -- Dédommagement : de quoi ouvrir deux coffres dorés
+    -- Compensation: enough gold to open two gold chests
     if removed > 0 then
         d.gold = (d.gold or 0) + 300
     end
     d.itemUnlockRework = true
 end
 
--- Vide les emplacements équipés qui pointent vers un objet non possédé
+-- Migration: before dual slots, rings and pets lived in equipped.ring / equipped.pet.
+-- These keys duplicated ring1 / pet1 and caused double counting: remove them.
+function Save.migrateEquipment()
+    local d = Save.data
+    local eq = d and d.equipped
+    if type(eq) ~= "table" then return end
+    if not d.dualSlotsV2 then
+        eq.ring1 = eq.ring1 or eq.ring
+        eq.pet1 = eq.pet1 or eq.pet
+        d.dualSlotsV2 = true
+    end
+    eq.ring, eq.pet = nil, nil
+end
+
+-- Clean up equipment: only keep the 6 valid slot keys, each with an owned item
+-- of the correct type equipped once. Missing items fallback to starter gear.
 function Save.sanitizeEquipment()
     local d = Save.data
     if not d or not d.equipped then return end
@@ -307,20 +319,31 @@ function Save.sanitizeEquipment()
     for _, id in ipairs(d.inventory or {}) do owned[id] = true end
 
     local fallback = { weapon = "starter_bow", armor = "vest_dexterity", ring1 = "wolf_ring", pet1 = "bat_companion" }
-    for slot, itemId in pairs(d.equipped) do
+    local clean, worn = {}, {}
+    for _, slot in ipairs(Save.EQUIP_SLOT_ORDER) do
+        local itemId = d.equipped[slot]
         if itemId and not owned[itemId] then
-            d.equipped[slot] = (fallback[slot] and owned[fallback[slot]]) and fallback[slot] or nil
+            itemId = (fallback[slot] and owned[fallback[slot]]) and fallback[slot] or nil
+        end
+        if itemId and Save.slotAccepts(slot, itemId) and not worn[itemId] then
+            clean[slot] = itemId
+            worn[itemId] = true
         end
     end
-    d.equipped.ring = d.equipped.ring1
-    d.equipped.pet = d.equipped.pet1
+    -- Modify in-place only where needed: an already clean save remains identical
+    -- and is not rewritten at boot (see Save.load)
+    for slot, itemId in pairs(d.equipped) do
+        if clean[slot] ~= itemId then d.equipped[slot] = nil end
+    end
+    for slot, itemId in pairs(clean) do
+        if d.equipped[slot] ~= itemId then d.equipped[slot] = itemId end
+    end
 end
 
--- Écriture en alternance (ping-pong) : chaque sauvegarde porte un numéro croissant et
--- va dans le fichier qui contient la plus ancienne des deux. Une coupure (batterie,
--- console éteinte) pendant l'écriture laisse donc toujours la précédente intacte, et
--- Save.load reprend le fichier valide le plus récent. Une seule écriture par sauvegarde :
--- sur la carte SD de la 3DS, chaque écriture coûte ~0,1 s quelle que soit sa taille.
+-- Ping-pong save writing: each save increments sequence number and writes to
+-- the older slot. A power loss during write leaves the other slot intact,
+-- and Save.load recovers the newest valid slot. Single write per save:
+-- on 3DS SD cards, every write takes ~0.1 s regardless of size.
 function Save.save()
     if not Save.data then return false end
     local seq = (Save.data.saveSeq or 0) + 1
@@ -334,9 +357,9 @@ function Save.save()
 end
 
 -- ============================================================================
--- REPRISE DE PARTIE : instantané de la course au début de chaque salle
+-- RUN RESUME: snapshot of the run at the start of each room
 -- ============================================================================
--- Champs du héros qui ne doivent pas être restaurés (position, vitesse, minuteries)
+-- Hero fields that must not be restored (position, velocity, timers)
 local RUN_SKIP = {
     x = true, y = true, vx = true, vy = true, targetAngle = true, currentTarget = true,
     isMoving = true, wasMoving = true, hasInput = true, benchInputX = true, benchInputY = true,
@@ -388,7 +411,7 @@ function Save.get()
     return Save.data
 end
 
--- Ajout d'or
+-- Add gold
 function Save.addGold(amount)
     local d = Save.get()
     d.gold = math.max(0, d.gold + amount)
@@ -396,7 +419,7 @@ function Save.addGold(amount)
     return d.gold
 end
 
--- Ajout de gemmes
+-- Add gems
 function Save.addGems(amount)
     local d = Save.get()
     d.gems = math.max(0, d.gems + amount)
@@ -404,13 +427,13 @@ function Save.addGems(amount)
     return d.gems
 end
 
--- Ajout d'un objet à l'inventaire
+-- Add item to inventory
 function Save.addItem(itemId)
     local d = Save.get()
     d.itemCopies = d.itemCopies or {}
     for _, id in ipairs(d.inventory) do
         if id == itemId then
-            -- Déjà possédé : incrémente le nombre de copies pour la fusion et donne un bonus d'or
+            -- Already owned: increment copy count for fusion and award gold bonus
             d.itemCopies[itemId] = (d.itemCopies[itemId] or 1) + 1
             Save.addGold(75)
             Save.save()
@@ -426,20 +449,51 @@ function Save.addItem(itemId)
     return true, "NEW ITEM"
 end
 
+-- ============================================================================
+-- EQUIPMENT: 6 slots, each reserved for a specific item type
+-- ============================================================================
+Save.EQUIP_SLOT_ORDER = { "weapon", "armor", "ring1", "ring2", "pet1", "pet2" }
 Save.EQUIP_SLOTS = {
-    weapon = true,
-    armor = true,
-    ring1 = true,
-    ring2 = true,
-    pet1 = true,
-    pet2 = true,
+    weapon = "weapon",
+    armor = "armor",
+    ring1 = "ring",
+    ring2 = "ring",
+    pet1 = "pet",
+    pet2 = "pet",
+}
+-- Candidate slots for each item type in order of filling
+Save.SLOTS_BY_TYPE = {
+    weapon = { "weapon" },
+    armor = { "armor" },
+    ring = { "ring1", "ring2" },
+    pet = { "pet1", "pet2" },
 }
 
--- Vérifie si un objet est équipé et renvoie (isEquipped, slotId)
+local function itemSlotType(itemId)
+    local Items = require("src.data.items")
+    local item = itemId and Items.get(itemId)
+    return item and item.slot or nil
+end
+
+-- Does the slot accept this item type? (e.g. a ring cannot go into a pet slot)
+function Save.slotAccepts(slot, itemId)
+    local slotType = Save.EQUIP_SLOTS[slot]
+    return slotType ~= nil and slotType == itemSlotType(itemId)
+end
+
+function Save.ownsItem(itemId)
+    local d = Save.get()
+    for _, id in ipairs(d.inventory or {}) do
+        if id == itemId then return true end
+    end
+    return false
+end
+
+-- Check if item is equipped, returns (isEquipped, slotId)
 function Save.isEquipped(itemId)
     local d = Save.get()
     if not d or not d.equipped or not itemId then return false, nil end
-    for slot in pairs(Save.EQUIP_SLOTS) do
+    for _, slot in ipairs(Save.EQUIP_SLOT_ORDER) do
         if d.equipped[slot] == itemId then
             return true, slot
         end
@@ -447,53 +501,63 @@ function Save.isEquipped(itemId)
     return false, nil
 end
 
--- Équiper un objet
+-- Equips an owned item into a compatible slot (replaces existing item).
+-- An item already equipped elsewhere moves to the new slot.
 function Save.equip(slot, itemId)
     local d = Save.get()
     if not d or not d.equipped then return false end
-    if Save.EQUIP_SLOTS[slot] then
-        -- Libère l'objet s'il était déjà dans un autre slot d'équipement
-        for otherSlot in pairs(Save.EQUIP_SLOTS) do
-            if otherSlot ~= slot and d.equipped[otherSlot] == itemId then
-                d.equipped[otherSlot] = nil
-            end
+    if not Save.slotAccepts(slot, itemId) or not Save.ownsItem(itemId) then return false end
+    for _, otherSlot in ipairs(Save.EQUIP_SLOT_ORDER) do
+        if otherSlot ~= slot and d.equipped[otherSlot] == itemId then
+            d.equipped[otherSlot] = nil
         end
-        d.equipped[slot] = itemId
-        d.equipped.ring = d.equipped.ring1 or d.equipped.ring2
-        d.equipped.pet = d.equipped.pet1 or d.equipped.pet2
-        Save.save()
-        return true
     end
-    return false
+    d.equipped[slot] = itemId
+    Save.save()
+    return true
 end
 
--- Déséquiper un emplacement
+-- Clear a slot
 function Save.unequip(slot)
     local d = Save.get()
-    if not d or not d.equipped then return false end
-    if Save.EQUIP_SLOTS[slot] then
-        d.equipped[slot] = nil
-        d.equipped.ring = d.equipped.ring1 or d.equipped.ring2
-        d.equipped.pet = d.equipped.pet1 or d.equipped.pet2
-        Save.save()
-        return true
-    end
-    return false
+    if not d or not d.equipped or not Save.EQUIP_SLOTS[slot] then return false end
+    if d.equipped[slot] == nil then return false end
+    d.equipped[slot] = nil
+    Save.save()
+    return true
 end
 
--- Obtenir le niveau d'un objet
+-- Get item level
 function Save.getItemLevel(itemId)
     local d = Save.get()
     return d.itemLevels[itemId] or 1
 end
 
--- Amélioration d'un équipement (Forge)
+-- Current item stats (level, fused rarity, stars)
+function Save.getItemStats(itemId)
+    local Items = require("src.data.items")
+    return Items.getStats(itemId, Save.getItemLevel(itemId), Save.getItemRarity(itemId), Save.getItemStars(itemId))
+end
+
+-- Item power ratio relative to base starter version (see Items.powerRatio)
+function Save.getItemPower(itemId)
+    local Items = require("src.data.items")
+    return Items.powerRatio(itemId, Save.getItemLevel(itemId), Save.getItemRarity(itemId), Save.getItemStars(itemId))
+end
+
+-- Upgrade cost for next level (depends on level and current rarity)
+function Save.getUpgradeCost(itemId)
+    local Items = require("src.data.items")
+    return Items.getUpgradeCost(Save.getItemLevel(itemId), Save.getItemRarity(itemId))
+end
+
+-- Equipment upgrade (Forge): returns (success, level, cost)
 function Save.upgradeItem(itemId)
     local d = Save.get()
     local lvl = Save.getItemLevel(itemId)
-    local cost = lvl * 120 -- Coût proportionnel au niveau
+    local cost = Save.getUpgradeCost(itemId)
 
-    if d.gold >= cost then
+    if Save.ownsItem(itemId) and d.gold >= cost then
         d.gold = d.gold - cost
         d.itemLevels[itemId] = lvl + 1
         Save.addQuestProgress("upgrades", 1)
@@ -503,7 +567,7 @@ function Save.upgradeItem(itemId)
     return false, lvl, cost
 end
 
--- Obtenir les talents
+-- Get talents
 function Save.getTalents()
     local d = Save.get()
     if not d.talents then
@@ -512,49 +576,32 @@ function Save.getTalents()
     return d.talents
 end
 
--- Coût du prochain talent
+-- Next talent upgrade cost (scales with total purchased talents)
 function Save.getTalentCost()
-    local talents = Save.getTalents()
-    local totalLevel = (talents.strength or 0) + (talents.vitality or 0) + (talents.recovery or 0) + (talents.agility or 0) + (talents.glory or 0)
+    local totalLevel = Talents.totalLevel(Save.getTalents())
     return Balance.COSTS.talentBase + totalLevel * Balance.COSTS.talentStep, totalLevel
 end
 
--- Amélioration d'un talent (sélectionné ou aléatoire)
+-- Buy a level for player-selected talent: returns (success, talent, level, cost)
 function Save.upgradeTalent(talentName)
     local d = Save.get()
     local talents = Save.getTalents()
-    local cost, totalLevel = Save.getTalentCost()
+    local cost = Save.getTalentCost()
 
-    if d.gold >= cost then
-        d.gold = d.gold - cost
-        local pool = { "strength", "vitality", "recovery", "agility" }
-        if (talents.glory or 0) == 0 then
-            table.insert(pool, "glory")
-        end
-        local chosen = talentName
-        local valid = false
-        if chosen and talents[chosen] ~= nil then
-            if chosen == "glory" and (talents.glory or 0) >= 1 then
-                valid = false
-            else
-                valid = true
-            end
-        end
-        if not valid then
-            chosen = pool[math.random(1, #pool)]
-        end
-        talents[chosen] = (talents[chosen] or 0) + 1
-        Save.save()
-        return true, chosen, talents[chosen], cost
+    if not Talents.canUpgrade(talentName, talents) or d.gold < cost then
+        return false, talentName, talents[talentName] or 0, cost
     end
-    return false, nil, totalLevel, cost
+    d.gold = d.gold - cost
+    talents[talentName] = (talents[talentName] or 0) + 1
+    Save.save()
+    return true, talentName, talents[talentName], cost
 end
 
 -- ============================================================================
--- NOUVEAUX SYSTÈMES ARCHERO 2 : HÉROS, PATROUILLE AFK, CHAPITRES & FUSION
+-- ARCHERO 2 SYSTEMS: HEROES, AFK PATROL, CHAPTERS & FUSION
 -- ============================================================================
 
--- Sélection du Héros Actif
+-- Active hero selection
 function Save.selectHero(heroId)
     local d = Save.get()
     d.unlockedHeroes = d.unlockedHeroes or { atreus = true, urasil = true }
@@ -566,7 +613,7 @@ function Save.selectHero(heroId)
     return false
 end
 
--- Déblocage d'un Héros avec Or ou Gemmes
+-- Unlock hero with Gold or Gems
 function Save.unlockHero(heroId)
     local Heroes = require("src.data.heroes")
     local h = Heroes.get(heroId)
@@ -593,7 +640,7 @@ function Save.unlockHero(heroId)
     return false
 end
 
--- Récolte de la Patrouille AFK (Idle Chest)
+-- Claim AFK Patrol (Idle Chest)
 function Save.claimPatrol()
     local d = Save.get()
     local amt = math.floor(d.patrolGold or 0)
@@ -606,7 +653,7 @@ function Save.claimPatrol()
     return 0
 end
 
--- Accumulation passive de la patrouille AFK
+-- Passive AFK patrol gold accumulation
 function Save.updatePatrol(dt)
     local d = Save.get()
     d.patrolMax = d.patrolMax or 500
@@ -615,9 +662,8 @@ function Save.updatePatrol(dt)
     end
 end
 
--- Sélection du Chapitre
 -- ============================================================================
--- QUÊTES JOURNALIÈRES & PASSE DE COMBAT
+-- DAILY QUESTS & BATTLE PASS
 -- ============================================================================
 local Quests = require("src.data.quests")
 
@@ -629,7 +675,7 @@ local function weekKey()
     return os.date("%Y-W%W")
 end
 
--- Récupère l'état des quêtes en réinitialisant si le jour a changé
+-- Returns quest state, resetting if date has rolled over
 function Save.getDailyQuests()
     local d = Save.get()
     d.dailyQuests = d.dailyQuests or { day = "", points = 0, progress = {}, claimed = {}, claimedTiers = {} }
@@ -643,7 +689,7 @@ function Save.getDailyQuests()
         q.progress = { kills = 0, rooms = 0, chests = 0, upgrades = 0, bosses = 0, skills = 0, gold = 0, pots = 0, runs = 0 }
         q.claimed = {}
         q.claimedTiers = {}
-        -- Nouvelle sélection de missions : le pool tourne chaque jour
+        -- Fresh mission draw: daily pool rotates each day
         q.selected = {}
         for _, quest in ipairs(Quests.dailySelection(q.day)) do
             q.selected[#q.selected + 1] = quest.id
@@ -659,7 +705,7 @@ function Save.getDailyQuests()
     return q
 end
 
--- Missions du jour effectivement tirées (objets complets, pas des identifiants)
+-- Daily quests currently drawn (full quest objects, not just ids)
 function Save.getDailyQuestList()
     local q = Save.getDailyQuests()
     local list = {}
@@ -670,7 +716,7 @@ function Save.getDailyQuestList()
     return list, q
 end
 
--- Missions hebdomadaires : compteurs séparés, remis à zéro chaque semaine
+-- Weekly quests: separate progress counters, reset weekly
 function Save.getWeeklyQuests()
     local d = Save.get()
     d.weeklyQuests = d.weeklyQuests or { week = "", progress = {}, claimed = {}, selected = {} }
@@ -700,13 +746,13 @@ function Save.getWeeklyQuestList()
     return list, w
 end
 
--- Avance un compteur de quête ("kills", "rooms", "chests", "upgrades", "bosses")
--- persist = true pour écrire immédiatement (hors combat)
+-- Progress a quest counter ("kills", "rooms", "chests", "upgrades", "bosses")
+-- persist = true writes immediately (outside combat)
 function Save.addQuestProgress(kind, amount, persist)
     local q = Save.getDailyQuests()
     q.progress[kind] = (q.progress[kind] or 0) + (amount or 1)
 
-    -- Les mêmes actions font avancer les missions de la semaine
+    -- Same actions also advance weekly missions
     local w = Save.getWeeklyQuests()
     w.progress[kind] = (w.progress[kind] or 0) + (amount or 1)
 
@@ -714,7 +760,7 @@ function Save.addQuestProgress(kind, amount, persist)
     return q.progress[kind]
 end
 
--- Réclame une mission hebdomadaire terminée
+-- Claim a completed weekly quest
 function Save.claimWeeklyQuest(questId)
     local quest = Quests.get(questId)
     if not quest then return false end
@@ -729,7 +775,7 @@ function Save.claimWeeklyQuest(questId)
     return true
 end
 
--- Réclame la récompense d'une quête terminée : renvoie true si accordée
+-- Claim a completed daily quest
 function Save.claimQuest(questId)
     local quest = Quests.get(questId)
     if not quest then return false end
@@ -745,7 +791,7 @@ function Save.claimQuest(questId)
     return true
 end
 
--- Réclame un palier de la jauge du passe
+-- Claim a battle pass gauge tier
 function Save.claimQuestTier(tierIndex)
     local tier = Quests.TIERS[tierIndex]
     if not tier then return false end
@@ -760,7 +806,7 @@ function Save.claimQuestTier(tierIndex)
 end
 
 -- ============================================================================
--- BESTIAIRE & RECORDS D'ÉVÉNEMENTS
+-- BESTIARY & EVENT RECORDS
 -- ============================================================================
 function Save.recordKill(monsterType, count)
     if not monsterType then return end
@@ -800,9 +846,7 @@ function Save.setChapter(chapIndex)
     return d.selectedChapter
 end
 
--- Rareté effective (Prend en compte les fusions passées)
--- Étoiles d'objet : gagnées en fusionnant un objet déjà au maximum de rareté
--- Succès : réclame la récompense d'un succès terminé
+-- Achievements: claim completed achievement reward
 function Save.claimAchievement(id)
     local Achievements = require("src.data.achievements")
     local a = Achievements.get(id)
@@ -819,7 +863,7 @@ function Save.claimAchievement(id)
     return true
 end
 
--- Boutique du jour : 3 offres tirées à partir de la date (identiques toute la journée)
+-- Daily shop: 3 daily offers seeded from the current date (consistent all day)
 function Save.getShop()
     local d = Save.get()
     d.shop = d.shop or { day = "", bought = {} }
@@ -848,13 +892,13 @@ function Save.addItemStar(itemId)
     local d = Save.get()
     d.itemStars = d.itemStars or {}
     local cur = d.itemStars[itemId] or 0
-    if cur >= 5 then return false end
+    if cur >= Save.MAX_ITEM_STARS then return false end
     d.itemStars[itemId] = cur + 1
     Save.save()
     return true
 end
 
--- Régénération d'énergie : +1 toutes les 6 minutes, même hors du jeu
+-- Energy regen: +1 every 6 minutes, even when game is closed
 local ENERGY_PERIOD = Balance.ENERGY.period
 
 function Save.updateEnergyRegen()
@@ -875,8 +919,8 @@ function Save.updateEnergyRegen()
     return d.energy - before
 end
 
--- Dépense l'énergie pour booster une partie. Renvoie false si la réserve est
--- insuffisante : la partie se lance quand même, simplement sans bonus.
+-- Spend energy to boost a run. Returns false if energy is insufficient
+-- (run still launches, simply without the bonus).
 function Save.spendEnergy(mode)
     local d = Save.get()
     Save.updateEnergyRegen()
@@ -892,7 +936,7 @@ function Save.spendEnergy(mode)
     return true, cost
 end
 
--- Temps restant (en secondes) avant la prochaine énergie
+-- Time remaining (in seconds) until next energy point
 function Save.energyCountdown()
     local d = Save.get()
     if d.energy >= d.maxEnergy then return 0 end
@@ -910,14 +954,22 @@ function Save.getItemRarity(itemId)
     return item and item.rarity or "common"
 end
 
--- Nombre de copies possédées d'un objet
+-- Number of owned copies of an item
 function Save.getItemCopies(itemId)
     local d = Save.get()
     d.itemCopies = d.itemCopies or {}
     return d.itemCopies[itemId] or 1
 end
 
--- Fusion d'équipement (3 -> 1 palier supérieur)
+-- Is fusion possible? Requires 3 copies and an available tier upgrade:
+-- higher rarity, or additional star (up to 5) once legendary
+Save.MAX_ITEM_STARS = 5
+function Save.canFuse(itemId)
+    if Save.getItemCopies(itemId) < 3 then return false end
+    return Save.getItemRarity(itemId) ~= "legendary" or Save.getItemStars(itemId) < Save.MAX_ITEM_STARS
+end
+
+-- Equipment fusion (3 -> 1 next tier)
 function Save.fuseItem(itemId)
     local d = Save.get()
     d.itemCopies = d.itemCopies or {}
@@ -938,7 +990,7 @@ function Save.fuseItem(itemId)
     local nextRarity = nextTiers[curRarity]
     if not nextRarity then
         -- Maximum rarity: fusion adds a star (+6% stats)
-        if Save.getItemStars(itemId) >= 5 then
+        if Save.getItemStars(itemId) >= Save.MAX_ITEM_STARS then
             return false, "MAXIMUM STARS"
         end
         d.itemCopies[itemId] = copies - 2
@@ -947,7 +999,7 @@ function Save.fuseItem(itemId)
         return true, curRarity, Save.getItemStars(itemId)
     end
 
-    -- Consomme 2 copies pour hisser l'objet au rang supérieur (3 -> 1)
+    -- Consumes 2 copies to upgrade item to next rarity tier (3 -> 1)
     d.itemCopies[itemId] = copies - 2
     d.itemRarities[itemId] = nextRarity
     Save.save()

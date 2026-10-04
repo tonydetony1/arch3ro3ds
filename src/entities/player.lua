@@ -205,7 +205,7 @@ function Player:addXp(amount)
         self.level = self.level + 1
         -- Formule exponentielle : premiers niveaux rapides, puis progression exigeante
         self.nextLevelXp = math.floor(50 * (self.level ^ 1.5))
-        self.hp = math.min(self.maxHp, self.hp + 20)
+        self.hp = math.min(self.maxHp, self.hp + math.floor(20 * (self.healMult or 1) + 0.5))
         leveledUp = true
     end
     return leveledUp

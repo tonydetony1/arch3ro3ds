@@ -19,6 +19,7 @@ assets/*.t3x
 .swarm/
 .claude-flow/
 tools/.claude-flow/
+.claude/
 
 # Cache Python & LÖVE
 tools/__pycache__/

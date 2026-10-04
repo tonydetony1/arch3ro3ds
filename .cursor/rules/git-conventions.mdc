@@ -1,0 +1,17 @@
+---
+description: Git commit messages and pull requests conventions
+alwaysApply: true
+---
+
+# Git & GitHub Conventions
+
+- **Language**: ALL Git commit messages, pull requests, branch names, and GitHub submissions MUST be written in **English**.
+- **Format**: Follow Conventional Commits:
+  - `feat(scope): ...`
+  - `fix(scope): ...`
+  - `docs(scope): ...`
+  - `perf(scope): ...`
+  - `refactor(scope): ...`
+  - `chore(scope): ...`
+  - `test(scope): ...`
+- **Code comments**: Write all code comments and documentation in English.
