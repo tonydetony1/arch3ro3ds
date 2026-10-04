@@ -22,11 +22,19 @@ local Balance = require("src.data.balance")
 local Talents = require("src.data.talents")
 local Pet = require("src.entities.pet")
 local SettingsPanel = require("src.ui.settings_panel")
+local WorldManager = require("src.core.world_manager")
 
 local MenuState = {}
 MenuState.__index = MenuState
 
 local MODE_LABELS = { ascension = "Ascension", infinite = "The Abyss", boss_rush = "Boss Rush", survival = "Arena" }
+
+-- Background of each world card in the Play tab (forest, desert, crystal, inferno, sky, void)
+local WORLD_CARD_BG = {
+    { 0.10, 0.22, 0.14 }, { 0.28, 0.18, 0.08 }, { 0.08, 0.16, 0.28 },
+    { 0.28, 0.10, 0.08 }, { 0.10, 0.18, 0.30 }, { 0.20, 0.10, 0.28 },
+}
+local LOCKED_TEXT = { 0.55, 0.58, 0.66, 1.0 }
 -- Mode card order on the PLAY tab (drawing, touch, d-pad)
 local PLAY_MODE_ORDER = { "ascension", "infinite", "boss_rush", "survival" }
 
@@ -49,13 +57,11 @@ function MenuState.new(stateMachine)
     -- Dedicated inventory manager with kinetic scrolling
     self.inventory = Inventory.new()
 
-    -- Chapters with distinct biomes and floors
-    self.chapters = {
-        { id = 1, name = "Emerald Plains", floors = 50, theme = "green", desc = "Slimes & Forest Wolves", bg = {0.10, 0.22, 0.14} },
-        { id = 2, name = "Crystal Caverns", floors = 30, theme = "blue", desc = "Bats & Stalactites", bg = {0.08, 0.16, 0.28} },
-        { id = 3, name = "Scorching Dunes", floors = 20, theme = "gold", desc = "Scorpions & Magma Worms", bg = {0.28, 0.18, 0.08} },
-        { id = 4, name = "Shadow Citadel", floors = 50, theme = "purple", desc = "Wraiths & Dark Skeletons", bg = {0.20, 0.10, 0.28} },
-    }
+    -- World cards: the worlds a run goes through, 10 floors each (src/core/world_manager.lua)
+    self.chapters = {}
+    for i, chap in ipairs(WorldManager.CHAPTERS) do
+        self.chapters[i] = { id = i, name = chap.name, boss = Bestiary.nameOf(chap.boss), bg = WORLD_CARD_BG[i] }
+    end
 
     -- Séquence Gacha d'ouverture de coffre
     self.openingChest = nil -- "gold" ou "obsidian"
@@ -443,26 +449,35 @@ function MenuState:drawPlayTab()
     UI.drawPillButton(cx + cw - 48, cy + 8, 20, 18, "", "blue", self.pressedBtn == "chap_prev", "arrow_left")
     UI.drawPillButton(cx + cw - 24, cy + 8, 20, 18, "", "blue", self.pressedBtn == "chap_next", "arrow_right")
 
-    -- Chapter Name
-    UI.drawText(chap.name:upper(), cx + 10, cy + 30, {0.98, 0.98, 1.0, 1.0}, {0.05, 0.06, 0.09, 1.0})
-    local prevF = love.graphics.getFont()
-    love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawText(chap.desc, cx + 10, cy + 46, {0.72, 0.80, 0.92, 1.0})
+    -- World name and boss (dimmed while the world is locked)
+    local records = self.saveData.records or {}
+    local best = math.max(records.ascensionMax or 1, records.infiniteMax or 0)
+    local prog = WorldManager.worldProgress(chap.id, best)
+    UI.drawText(chap.name:upper(), cx + 10, cy + 30, prog.unlocked and {0.98, 0.98, 1.0, 1.0} or LOCKED_TEXT, {0.05, 0.06, 0.09, 1.0})
+    UI.drawText("Boss: " .. chap.boss, cx + 10, cy + 46, {0.72, 0.80, 0.92, 1.0})
 
-    -- Floor progress bar
+    -- Floor progress of this world, from the best floor ever reached
     local barW = cw - 20
     local barX = cx + 10
     local barY = cy + 62
-    local progress = math.min(1.0, (self.saveData.records.ascensionMax or 1) / chap.floors)
-    UI.drawText(string.format("Floor %d / %d", math.min(chap.floors, self.saveData.records.ascensionMax or 1), chap.floors), barX, barY - 2, {0.85, 0.92, 1.0, 0.95})
-    love.graphics.setFont(prevF)
+    local progress, label
+    if not prog.unlocked then
+        progress, label = 0, string.format("LOCKED: floor %d+", prog.first)
+    elseif not prog.total then
+        progress, label = 1, string.format("Floor %d+  Best %d", prog.first, best)
+    elseif prog.cleared then
+        progress, label = 1, string.format("Floors %d-%d CLEARED", prog.first, prog.last)
+    else
+        progress = prog.reached / prog.total
+        label = string.format("Floors %d-%d  %d/%d", prog.first, prog.last, prog.reached, prog.total)
+    end
+    UI.drawText(label, barX, barY - 2, prog.unlocked and {0.85, 0.92, 1.0, 0.95} or LOCKED_TEXT)
 
-    -- Track de barre
+    -- Bar track, then the fill (nothing for a locked world)
     love.graphics.setColor(0.06, 0.08, 0.12, 0.95)
     love.graphics.rectangle("fill", barX, barY + 12, barW, 6, 3, 3)
-    -- Remplissage lumineux
     love.graphics.setColor(0.20, 0.85, 0.45, 1.0)
-    love.graphics.rectangle("fill", barX, barY + 12, math.max(4, barW * progress), 6, 3, 3)
+    if progress > 0 then love.graphics.rectangle("fill", barX, barY + 12, math.max(4, barW * progress), 6, 3, 3) end
 
     -- 2. BENTO 2: AFK PATROL (IDLE CHEST)
     local px, py, pw, ph = 206, 6, 108, 88
@@ -548,9 +563,9 @@ function MenuState:drawPlayTab()
     PixelFont.print(label, tx + 20, midY - 11, Palette.C.white, "main", 2, "shadow")
     Skin.pill(bx + bw - 20, midY - 6, 14, 12, "dark", "A")
 
-    -- Subtitle Mode & Chapter
+    -- Subtitle: selected mode (a run always starts on floor 1, whatever world card is shown)
     local subLabel = run and string.format("Room %d - in progress", run.room or 1)
-        or string.format("%s - Ch.%d", MODE_LABELS[self.selectedMode] or "Ascension", chap.id)
+        or (MODE_LABELS[self.selectedMode] or "Ascension")
     PixelFont.printf(subLabel, lx, ly + 78, lw, "center", {0.60, 0.95, 0.75, 1.0}, "main")
     if run then
         UI.drawPillButton(lx + lw - 66, ly + 8, 58, 18, "ABANDON", "red", self.pressedBtn == "abandon_run")
