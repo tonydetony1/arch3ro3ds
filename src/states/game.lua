@@ -318,7 +318,7 @@ function GameState:setupRoom(roomNum)
     self.mapW, self.mapH = spec.mapW, spec.mapH
 
     -- Sanctuaire d'un écran : caméra fixe, sans marge de ciel autour de la salle
-    self.camera:setBounds(self.mapW, self.mapH, spec.kind == "sanctuary" and 0 or Camera.SKY_MARGIN)
+    self.camera:setBounds(self.mapW, self.mapH, spec.kind == "sanctuary" and 0 or WorldManager.skyMargin(spec.chapterIndex))
     self.player:setBounds(self.mapW, self.mapH)
     self.obstacleManager:setTheme(spec.variant, spec.hazard)
     self.obstacleManager:generate(self.mapW, self.mapH, roomNum, spec.kind)

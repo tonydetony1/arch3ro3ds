@@ -154,6 +154,7 @@ local WorldManager = {
 WorldManager.THEMES = {
     [1] = {
         variant = nil,                       -- décor par défaut (prairie)
+        skyMargin = 36,                       -- floating island: open sky past the border
         ground = "4f9b45", groundLight = "5dac4d", groundDark = "438a3e", edge = "356f39",
         skyTop = "4f9be8", skyBottom = "cdeeff",
         wallTree = "tall_tree_a", wallTreeSmall = "tall_tree_b",
@@ -190,6 +191,7 @@ WorldManager.THEMES = {
     },
     [5] = {
         variant = "sky",
+        skyMargin = 36,                       -- floating island: open sky past the border
         ground = "8b9bb4", groundLight = "c0cbdc", groundDark = "5a6988", edge = "3a4466",
         skyTop = "3d7dd6", skyBottom = "dff2ff",
         wallTree = "crystal_spire", wallTreeSmall = "crystal_spire",
@@ -231,6 +233,12 @@ WorldManager.SANCTUARY_THEME = { angel = 7, devil = 8 }
 
 function WorldManager.getTheme(chapterIndex)
     return WorldManager.THEMES[chapterIndex or 1] or WorldManager.THEMES[1]
+end
+
+-- Pixels of sky the camera may show past the room border: only worlds drawn as floating
+-- islands (forest, sky). Elsewhere a plain sky gradient around the room reads as a void.
+function WorldManager.skyMargin(world)
+    return WorldManager.getTheme(world).skyMargin or 0
 end
 
 function WorldManager.getChapter(chapterIndex)
