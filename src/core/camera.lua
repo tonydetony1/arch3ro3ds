@@ -7,6 +7,10 @@ local Config = require("src.data.config")
 local Camera = {}
 Camera.__index = Camera
 
+-- Marge ciel ouvert : l'arène flotte sans toucher les bords absolus (0 = caméra fixe
+-- sur une salle d'un écran, comme les sanctuaires)
+Camera.SKY_MARGIN = 36
+
 function Camera.new()
     local self = setmetatable({}, Camera)
     self.viewportW = Config.TOP_WIDTH   -- 400
@@ -18,7 +22,7 @@ function Camera.new()
     self.y = self.halfH
     self.mapW = self.viewportW
     self.mapH = self.viewportH
-    self.margin = 36 -- Marge ciel ouvert : l'arène flotte sans toucher les bords absolus
+    self.margin = Camera.SKY_MARGIN
     self.lerpSpeed = 7.5 -- Vitesse de suivi fluide
 
     return self
@@ -40,7 +44,7 @@ end
 
 function Camera:clamp()
     -- Clamping avec marge céleste : révèle le ciel ouvert et les nuages en arrière-plan
-    local m = self.margin or 36
+    local m = self.margin or Camera.SKY_MARGIN
     local minX = self.halfW - m
     local maxX = math.max(minX, self.mapW - self.halfW + m)
     local minY = self.halfH - m

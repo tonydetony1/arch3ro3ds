@@ -280,6 +280,7 @@ function SelfTest.update(gameStateMachine, testFrames)
             assert(not srm:isOfferOpen(), "Offer must stay closed until the hero comes close")
             g:update(0.016)
             assert(not srm:isOfferOpen(), "Offer must stay closed while the hero is at the entrance")
+            assert(g.camera.x == 200 and g.camera.y == 120, "Sanctuary camera must stay fixed on the single screen")
             g:drawTop()
             g:drawBottom()
 
