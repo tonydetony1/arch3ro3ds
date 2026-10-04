@@ -55,6 +55,13 @@ function Encounters.budget(room, difficulty)
     return (Encounters.BUDGET_BASE + Encounters.BUDGET_PER_ROOM * (room - 1)) * (difficulty or 1)
 end
 
+-- HP multiplier for the part of a threat budget above BUDGET_CAP (deep Abyss rooms):
+-- the room cannot hold more monsters, so the surplus turns into extra HP
+function Encounters.hpOverflow(rawBudget)
+    if rawBudget <= Encounters.BUDGET_CAP then return 1 end
+    return 1 + (rawBudget - Encounters.BUDGET_CAP) / Encounters.BUDGET_CAP
+end
+
 function Encounters.waveCount(budget)
     if budget < 9 then return 1 elseif budget < 18 then return 2 end
     return 3

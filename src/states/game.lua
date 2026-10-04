@@ -282,7 +282,7 @@ function GameState:roomSpec(roomNum)
     elseif roomType == "angel" or roomType == "devil" then
         kind = "sanctuary"
     end
-    local chapterIndex = math.min(6, math.floor((roomNum - 1) / 10) + 1)
+    local chapterIndex = WorldManager.worldOfRoom(roomNum)
     -- Décor du chapitre, ou ciel de l'Ange / enfer du Démon (thèmes 7 et 8)
     local themeIndex = (kind == "sanctuary") and WorldManager.SANCTUARY_THEME[roomType] or chapterIndex
     local theme = WorldManager.getTheme(themeIndex)
@@ -311,6 +311,7 @@ function GameState:setupRoom(roomNum)
     self.roomNumber = roomNum
     self.chapterIndex = spec.chapterIndex
     -- Normal monsters hit harder in deeper rooms (survival: set again at each wave)
+    AIController.setDamageScale(WorldManager.damageMult(roomNum))
     self.roomType = spec.roomType
     self.bossWheelDone = false
 
@@ -1104,6 +1105,7 @@ function GameState:update(dt)
         if self.waveTimer <= 0 or cleared then
             self.waveCount = (self.waveCount or 1) + 1
             self.waveTimer = 15.0
+            AIController.setDamageScale(WorldManager.damageMult(self.waveCount))
             self.pendingSpawns = self.obstacleManager:placeSpawns(
                 WorldManager.generateSurvivalWave(self.chapterIndex, self.waveCount, self.mapW, self.mapH))
             self.spawnWarningTimer = 0.55
