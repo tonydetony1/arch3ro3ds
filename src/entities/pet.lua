@@ -11,16 +11,30 @@ Pet.__index = Pet
 
 function Pet.new(petType, slotIndex)
     local self = setmetatable({}, Pet)
-    self.type = petType or "laser_bat" -- "laser_bat" ou "ghost_mage"
     self.slotIndex = slotIndex or 1
     self.x = Config.TOP_WIDTH / 2
     self.y = Config.TOP_HEIGHT / 2
     self.fireCooldown = 1.2
     self.fireTimer = math.random() * 0.5
     self.animTime = math.random() * 5.0
-    self.damage = (self.type == "laser_bat") and 16 or 14
     self.range = 260
     self.radius = 6
+
+    if petType == "bat_companion" or petType == "laser_bat" then
+        self.type = "laser_bat"
+        self.damage = 16
+    elseif petType == "ghost_familiar" or petType == "ghost_mage" then
+        self.type = "ghost_mage"
+        self.damage = 14
+    elseif petType == "dragon_pet" then
+        self.type = "dragon_pet"
+        self.damage = 22
+        self.fireCooldown = 1.4
+    else
+        self.type = petType or "laser_bat"
+        self.damage = 16
+    end
+
     return self
 end
 
@@ -67,12 +81,14 @@ function Pet:update(dt, player, projectilePool, dummyPool)
                 local dirY = bdy / dist
                 local proj = projectilePool:obtain()
                 if proj then
-                    local color = (self.type == "laser_bat") and {0.75, 0.30, 0.95, 1.0} or {0.35, 0.85, 1.0, 1.0}
+                    local color = (self.type == "laser_bat") and {0.75, 0.30, 0.95, 1.0}
+                        or (self.type == "dragon_pet") and {1.0, 0.45, 0.15, 1.0}
+                        or {0.35, 0.85, 1.0, 1.0}
                     local pData = {
-                        projectile_speed = 300,
+                        projectile_speed = (self.type == "dragon_pet") and 260 or 300,
                         damage = self.damage,
                         range = self.range,
-                        radius = 2.5,
+                        radius = (self.type == "dragon_pet") and 3.5 or 2.5,
                         color = color,
                     }
                     proj:spawn(self.x + dirX * 6, self.y + dirY * 6, dirX, dirY, pData, false, 0, false)
@@ -86,11 +102,15 @@ function Pet:draw()
     local floatY = math.floor(math.sin(self.animTime * 3.5 + self.slotIndex) * 3 + 0.5)
     VFX.drawDynamicShadow(self.x, self.y + 10, 5, 2, math.abs(floatY) + 6, 0.30)
 
-    local name = (self.type == "laser_bat") and "pet_bat" or "pet_ghost"
-    local fps = (self.type == "laser_bat") and 10 or 3
-    local frame = math.floor(self.animTime * fps) % 2 + 1
     love.graphics.setColor(1, 1, 1, 1)
-    Art.draw(name, frame, self.x, self.y + floatY, self.slotIndex == 2)
+    if self.type == "dragon_pet" then
+        Art.drawEx("item_pet_dragon", 1, self.x, self.y + floatY, 0, 1.2, 1.2, self.slotIndex == 2, "ember")
+    else
+        local name = (self.type == "laser_bat") and "pet_bat" or "pet_ghost"
+        local fps = (self.type == "laser_bat") and 10 or 3
+        local frame = math.floor(self.animTime * fps) % 2 + 1
+        Art.draw(name, frame, self.x, self.y + floatY, self.slotIndex == 2)
+    end
 end
 
 return Pet

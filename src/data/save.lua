@@ -180,11 +180,16 @@ function Save.load()
                 Save.data[k] = v
             end
         end
+        if not Save.data.dualSlotsV2 then
+            if Save.data.equipped then
+                Save.data.equipped.ring1 = Save.data.equipped.ring1 or Save.data.equipped.ring
+                Save.data.equipped.pet1 = Save.data.equipped.pet1 or Save.data.equipped.pet
+            end
+            Save.data.dualSlotsV2 = true
+        end
         if Save.data.equipped then
-            Save.data.equipped.ring1 = Save.data.equipped.ring1 or Save.data.equipped.ring or "wolf_ring"
-            Save.data.equipped.ring2 = Save.data.equipped.ring2 or "bear_ring"
-            Save.data.equipped.pet1 = Save.data.equipped.pet1 or Save.data.equipped.pet or "bat_companion"
-            Save.data.equipped.pet2 = Save.data.equipped.pet2 or "ghost_familiar"
+            Save.data.equipped.ring = Save.data.equipped.ring1 or Save.data.equipped.ring2
+            Save.data.equipped.pet = Save.data.equipped.pet1 or Save.data.equipped.pet2
         end
         if Save.data.inventory then
             local existing = {}
@@ -322,7 +327,10 @@ function Save.save()
     Save.data.saveSeq = seq
     local content = "return " .. serializeTable(Save.data) .. "\n" .. END_MARK .. "\n"
     local target = (seq % 2 == 1) and Save.SAVE_FILE or Save.BACKUP_FILE
-    return love.filesystem.write(target, content)
+    if love and love.filesystem and love.filesystem.write then
+        return love.filesystem.write(target, content)
+    end
+    return true
 end
 
 -- ============================================================================
@@ -415,14 +423,58 @@ function Save.addItem(itemId)
         d.itemLevels[itemId] = 1
     end
     Save.save()
-    return true, "NOUVEL OBJET"
+    return true, "NEW ITEM"
+end
+
+Save.EQUIP_SLOTS = {
+    weapon = true,
+    armor = true,
+    ring1 = true,
+    ring2 = true,
+    pet1 = true,
+    pet2 = true,
+}
+
+-- Vérifie si un objet est équipé et renvoie (isEquipped, slotId)
+function Save.isEquipped(itemId)
+    local d = Save.get()
+    if not d or not d.equipped or not itemId then return false, nil end
+    for slot in pairs(Save.EQUIP_SLOTS) do
+        if d.equipped[slot] == itemId then
+            return true, slot
+        end
+    end
+    return false, nil
 end
 
 -- Équiper un objet
 function Save.equip(slot, itemId)
     local d = Save.get()
-    if d.equipped[slot] ~= nil then
+    if not d or not d.equipped then return false end
+    if Save.EQUIP_SLOTS[slot] then
+        -- Libère l'objet s'il était déjà dans un autre slot d'équipement
+        for otherSlot in pairs(Save.EQUIP_SLOTS) do
+            if otherSlot ~= slot and d.equipped[otherSlot] == itemId then
+                d.equipped[otherSlot] = nil
+            end
+        end
         d.equipped[slot] = itemId
+        d.equipped.ring = d.equipped.ring1 or d.equipped.ring2
+        d.equipped.pet = d.equipped.pet1 or d.equipped.pet2
+        Save.save()
+        return true
+    end
+    return false
+end
+
+-- Déséquiper un emplacement
+function Save.unequip(slot)
+    local d = Save.get()
+    if not d or not d.equipped then return false end
+    if Save.EQUIP_SLOTS[slot] then
+        d.equipped[slot] = nil
+        d.equipped.ring = d.equipped.ring1 or d.equipped.ring2
+        d.equipped.pet = d.equipped.pet1 or d.equipped.pet2
         Save.save()
         return true
     end
@@ -445,7 +497,7 @@ function Save.upgradeItem(itemId)
         d.gold = d.gold - cost
         d.itemLevels[itemId] = lvl + 1
         Save.addQuestProgress("upgrades", 1)
-    Save.save()
+        Save.save()
         return true, lvl + 1, cost
     end
     return false, lvl, cost
@@ -460,12 +512,18 @@ function Save.getTalents()
     return d.talents
 end
 
--- Amélioration aléatoire d'un talent (Système de Runes Archero)
-function Save.upgradeTalent()
-    local d = Save.get()
+-- Coût du prochain talent
+function Save.getTalentCost()
     local talents = Save.getTalents()
     local totalLevel = (talents.strength or 0) + (talents.vitality or 0) + (talents.recovery or 0) + (talents.agility or 0) + (talents.glory or 0)
-    local cost = Balance.COSTS.talentBase + totalLevel * Balance.COSTS.talentStep
+    return Balance.COSTS.talentBase + totalLevel * Balance.COSTS.talentStep, totalLevel
+end
+
+-- Amélioration d'un talent (sélectionné ou aléatoire)
+function Save.upgradeTalent(talentName)
+    local d = Save.get()
+    local talents = Save.getTalents()
+    local cost, totalLevel = Save.getTalentCost()
 
     if d.gold >= cost then
         d.gold = d.gold - cost
@@ -473,7 +531,18 @@ function Save.upgradeTalent()
         if (talents.glory or 0) == 0 then
             table.insert(pool, "glory")
         end
-        local chosen = pool[math.random(1, #pool)]
+        local chosen = talentName
+        local valid = false
+        if chosen and talents[chosen] ~= nil then
+            if chosen == "glory" and (talents.glory or 0) >= 1 then
+                valid = false
+            else
+                valid = true
+            end
+        end
+        if not valid then
+            chosen = pool[math.random(1, #pool)]
+        end
         talents[chosen] = (talents[chosen] or 0) + 1
         Save.save()
         return true, chosen, talents[chosen], cost

@@ -9,6 +9,7 @@ local Items = require("src.data.items")
 local UI = require("src.ui.ui_components")
 local Art = require("src.render.art")
 local HeroSprites = require("src.render.sprites.heroes")
+local Audio = require("src.audio.audio")
 
 local Inventory = {}
 Inventory.__index = Inventory
@@ -61,11 +62,7 @@ end
 
 -- Vérifie si un objet est équipé dans l'un des 6 slots
 function Inventory:isEquipped(itemId)
-    if not self.saveData or not self.saveData.equipped then return false end
-    for _, slotId in pairs(self.saveData.equipped) do
-        if slotId == itemId then return true end
-    end
-    return false
+    return Save.isEquipped(itemId)
 end
 
 -- ============================================================================
@@ -377,21 +374,50 @@ function Inventory:drawItemModal(t)
     -- 4. Action buttons: EQUIP, UPGRADE, FUSE
     local btnY = my + 142
     local isCurrentlyEquipped = self:isEquipped(itemId)
-    local equipText = isCurrentlyEquipped and "UNEQUIP" or "EQUIP"
-    local equipTheme = isCurrentlyEquipped and "red" or "green"
+    local slotType = item.slot
+    local isDualSlot = (slotType == "ring" or slotType == "pet")
+    local bothOccupied = isDualSlot and not isCurrentlyEquipped and not self.modalSourceSlot
+        and (self.saveData.equipped[slotType .. "1"] ~= nil)
+        and (self.saveData.equipped[slotType .. "2"] ~= nil)
 
-    if canFuse then
-        -- 3 Pill buttons
-        UI.drawPillButton(mx + 6, btnY, 78, 36, equipText, equipTheme, self.pressedBtn == "equip")
+    if isCurrentlyEquipped then
+        local equipText = "UNEQUIP"
+        local equipTheme = "red"
+        if canFuse then
+            UI.drawPillButton(mx + 6, btnY, 78, 36, equipText, equipTheme, self.pressedBtn == "equip")
+            local upText = string.format("%d G", upgradeCost)
+            UI.drawPillButton(mx + 88, btnY, 88, 36, upText, canUpgrade and "blue" or "gray", self.pressedBtn == "upgrade", "shield")
+            UI.drawPillButton(mx + 180, btnY, 90, 36, "FUSE", "gold", self.pressedBtn == "fuse", "sparkles")
+        else
+            UI.drawPillButton(mx + 8, btnY, 126, 36, equipText, equipTheme, self.pressedBtn == "equip")
+            local upText = string.format("UPGRADE (%d G)", upgradeCost)
+            local upTheme = canUpgrade and "gold" or "gray"
+            UI.drawPillButton(mx + 142, btnY, 126, 36, upText, upTheme, self.pressedBtn == "upgrade")
+        end
+    elseif bothOccupied and not canFuse then
+        -- Offre au joueur le choix direct de l'emplacement à remplacer (Anneau 1/2 ou Familier 1/2)
+        UI.drawPillButton(mx + 6, btnY, 62, 36, "SLOT 1", "green", self.pressedBtn == "equip1")
+        UI.drawPillButton(mx + 72, btnY, 62, 36, "SLOT 2", "green", self.pressedBtn == "equip2")
         local upText = string.format("%d G", upgradeCost)
-        UI.drawPillButton(mx + 88, btnY, 88, 36, upText, canUpgrade and "blue" or "gray", self.pressedBtn == "upgrade", "shield")
-        UI.drawPillButton(mx + 180, btnY, 90, 36, "FUSE", "gold", self.pressedBtn == "fuse", "sparkles")
-    else
-        -- 2 Pill buttons
-        UI.drawPillButton(mx + 8, btnY, 126, 36, equipText, equipTheme, self.pressedBtn == "equip")
-        local upText = string.format("UPGRADE (%d G)", upgradeCost)
         local upTheme = canUpgrade and "gold" or "gray"
-        UI.drawPillButton(mx + 142, btnY, 126, 36, upText, upTheme, self.pressedBtn == "upgrade")
+        UI.drawPillButton(mx + 138, btnY, 130, 36, upText, upTheme, self.pressedBtn == "upgrade")
+    else
+        local equipText = "EQUIP"
+        if self.modalSourceSlot then
+            equipText = "EQUIP (" .. self.modalSourceSlot:upper() .. ")"
+        end
+        local equipTheme = "green"
+        if canFuse then
+            UI.drawPillButton(mx + 6, btnY, 78, 36, equipText, equipTheme, self.pressedBtn == "equip")
+            local upText = string.format("%d G", upgradeCost)
+            UI.drawPillButton(mx + 88, btnY, 88, 36, upText, canUpgrade and "blue" or "gray", self.pressedBtn == "upgrade", "shield")
+            UI.drawPillButton(mx + 180, btnY, 90, 36, "FUSE", "gold", self.pressedBtn == "fuse", "sparkles")
+        else
+            UI.drawPillButton(mx + 8, btnY, 126, 36, equipText, equipTheme, self.pressedBtn == "equip")
+            local upText = string.format("UPGRADE (%d G)", upgradeCost)
+            local upTheme = canUpgrade and "gold" or "gray"
+            UI.drawPillButton(mx + 142, btnY, 126, 36, upText, upTheme, self.pressedBtn == "upgrade")
+        end
     end
 end
 
@@ -410,6 +436,12 @@ function Inventory:touchpressed(id, tx, ty)
         local effRarity = Save.getItemRarity(self.modalItemId)
         local rData = Items.getRarityData(effRarity)
         local canFuse = (copies >= 3) and (rData.tier < 5)
+        local isCurrentlyEquipped = self:isEquipped(self.modalItemId)
+        local slotType = self.modalItem and self.modalItem.slot
+        local isDualSlot = (slotType == "ring" or slotType == "pet")
+        local bothOccupied = isDualSlot and not isCurrentlyEquipped and not self.modalSourceSlot
+            and (self.saveData.equipped[slotType .. "1"] ~= nil)
+            and (self.saveData.equipped[slotType .. "2"] ~= nil)
 
         -- Clic sur fermer
         if tx >= mx + mw - 24 and tx <= mx + mw and ty >= my and ty <= my + 24 then
@@ -418,7 +450,18 @@ function Inventory:touchpressed(id, tx, ty)
         end
 
         local btnY = my + 142
-        if canFuse then
+        if bothOccupied and not canFuse then
+            if tx >= mx + 6 and tx <= mx + 68 and ty >= btnY and ty <= btnY + 36 then
+                self.pressedBtn = "equip1"
+                return true
+            elseif tx >= mx + 72 and tx <= mx + 134 and ty >= btnY and ty <= btnY + 36 then
+                self.pressedBtn = "equip2"
+                return true
+            elseif tx >= mx + 138 and tx <= mx + 268 and ty >= btnY and ty <= btnY + 36 then
+                self.pressedBtn = "upgrade"
+                return true
+            end
+        elseif canFuse then
             if tx >= mx + 6 and tx <= mx + 84 and ty >= btnY and ty <= btnY + 36 then
                 self.pressedBtn = "equip"
                 return true
@@ -453,6 +496,22 @@ function Inventory:touchpressed(id, tx, ty)
             local itemId = self.saveData.equipped[s.id]
             if itemId then
                 self:openModal(itemId, s.id)
+            else
+                -- Emplacement vide : chercher un objet disponible de ce type dans le sac à dos
+                local candidate = nil
+                for _, invId in ipairs(self.saveData.inventory or {}) do
+                    local it = Items.get(invId)
+                    if it and it.slot == s.type and not self:isEquipped(invId) then
+                        candidate = invId
+                        break
+                    end
+                end
+                if candidate then
+                    self:openModal(candidate, s.id)
+                    Audio.play("ui_click", 0.05, 0.7)
+                else
+                    Audio.play("ui_cancel", 0, 0.6)
+                end
             end
             return true
         end
@@ -469,7 +528,7 @@ function Inventory:touchmoved(id, tx, ty, dx, dy)
     if self.modalItem then return end
 
     local distSq = (tx - self.touchStartX)^2 + (ty - self.touchStartY)^2
-    if distSq > 36 then
+    if distSq > 196 then
         self.hasDragged = true
     end
 
@@ -488,6 +547,21 @@ function Inventory:touchreleased(id, tx, ty)
             self:toggleEquip(self.modalItemId, self.modalSourceSlot)
             self.pressedBtn = nil
             self:closeModal()
+            self:refresh()
+            return
+        elseif self.pressedBtn == "equip1" then
+            local slotType = self.modalItem and self.modalItem.slot
+            self:toggleEquip(self.modalItemId, slotType .. "1")
+            self.pressedBtn = nil
+            self:closeModal()
+            self:refresh()
+            return
+        elseif self.pressedBtn == "equip2" then
+            local slotType = self.modalItem and self.modalItem.slot
+            self:toggleEquip(self.modalItemId, slotType .. "2")
+            self.pressedBtn = nil
+            self:closeModal()
+            self:refresh()
             return
         elseif self.pressedBtn == "upgrade" then
             local lvl = self.saveData.itemLevels[self.modalItemId] or 1
@@ -497,6 +571,10 @@ function Inventory:touchreleased(id, tx, ty)
                 Save.addGold(-cost)
                 self.saveData.itemLevels[self.modalItemId] = lvl + 1
                 Save.save()
+                self:refresh()
+                Audio.play("upgrade", 0.05, 0.8)
+            else
+                Audio.play("ui_cancel", 0, 0.6)
             end
             self.pressedBtn = nil
             return
@@ -505,6 +583,7 @@ function Inventory:touchreleased(id, tx, ty)
             if ok then
                 self:refresh()
                 self.modalItem = Items.get(self.modalItemId)
+                Audio.play("chest_reveal", 0, 0.9)
             end
             self.pressedBtn = nil
             return
@@ -562,43 +641,137 @@ function Inventory:toggleEquip(itemId, sourceSlot)
     local item = Items.get(itemId)
     if not item then return end
 
+    local isEq, equippedSlot = Save.isEquipped(itemId)
+    if isEq then
+        -- L'objet est déjà équipé : on le déséquipe
+        local slotToUnequip = sourceSlot or equippedSlot
+        Save.unequip(slotToUnequip)
+        self:refresh()
+        return
+    end
+
+    -- L'objet n'est pas équipé : on détermine le bon emplacement selon son type
     local slotType = item.slot
     local targetSlot = nil
 
-    if slotType == "weapon" then
-        targetSlot = "weapon"
-    elseif slotType == "armor" then
-        targetSlot = "armor"
-    elseif slotType == "ring" then
-        -- Équipe dans ring1, ou si ring1 occupé, dans ring2
-        if self.saveData.equipped.ring1 == itemId then
-            self.saveData.equipped.ring1 = nil
-            Save.save()
-            return
-        elseif self.saveData.equipped.ring2 == itemId then
-            self.saveData.equipped.ring2 = nil
-            Save.save()
-            return
-        else
-            targetSlot = (self.saveData.equipped.ring1 == nil) and "ring1" or "ring2"
+    if sourceSlot and Save.EQUIP_SLOTS[sourceSlot] then
+        if (slotType == "weapon" and sourceSlot == "weapon")
+            or (slotType == "armor" and sourceSlot == "armor")
+            or (slotType == "ring" and (sourceSlot == "ring1" or sourceSlot == "ring2"))
+            or (slotType == "pet" and (sourceSlot == "pet1" or sourceSlot == "pet2")) then
+            targetSlot = sourceSlot
         end
-    elseif slotType == "pet" then
-        if self.saveData.equipped.pet1 == itemId then
-            self.saveData.equipped.pet1 = nil
-            Save.save()
-            return
-        elseif self.saveData.equipped.pet2 == itemId then
-            self.saveData.equipped.pet2 = nil
-            Save.save()
-            return
-        else
-            targetSlot = (self.saveData.equipped.pet1 == nil) and "pet1" or "pet2"
+    end
+
+    if not targetSlot then
+        if slotType == "weapon" then
+            targetSlot = "weapon"
+        elseif slotType == "armor" then
+            targetSlot = "armor"
+        elseif slotType == "ring" then
+            if self.saveData.equipped.ring1 == nil then
+                targetSlot = "ring1"
+            elseif self.saveData.equipped.ring2 == nil then
+                targetSlot = "ring2"
+            else
+                -- Si les deux sont occupés, on remplace le premier
+                targetSlot = "ring1"
+            end
+        elseif slotType == "pet" then
+            if self.saveData.equipped.pet1 == nil then
+                targetSlot = "pet1"
+            elseif self.saveData.equipped.pet2 == nil then
+                targetSlot = "pet2"
+            else
+                -- Si les deux sont occupés, on remplace le premier
+                targetSlot = "pet1"
+            end
         end
     end
 
     if targetSlot then
         Save.equip(targetSlot, itemId)
+        self:refresh()
     end
+end
+
+-- Support manette / boutons physiques 3DS
+function Inventory:gamepadpressed(button)
+    if self.modalItem then
+        if button == "b" then
+            self:closeModal()
+            Audio.play("ui_cancel", 0, 0.7)
+            return true
+        elseif button == "a" then
+            self:toggleEquip(self.modalItemId, self.modalSourceSlot)
+            self:closeModal()
+            self:refresh()
+            Audio.play("ui_confirm", 0, 0.8)
+            return true
+        elseif button == "x" then
+            local lvl = self.saveData.itemLevels[self.modalItemId] or 1
+            local effRarity = Save.getItemRarity(self.modalItemId)
+            local cost = Items.getUpgradeCost(lvl, effRarity)
+            if self.saveData.gold >= cost then
+                Save.addGold(-cost)
+                self.saveData.itemLevels[self.modalItemId] = lvl + 1
+                Save.save()
+                self:refresh()
+                Audio.play("upgrade", 0.05, 0.8)
+            else
+                Audio.play("ui_cancel", 0, 0.6)
+            end
+            return true
+        elseif button == "y" then
+            local copies = Save.getItemCopies(self.modalItemId)
+            local effRarity = Save.getItemRarity(self.modalItemId)
+            local rData = Items.getRarityData(effRarity)
+            if copies >= 3 and rData.tier < 5 then
+                local ok = Save.fuseItem(self.modalItemId)
+                if ok then
+                    self:refresh()
+                    self.modalItem = Items.get(self.modalItemId)
+                    Audio.play("chest_reveal", 0, 0.9)
+                end
+            end
+            return true
+        end
+        return true
+    end
+    return false
+end
+
+-- Support clavier PC (Flèches, Entrée, Espace, Échap)
+function Inventory:keypressed(key)
+    if self.modalItem then
+        if key == "escape" or key == "backspace" then
+            self:closeModal()
+            Audio.play("ui_cancel", 0, 0.7)
+            return true
+        elseif key == "return" or key == "space" or key == "e" then
+            self:toggleEquip(self.modalItemId, self.modalSourceSlot)
+            self:closeModal()
+            self:refresh()
+            Audio.play("ui_confirm", 0, 0.8)
+            return true
+        elseif key == "u" then
+            local lvl = self.saveData.itemLevels[self.modalItemId] or 1
+            local effRarity = Save.getItemRarity(self.modalItemId)
+            local cost = Items.getUpgradeCost(lvl, effRarity)
+            if self.saveData.gold >= cost then
+                Save.addGold(-cost)
+                self.saveData.itemLevels[self.modalItemId] = lvl + 1
+                Save.save()
+                self:refresh()
+                Audio.play("upgrade", 0.05, 0.8)
+            else
+                Audio.play("ui_cancel", 0, 0.6)
+            end
+            return true
+        end
+        return true
+    end
+    return false
 end
 
 return Inventory

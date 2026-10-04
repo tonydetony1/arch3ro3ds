@@ -38,6 +38,7 @@ function MenuState.new(stateMachine)
     self.heroSubPage = "roster"
     self.questSubPage = "quests"
     self.chestSubPage = "chests"
+    self.selectedTalent = nil
     self.settingsPanel = SettingsPanel.new()
     self.bestiarySelected = "slime"
 
@@ -293,11 +294,25 @@ function MenuState:drawTop()
 
     -- Familiers équipés (sprites de combat, échelle 2)
     local petFloat = math.floor(math.sin(t * 4.6) * 3)
-    if self.saveData.equipped.pet1 or self.saveData.equipped.pet then
-        Art.drawEx("pet_bat", (math.floor(t * 8) % 2) + 1, heroX - 58, heroBottom - 44 + petFloat, 0, 2, 2)
+    local p1 = self.saveData.equipped.pet1 or self.saveData.equipped.pet
+    if p1 then
+        if p1 == "dragon_pet" then
+            Art.drawEx("item_pet_dragon", 1, heroX - 58, heroBottom - 44 + petFloat, 0, 2, 2, false, "ember")
+        elseif p1 == "ghost_familiar" or p1 == "ghost_mage" then
+            Art.drawEx("pet_ghost", (math.floor(t * 4) % 2) + 1, heroX - 58, heroBottom - 44 + petFloat, 0, 2, 2)
+        else
+            Art.drawEx("pet_bat", (math.floor(t * 8) % 2) + 1, heroX - 58, heroBottom - 44 + petFloat, 0, 2, 2)
+        end
     end
-    if self.saveData.equipped.pet2 then
-        Art.drawEx("pet_ghost", (math.floor(t * 4) % 2) + 1, heroX + 58, heroBottom - 44 - petFloat, 0, 2, 2)
+    local p2 = self.saveData.equipped.pet2
+    if p2 then
+        if p2 == "dragon_pet" then
+            Art.drawEx("item_pet_dragon", 1, heroX + 58, heroBottom - 44 - petFloat, 0, 2, 2, true, "ember")
+        elseif p2 == "bat_companion" or p2 == "laser_bat" then
+            Art.drawEx("pet_bat", (math.floor(t * 8) % 2) + 1, heroX + 58, heroBottom - 44 - petFloat, 0, 2, 2, true)
+        else
+            Art.drawEx("pet_ghost", (math.floor(t * 4) % 2) + 1, heroX + 58, heroBottom - 44 - petFloat, 0, 2, 2, true)
+        end
     end
 
     -- ------------------------------------------------------------------
@@ -558,7 +573,7 @@ function MenuState:drawQuestsTab()
     UI.drawBentoCard(6, 4, W - 12, 42, {})
     UI.drawText("DAILY QUESTS", 14, 7, Palette.C.yellow)
     UI.drawPillButton(W - 122, 5, 56, 16, "QUESTS", "gold", false)
-    UI.drawPillButton(W - 64, 5, 56, 16, "ACHIEV.", "dark", self.pressedBtn == "tab_achievements")
+    UI.drawPillButton(W - 64, 5, 56, 16, "ACHIEV.", "dark", self.pressedBtn == "subtab_achievements")
 
     -- Battle pass gauge and tiers
     local barX, barY, barW = 14, 24, W - 28
@@ -638,7 +653,7 @@ function MenuState:drawAchievementsPage()
 
     UI.drawBentoCard(6, 4, W - 12, 22, {})
     UI.drawText("ACHIEVEMENTS", 14, 7, Palette.C.yellow)
-    UI.drawPillButton(W - 122, 5, 56, 16, "QUESTS", "dark", self.pressedBtn == "tab_quests")
+    UI.drawPillButton(W - 122, 5, 56, 16, "QUESTS", "dark", self.pressedBtn == "subtab_quests")
     UI.drawPillButton(W - 64, 5, 56, 16, "ACHIEV.", "gold", false)
 
     for i, a in ipairs(Achievements.LIST) do
@@ -693,7 +708,7 @@ function MenuState:drawShopPage()
 
     UI.drawBentoCard(6, 4, W - 12, 22, {})
     UI.drawText("DAILY SHOP", 14, 7, Palette.C.yellow)
-    UI.drawPillButton(W - 122, 5, 56, 16, "CHESTS", "dark", self.pressedBtn == "tab_chests")
+    UI.drawPillButton(W - 122, 5, 56, 16, "CHESTS", "dark", self.pressedBtn == "subtab_chests")
     UI.drawPillButton(W - 64, 5, 56, 16, "SHOP", "gold", false)
 
     for i, offer in ipairs(offers) do
@@ -905,8 +920,7 @@ end
 function MenuState:drawTalentsTab()
     local botW = Config.BOTTOM_WIDTH
     local talents = Save.getTalents()
-    local totalLevel = (talents.strength or 0) + (talents.vitality or 0) + (talents.recovery or 0) + (talents.agility or 0) + (talents.glory or 0)
-    local cost = 80 + totalLevel * 40
+    local cost, totalLevel = Save.getTalentCost()
     local canUpgrade = (self.saveData.gold >= cost)
     local t = love.timer.getTime()
 
@@ -928,37 +942,72 @@ function MenuState:drawTalentsTab()
     love.graphics.pop()
 
     UI.drawText("SACRED TALENT SEAL", hx + 58, hy + 10, {1.0, 0.88, 0.25, 1.0})
-    UI.drawPillBadge(hx + 58, hy + 26, 120, 18, string.format("TOTAL LEVEL: %d", totalLevel), {0.18, 0.10, 0.28, 0.9}, {0.70, 0.30, 0.90, 0.9}, {0.95, 0.85, 1.0, 1.0})
+    UI.drawPillBadge(hx + 58, hy + 26, 116, 18, string.format("TOTAL LEVEL: %d", totalLevel), {0.18, 0.10, 0.28, 0.9}, {0.70, 0.30, 0.90, 0.9}, {0.95, 0.85, 1.0, 1.0})
+
+    local hasGlory = (talents.glory or 0) > 0
+    if hasGlory then
+        UI.drawPillBadge(hx + 180, hy + 26, 116, 18, "GLORY ACTIVE", {0.12, 0.22, 0.16, 0.9}, {0.35, 0.95, 0.55, 0.9}, {0.85, 1.0, 0.90, 1.0}, "check")
+    else
+        UI.drawPillBadge(hx + 180, hy + 26, 116, 18, "GLORY: LOCKED", {0.18, 0.12, 0.12, 0.9}, {0.65, 0.25, 0.25, 0.8}, {0.95, 0.80, 0.80, 1.0}, "lock")
+    end
 
     -- 2. 4 Bento Cards (2x2 grid)
     -- Strength (+5 ATK)
     local t1x, t1y, t1w, t1h = 6, 62, 150, 36
-    UI.drawBentoCard(t1x, t1y, t1w, t1h, { r = 6, bg = {0.09, 0.11, 0.16, 0.95}, borderColor = {0.45, 0.20, 0.24, 0.8} })
+    local isSel1 = (self.selectedTalent == "strength")
+    UI.drawBentoCard(t1x, t1y, t1w, t1h, {
+        r = 6,
+        bg = isSel1 and {0.22, 0.12, 0.16, 0.98} or {0.09, 0.11, 0.16, 0.95},
+        borderColor = isSel1 and {1.0, 0.55, 0.55, 1.0} or {0.45, 0.20, 0.24, 0.8},
+        borderWidth = isSel1 and 2 or 1,
+    })
     UI.drawIcon("swords", t1x + 14, t1y + 18, 8, {1.0, 0.45, 0.45, 1.0})
     UI.drawText("STRENGTH (+5 ATK)", t1x + 28, t1y + 6, {1.0, 0.45, 0.45, 1.0})
+    if isSel1 then UI.drawIcon("check", t1x + t1w - 12, t1y + 18, 7, {1.0, 0.55, 0.55, 1.0}) end
     local prevF = love.graphics.getFont()
     love.graphics.setFont(UI.getFont("tiny"))
     UI.drawText(string.format("Level %d", talents.strength or 0), t1x + 28, t1y + 20, {0.80, 0.85, 0.95, 1.0})
 
     -- Vitality (+80 HP)
     local t2x, t2y, t2w, t2h = 164, 62, 150, 36
-    UI.drawBentoCard(t2x, t2y, t2w, t2h, { r = 6, bg = {0.09, 0.11, 0.16, 0.95}, borderColor = {0.20, 0.45, 0.28, 0.8} })
+    local isSel2 = (self.selectedTalent == "vitality")
+    UI.drawBentoCard(t2x, t2y, t2w, t2h, {
+        r = 6,
+        bg = isSel2 and {0.12, 0.22, 0.16, 0.98} or {0.09, 0.11, 0.16, 0.95},
+        borderColor = isSel2 and {0.55, 1.0, 0.75, 1.0} or {0.20, 0.45, 0.28, 0.8},
+        borderWidth = isSel2 and 2 or 1,
+    })
     UI.drawIcon("heart", t2x + 14, t2y + 18, 8, {0.45, 1.0, 0.65, 1.0})
     UI.drawText("VITALITY (+80 HP)", t2x + 28, t2y + 6, {0.45, 1.0, 0.65, 1.0})
+    if isSel2 then UI.drawIcon("check", t2x + t2w - 12, t2y + 18, 7, {0.55, 1.0, 0.75, 1.0}) end
     UI.drawText(string.format("Level %d", talents.vitality or 0), t2x + 28, t2y + 20, {0.80, 0.85, 0.95, 1.0})
 
     -- Agility (+1% Dodge)
     local t3x, t3y, t3w, t3h = 6, 102, 150, 36
-    UI.drawBentoCard(t3x, t3y, t3w, t3h, { r = 6, bg = {0.09, 0.11, 0.16, 0.95}, borderColor = {0.20, 0.35, 0.55, 0.8} })
+    local isSel3 = (self.selectedTalent == "agility")
+    UI.drawBentoCard(t3x, t3y, t3w, t3h, {
+        r = 6,
+        bg = isSel3 and {0.12, 0.18, 0.26, 0.98} or {0.09, 0.11, 0.16, 0.95},
+        borderColor = isSel3 and {0.50, 0.90, 1.0, 1.0} or {0.20, 0.35, 0.55, 0.8},
+        borderWidth = isSel3 and 2 or 1,
+    })
     UI.drawIcon("sparkles", t3x + 14, t3y + 18, 8, {0.35, 0.85, 1.0, 1.0})
     UI.drawText("AGILITY (+1% DODGE)", t3x + 28, t3y + 6, {0.40, 0.85, 1.0, 1.0})
+    if isSel3 then UI.drawIcon("check", t3x + t3w - 12, t3y + 18, 7, {0.50, 0.90, 1.0, 1.0}) end
     UI.drawText(string.format("Level %d", talents.agility or 0), t3x + 28, t3y + 20, {0.80, 0.85, 0.95, 1.0})
 
     -- Recovery (+50 Heal)
     local t4x, t4y, t4w, t4h = 164, 102, 150, 36
-    UI.drawBentoCard(t4x, t4y, t4w, t4h, { r = 6, bg = {0.09, 0.11, 0.16, 0.95}, borderColor = {0.45, 0.38, 0.18, 0.8} })
+    local isSel4 = (self.selectedTalent == "recovery")
+    UI.drawBentoCard(t4x, t4y, t4w, t4h, {
+        r = 6,
+        bg = isSel4 and {0.24, 0.20, 0.12, 0.98} or {0.09, 0.11, 0.16, 0.95},
+        borderColor = isSel4 and {1.0, 0.90, 0.40, 1.0} or {0.45, 0.38, 0.18, 0.8},
+        borderWidth = isSel4 and 2 or 1,
+    })
     UI.drawIcon("hero", t4x + 14, t4y + 18, 8, {1.0, 0.85, 0.30, 1.0})
     UI.drawText("RECOVERY (+50 HEAL)", t4x + 28, t4y + 6, {1.0, 0.85, 0.30, 1.0})
+    if isSel4 then UI.drawIcon("check", t4x + t4w - 12, t4y + 18, 7, {1.0, 0.90, 0.40, 1.0}) end
     UI.drawText(string.format("Level %d", talents.recovery or 0), t4x + 28, t4y + 20, {0.80, 0.85, 0.95, 1.0})
     love.graphics.setFont(prevF)
 
@@ -970,7 +1019,8 @@ function MenuState:drawTalentsTab()
         borderColor = {0.18, 0.23, 0.33, 0.85},
     })
 
-    local btnText = string.format("UPGRADE SEAL  (%d GOLD)", cost)
+    local btnLabel = self.selectedTalent and self.selectedTalent:upper() or "RANDOM"
+    local btnText = string.format("UPGRADE %s  (%d GOLD)", btnLabel, cost)
     UI.drawPillButton(24, 148, 272, 38, btnText, canUpgrade and "violet" or "gray", self.pressedBtn == "upgrade_talent", "rune")
 
     if self.talentUpgradeTimer and self.talentUpgradeTimer > 0 and self.lastUpgradedTalent then
@@ -1171,10 +1221,10 @@ function MenuState:touchpressed(id, tx, ty)
         -- Bascule Quêtes / Succès
         if ty >= 5 and ty <= 22 then
             if tx >= W - 122 and tx <= W - 66 then
-                self.pressedBtn = "tab_quests"
+                self.pressedBtn = "subtab_quests"
                 return
             elseif tx >= W - 64 and tx <= W - 8 then
-                self.pressedBtn = "tab_achievements"
+                self.pressedBtn = "subtab_achievements"
                 return
             end
         end
@@ -1222,10 +1272,10 @@ function MenuState:touchpressed(id, tx, ty)
         local W = Config.BOTTOM_WIDTH
         if ty >= 5 and ty <= 22 then
             if tx >= W - 122 and tx <= W - 66 then
-                self.pressedBtn = "tab_chests"
+                self.pressedBtn = "subtab_chests"
                 return
             elseif tx >= W - 64 and tx <= W - 8 then
-                self.pressedBtn = "tab_shop"
+                self.pressedBtn = "subtab_shop"
                 return
             end
         end
@@ -1237,6 +1287,13 @@ function MenuState:touchpressed(id, tx, ty)
                     return
                 end
             end
+            return
+        end
+        if tx >= 6 and tx <= 158 and ty >= 6 and ty <= 196 then
+            self.pressedBtn = "open_gold"
+            return
+        elseif tx >= 162 and tx <= 316 and ty >= 6 and ty <= 196 then
+            self.pressedBtn = "open_obsidian"
             return
         end
 
@@ -1263,35 +1320,6 @@ function MenuState:touchpressed(id, tx, ty)
             self.pressedBtn = "open_bestiary"
             return
         end
-    end
-
-    if self.currentTab == "play" then
-        -- Chevrons Carrousel Chapitres
-        if (tx >= 140 and tx <= 168 and ty >= 6 and ty <= 32) or (tx >= 6 and tx <= 44 and ty >= 6 and ty <= 40) then
-            self.pressedBtn = "chap_prev"
-        elseif (tx >= 168 and tx <= 202 and ty >= 6 and ty <= 32) or (tx >= 160 and tx <= 204 and ty >= 6 and ty <= 40) then
-            self.pressedBtn = "chap_next"
-        -- Modes de jeu (4 cartes empilées)
-        elseif tx >= 6 and tx <= 126 and ty >= 100 and ty <= 122 then
-            self.pressedBtn = "mode_asc"
-        elseif tx >= 6 and tx <= 126 and ty >= 124 and ty <= 146 then
-            self.pressedBtn = "mode_inf"
-        elseif tx >= 6 and tx <= 126 and ty >= 148 and ty <= 170 then
-            self.pressedBtn = "mode_boss"
-        elseif tx >= 6 and tx <= 126 and ty <= 198 and ty >= 172 then
-            self.pressedBtn = "mode_surv"
-        -- Récolte Patrouille AFK
-        elseif tx >= 206 and tx <= 316 and ty >= 6 and ty <= 96 then
-            self.pressedBtn = "claim_patrol"
-        -- Abandon de la course sauvegardée (pastille en haut à droite du bouton Jouer)
-        elseif Save.getRun() and tx >= 248 and tx <= 308 and ty >= 106 and ty <= 128 then
-            self.pressedBtn = "abandon_run"
-        -- Bouton Master Jouer
-        elseif tx >= 130 and tx <= 316 and ty >= 100 and ty <= 198 then
-            self.pressedBtn = "play"
-        end
-
-    elseif self.currentTab == "heroes" then
         -- Clic sur l'un des 5 avatars Bento en haut
         local hList = Heroes.getAll()
         for i, h in ipairs(hList) do
@@ -1310,21 +1338,58 @@ function MenuState:touchpressed(id, tx, ty)
             else
                 self.pressedBtn = "unlock_hero"
             end
+            return
+        end
+
+    elseif self.currentTab == "play" then
+        -- Chevrons Carrousel Chapitres
+        if (tx >= 140 and tx <= 168 and ty >= 6 and ty <= 32) or (tx >= 6 and tx <= 44 and ty >= 6 and ty <= 40) then
+            self.pressedBtn = "chap_prev"
+        elseif (tx >= 168 and tx <= 202 and ty >= 6 and ty <= 32) or (tx >= 160 and tx <= 204 and ty >= 6 and ty <= 40) then
+            self.pressedBtn = "chap_next"
+        -- Modes de jeu (4 cartes empilées)
+        elseif tx >= 6 and tx <= 126 and ty >= 100 and ty <= 122 then
+            self.pressedBtn = "mode_asc"
+        elseif tx >= 6 and tx <= 126 and ty >= 124 and ty <= 146 then
+            self.pressedBtn = "mode_inf"
+        elseif tx >= 6 and tx <= 126 and ty >= 148 and ty <= 170 then
+            self.pressedBtn = "mode_boss"
+        elseif tx >= 6 and tx <= 126 and ty >= 198 and ty >= 172 then
+            self.pressedBtn = "mode_surv"
+        -- Récolte Patrouille AFK
+        elseif tx >= 206 and tx <= 316 and ty >= 6 and ty <= 96 then
+            self.pressedBtn = "claim_patrol"
+        -- Abandon de la course sauvegardée (pastille en haut à droite du bouton Jouer)
+        elseif Save.getRun() and tx >= 248 and tx <= 308 and ty >= 106 and ty <= 128 then
+            self.pressedBtn = "abandon_run"
+        -- Bouton Master Jouer
+        elseif tx >= 130 and tx <= 316 and ty >= 100 and ty <= 198 then
+            self.pressedBtn = "play"
         end
 
     elseif self.currentTab == "equipment" then
         self.inventory:touchpressed(id, tx, ty)
 
     elseif self.currentTab == "talents" then
-        if tx >= 20 and tx <= 300 and ty >= 136 and ty <= 194 then
+        if tx >= 6 and tx <= 156 and ty >= 62 and ty <= 98 then
+            self.selectedTalent = (self.selectedTalent == "strength") and nil or "strength"
+            Audio.play("ui_click", 0.05, 0.7)
+            return
+        elseif tx >= 164 and tx <= 314 and ty >= 62 and ty <= 98 then
+            self.selectedTalent = (self.selectedTalent == "vitality") and nil or "vitality"
+            Audio.play("ui_click", 0.05, 0.7)
+            return
+        elseif tx >= 6 and tx <= 156 and ty >= 102 and ty <= 138 then
+            self.selectedTalent = (self.selectedTalent == "agility") and nil or "agility"
+            Audio.play("ui_click", 0.05, 0.7)
+            return
+        elseif tx >= 164 and tx <= 314 and ty >= 102 and ty <= 138 then
+            self.selectedTalent = (self.selectedTalent == "recovery") and nil or "recovery"
+            Audio.play("ui_click", 0.05, 0.7)
+            return
+        elseif tx >= 20 and tx <= 300 and ty >= 136 and ty <= 194 then
             self.pressedBtn = "upgrade_talent"
-        end
-
-    elseif self.currentTab == "chests" then
-        if tx >= 6 and tx <= 158 and ty >= 6 and ty <= 196 then
-            self.pressedBtn = "open_gold"
-        elseif tx >= 162 and tx <= 316 and ty >= 6 and ty <= 196 then
-            self.pressedBtn = "open_obsidian"
+            return
         end
     end
 end
@@ -1357,7 +1422,13 @@ function MenuState:touchreleased(id, tx, ty)
     for _, tab in ipairs(self.tabs) do
         if self.pressedBtn == "tab_" .. tab.id then
             self.currentTab = tab.id
-            if tab.id == "equipment" then
+            if tab.id == "quests" then
+                self.questSubPage = "quests"
+            elseif tab.id == "chests" then
+                self.chestSubPage = "chests"
+            elseif tab.id == "heroes" then
+                self.heroSubPage = "roster"
+            elseif tab.id == "equipment" then
                 self.inventory:refresh()
             elseif tab.id == "settings" then
                 self.settingsPanel:open()
@@ -1378,7 +1449,7 @@ function MenuState:touchreleased(id, tx, ty)
         elseif self.pressedBtn == "claim_patrol" then
             local claimed = Save.claimPatrol()
             if claimed > 0 then
-                self.patrolRewardText = string.format("+%d OR RECOLTE !", claimed)
+                self.patrolRewardText = string.format("+%d GOLD COLLECTED!", claimed)
                 self.patrolRewardTimer = 1.6
             end
         elseif self.pressedBtn == "mode_asc" then
@@ -1400,10 +1471,12 @@ function MenuState:touchreleased(id, tx, ty)
         end
 
     elseif self.currentTab == "quests" then
-        if self.pressedBtn == "tab_quests" then
+        if self.pressedBtn == "subtab_quests" then
             self.questSubPage = "quests"
-        elseif self.pressedBtn == "tab_achievements" then
+            Audio.play("ui_click", 0.05, 0.7)
+        elseif self.pressedBtn == "subtab_achievements" then
             self.questSubPage = "achievements"
+            Audio.play("ui_click", 0.05, 0.7)
         elseif self.pressedBtn and self.pressedBtn:sub(1, 4) == "ach_" then
             if Save.claimAchievement(self.pressedBtn:sub(5)) then
                 Audio.play("ui_confirm", 0, 0.9)
@@ -1446,19 +1519,22 @@ function MenuState:touchreleased(id, tx, ty)
 
     elseif self.currentTab == "talents" then
         if self.pressedBtn == "upgrade_talent" then
-            local success, chosen, newLvl, cost = Save.upgradeTalent()
+            local success, chosen, newLvl, cost = Save.upgradeTalent(self.selectedTalent)
             if success then
                 self.saveData = Save.get()
                 self.lastUpgradedTalent = chosen
                 self.talentUpgradeTimer = 1.5
+                Audio.play("upgrade", 0.05, 0.8)
             end
         end
 
     elseif self.currentTab == "chests" then
-        if self.pressedBtn == "tab_chests" then
+        if self.pressedBtn == "subtab_chests" then
             self.chestSubPage = "chests"
-        elseif self.pressedBtn == "tab_shop" then
+            Audio.play("ui_click", 0.05, 0.7)
+        elseif self.pressedBtn == "subtab_shop" then
             self.chestSubPage = "shop"
+            Audio.play("ui_click", 0.05, 0.7)
         elseif self.pressedBtn and self.pressedBtn:sub(1, 5) == "shop_" then
             local idx = tonumber(self.pressedBtn:sub(6))
             local offers = self:getShopOffers()
@@ -1547,6 +1623,10 @@ function MenuState:gamepadpressed(joystick, button)
     if button == "b" then
         if self.currentTab == "settings" then
             self.currentTab = "play"
+        elseif self.currentTab == "equipment" and self.inventory.modalItem then
+            self.inventory:closeModal()
+            Audio.play("ui_cancel", 0, 0.7)
+            return
         elseif self.questSubPage == "achievements" then
             self.questSubPage = "quests"
         elseif self.heroSubPage == "bestiary" then
@@ -1561,6 +1641,9 @@ function MenuState:gamepadpressed(joystick, button)
     elseif button == "y" then
         if self.currentTab == "settings" then
             self.currentTab = "play"
+        elseif self.currentTab == "equipment" and self.inventory.modalItem then
+            self.inventory:gamepadpressed("y")
+            return
         else
             self.currentTab = "settings"
             self.settingsPanel:open()
@@ -1583,6 +1666,8 @@ function MenuState:gamepadpressed(joystick, button)
             Audio.play("ui_click", 0.05, 0.7)
         end
         return
+    elseif self.currentTab == "equipment" then
+        if self.inventory:gamepadpressed(button) then return end
     elseif button == "a" or button == "start" then
         self:keypressed("return")
         return
@@ -1592,17 +1677,28 @@ function MenuState:gamepadpressed(joystick, button)
 end
 
 function MenuState:keypressed(key)
+    if self.currentTab == "equipment" and (key == "escape" or key == "backspace") and self.inventory.modalItem then
+        self.inventory:closeModal()
+        Audio.play("ui_cancel", 0, 0.7)
+        return
+    end
+
     if key == "return" or key == "start" or key == "space" then
         if self.currentTab == "play" then
             self:launchGame()
         elseif self.currentTab == "talents" then
-            local success, chosen = Save.upgradeTalent()
+            local success, chosen = Save.upgradeTalent(self.selectedTalent)
             if success then
                 self.saveData = Save.get()
                 self.lastUpgradedTalent = chosen
                 self.talentUpgradeTimer = 1.5
+                Audio.play("upgrade", 0.05, 0.8)
             end
+        elseif self.currentTab == "equipment" then
+            if self.inventory:keypressed(key) then return end
         end
+    elseif self.currentTab == "equipment" then
+        if self.inventory:keypressed(key) then return end
     elseif key == "1" then
         self.currentTab = "play"
     elseif key == "2" then

@@ -132,11 +132,33 @@ function GameState:enter(params)
             self.player.dodgeChance = (self.player.dodgeChance or 0) + (aStats.dodge or 0) / 100
         end
 
-        local rId = saveData.equipped.ring
-        if rId then
-            local rStats = Items.getStats(rId, Save.getItemLevel(rId), Save.getItemRarity(rId), Save.getItemStars(rId))
-            self.player.critChance = self.player.critChance + ((rStats.crit or 0) / 100)
-            self.player.damageMult = self.player.damageMult + ((rStats.atk or 0) / 30)
+        -- Anneaux équipés : prise en compte de ring1 et ring2
+        local ringList = { saveData.equipped.ring1 or saveData.equipped.ring, saveData.equipped.ring2 }
+        for _, rId in ipairs(ringList) do
+            if rId then
+                local rStats = Items.getStats(rId, Save.getItemLevel(rId), Save.getItemRarity(rId), Save.getItemStars(rId))
+                self.player.critChance = self.player.critChance + ((rStats.crit or 0) / 100)
+                self.player.damageMult = self.player.damageMult + ((rStats.atk or 0) / 30)
+                if rStats.hp and rStats.hp > 0 then
+                    self.player.maxHp = self.player.maxHp + rStats.hp
+                    self.player.hp = self.player.hp + rStats.hp
+                end
+                if rStats.dodge and rStats.dodge > 0 then
+                    self.player.dodgeChance = (self.player.dodgeChance or 0) + (rStats.dodge / 100)
+                end
+            end
+        end
+
+        -- Familiers équipés : synchronisation stricte avec l'équipement réel
+        self.player.pets = {}
+        local Pet = require("src.entities.pet")
+        local p1Id = saveData.equipped.pet1 or saveData.equipped.pet
+        if p1Id then
+            table.insert(self.player.pets, Pet.new(p1Id, 1))
+        end
+        local p2Id = saveData.equipped.pet2
+        if p2Id then
+            table.insert(self.player.pets, Pet.new(p2Id, 2))
         end
     end
 

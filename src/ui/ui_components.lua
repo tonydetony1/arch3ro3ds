@@ -261,7 +261,7 @@ function UI.drawItemCard(x, y, w, h, item, level, isEquipped, isSelected, rarity
 
     -- Badge de niveau
     if level and level > 0 then
-        local lvlStr = "N." .. level
+        local lvlStr = "LV." .. level
         local bw = math.max(18, PixelFont.getWidth(lvlStr, "tiny") + 6)
         Skin.roundRect(C.ink, x + 3, y + 3, bw, 9, 2)
         PixelFont.printf(lvlStr, x + 3, y + 5, bw, "center", C.yellow, "tiny")

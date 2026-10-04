@@ -42,6 +42,7 @@ end
 -- recherche de fichier coûte plusieurs dizaines de ms sur 3DS) ; .ogg seulement si le
 -- .wav n'a pas pu être lu
 function Audio.loadSfx(name)
+    if not love or not love.audio or not love.audio.newSource then return end
     if Audio.sources[name] ~= nil then return end
     Audio.sources[name] = false -- tenté (même en cas d'échec : pas de nouvel essai)
     local path = SFX_PATH .. name .. ".wav"
@@ -123,6 +124,10 @@ function Audio.play(name, pitchVar, volumeScale)
         end
         src:play()
     end)
+end
+
+function Audio.playSfx(name, pitchVar, volumeScale)
+    return Audio.play(name, pitchVar, volumeScale)
 end
 
 -- Lance une musique (fondu enchaîné si une autre tourne déjà)

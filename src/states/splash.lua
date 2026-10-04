@@ -162,11 +162,11 @@ function SplashState:enter()
     local hData = Heroes.get(sData.selectedHero or "atreus")
     -- Textes figés le temps de l'écran titre (pas de string.format à chaque image)
     self.texts = {
-        level = string.format("NIV. %d", sData.accountLevel or 1),
+        level = string.format("LV. %d", sData.accountLevel or 1),
         gold = tostring(sData.gold or 0),
         gems = tostring(sData.gems or 0),
         name = hData.name:upper(),
-        caption = string.format("%s  -  CHAPITRE %d", hData.title, sData.selectedChapter or 1),
+        caption = string.format("%s  -  CHAPTER %d", hData.title, sData.selectedChapter or 1),
     }
     -- Mode économie : moitié moins de particules
     self.particleCount = st.lowPower and 0.5 or 1
@@ -451,9 +451,9 @@ function SplashState:drawBottom()
             BTN_W / glow[3] * 1.2, BTN_H / glow[4] * 2.2, glow[3] / 2, glow[4] / 2)
         setAdd(false)
     end
-    UI.drawPillButton(BTN_X, BTN_Y, BTN_W, BTN_H, "TOUCHER POUR JOUER", "emerald", self.pressed, "swords")
+    UI.drawPillButton(BTN_X, BTN_Y, BTN_W, BTN_H, "TOUCH TO PLAY", "emerald", self.pressed, "swords")
 
-    PixelFont.printf("Développé par TonyDeTony  -  v1.0.7", 0, 226, BOT_W, "center", FOOTER_COLOR, "tiny")
+    PixelFont.printf("Developed by TonyDeTony  -  v1.0.7", 0, 226, BOT_W, "center", FOOTER_COLOR, "tiny")
     if t < FADE_IN then
         love.graphics.setColor(0, 0, 0, 1 - t / FADE_IN)
         love.graphics.rectangle("fill", 0, 0, BOT_W, Config.BOTTOM_HEIGHT)
