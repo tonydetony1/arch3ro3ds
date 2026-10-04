@@ -183,7 +183,7 @@ local Items = {
             desc = "Piercing spinning blade that returns to player dealing double damage.",
             passives = {
                 uncommon  = { name = "Aerodynamic", desc = "Base Attack increased by +25%." },
-                rare      = { name = "Double Impact", desc = "Deals 65% of total damage on return flight." },
+                rare      = { name = "Double Impact", desc = "Deals 50% of total damage on return flight." },
                 epic      = { name = "Total Pierce", desc = "Pierces through all lined-up monsters without slowing down." },
                 legendary = { name = "Swirling Typhoon", desc = "Lightly pulls enemies toward its center." },
             },
@@ -561,16 +561,19 @@ function Items.getStats(id, level, rarityOverride, stars)
     -- Facteur de niveau et de rareté
     local totalScale = statScale(level, rData, stars)
 
-    local isRareDodge = rData.tier >= 3 and item.passives and item.passives.rare and (string.find(item.passives.rare.desc, "Esquive") or string.find(item.passives.rare.desc, "Dodge"))
-    local isRareCrit = rData.tier >= 3 and item.passives and item.passives.rare and (string.find(item.passives.rare.desc, "Critique") or string.find(item.passives.rare.desc, "Crit"))
+    -- Rare passive "+N% Dodge" / "+N% Critical": the description sets the bonus
+    local rareDesc = rData.tier >= 3 and item.passives and item.passives.rare and item.passives.rare.desc or ""
+    local rarePct = tonumber(rareDesc:match("%+(%d+)%%")) or 0
+    local rareDodge = rareDesc:find("Dodge") and rarePct or 0
+    local rareCrit = rareDesc:find("Crit") and rarePct or 0
 
     local stats = {
         level = level,
         rarity = curRarity,
         atk = item.baseAtk and math.floor(item.baseAtk * totalScale) or 0,
         hp = item.baseHp and math.floor(item.baseHp * totalScale) or 0,
-        dodge = (item.bonusDodge or 0) + (isRareDodge and 7 or 0),
-        crit = (item.bonusCrit or 0) + (isRareCrit and 8 or 0),
+        dodge = (item.bonusDodge or 0) + rareDodge,
+        crit = (item.bonusCrit or 0) + rareCrit,
         bossDmg = item.bonusBoss or 0,
         goldBonus = item.bonusGold or 0,
         fireRate = item.fireRate or 0.3,

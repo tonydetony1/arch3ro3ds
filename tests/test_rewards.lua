@@ -148,4 +148,29 @@ T["equipment: items without those bonuses change nothing"] = function()
     assert(p.bossDamageMult == 1.0 and p.goldMultiplier == 1.0)
 end
 
+-- Percentage written in a passive description, e.g. "+10% Critical Hit Chance." -> 10
+local function passivePct(id, tier)
+    return tonumber(Items.get(id).passives[tier].desc:match("(%d+)%%"))
+end
+
+T["rare passives: crit and dodge bonuses match their description"] = function()
+    for _, case in ipairs({
+        { id = "starter_bow", stat = "crit" },
+        { id = "wolf_ring", stat = "crit" },
+        { id = "serpent_ring", stat = "dodge" },
+        { id = "vest_dexterity", stat = "dodge" },
+    }) do
+        local item = Items.get(case.id)
+        local base = (case.stat == "crit") and (item.bonusCrit or 0) or (item.bonusDodge or 0)
+        local got = Items.getStats(case.id, 1, "rare")[case.stat]
+        local expected = base + passivePct(case.id, "rare")
+        assert(got == expected, string.format("%s: %s %d, expected %d", case.id, case.stat, got, expected))
+    end
+end
+
+T["boomerang: return flight passive matches the weapon"] = function()
+    local pct = passivePct("tornado_boomerang", "rare")
+    assert(pct == math.floor(Weapons.get("tornado_boomerang").return_damage_mult * 100 + 0.5), tostring(pct))
+end
+
 return T
