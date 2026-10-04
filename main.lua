@@ -1,10 +1,10 @@
 -- main.lua
--- Point d'entrée d'Arch3ro pour Nintendo 3DS (LÖVEPotion) & PC Desktop (LÖVE2D)
+-- Entry point for Arch3ro on Nintendo 3DS (LÖVE-Potion) & Desktop PC (LÖVE2D)
 
--- Paquet 3DS : tous les modules sont regroupés dans « modules.bin » (tools/build_all.py).
--- Une seule lecture au démarrage au lieu d'une recherche de fichier par module dans
--- l'archive (~50 ms chacune sur Old 3DS, soit ~3 s pour la soixantaine de modules).
--- Absent sur PC : require charge alors les fichiers .lua normalement.
+-- 3DS package: all modules are bundled in "modules.bin" (tools/build_all.py).
+-- A single read at boot instead of per-module file lookups in the archive
+-- (~50 ms each on Old 3DS, taking ~3 s for ~60 modules).
+-- Absent on PC: require loads .lua files normally.
 local releaseModuleBundle
 local bundleReadTime = nil
 do
@@ -31,8 +31,8 @@ do
             return chunk
         end
         table.insert(package.loaders, 2, bundleLoader)
-        -- Après le démarrage : on rend la mémoire du paquet (~1,3 Mo) ; les rares require
-        -- tardifs repassent par les fichiers individuels, toujours présents dans l'archive
+        -- After boot: free the bundle memory (~1.3 MB); rare late requires
+        -- fall back to individual files still present in the archive
         releaseModuleBundle = function()
             index, blob = nil, nil
             for i, loader in ipairs(package.loaders) do
@@ -42,7 +42,7 @@ do
     end
 end
 
--- Chronométrage du démarrage (écrit dans boot_profile.txt du dossier de sauvegarde)
+-- Boot timing (written to boot_profile.txt in the save directory)
 local Boot = require("src.core.boot_profile")
 local bootMark = Boot.mark
 if bundleReadTime then
@@ -56,6 +56,7 @@ local Save = require("src.data.save")
 bootMark("src.data.save")
 local Audio = require("src.audio.audio")
 bootMark("src.audio.audio")
+local SplashState = require("src.states.splash")
 local MenuState = require("src.states.menu")
 bootMark("src.states.menu")
 local GameState = require("src.states.game")
@@ -67,12 +68,12 @@ local Perf = require("src.core.perf")
 local PixelFont = require("src.ui.pixel_font")
 local Palette = require("src.render.palette")
 
--- Boucle 3DS : écran tactile redessiné une image sur deux (voir src/core/runloop.lua)
+-- 3DS loop: touch screen redrawn every other frame (see src/core/runloop.lua)
 if Gpu.is3DS and love.graphics.getScreens then
     love.run = require("src.core.runloop").run
 end
 
-bootMark("modules chargés")
+bootMark("modules loaded")
 
 local gameStateMachine
 local isTestMode = false
@@ -84,19 +85,19 @@ local benchMode = false
 local Bench = nil
 
 function love.load(arg)
-    -- Graine aléatoire
+    -- Random seed
     math.randomseed(os.time())
 
-    -- Chargement ou initialisation des données de sauvegarde
+    -- Load or initialize save data
     Save.load()
     Save.updateEnergyRegen()
-    bootMark("sauvegarde lue")
+    bootMark("save loaded")
 
-    -- Détection des drapeaux CLI
+    -- Detect CLI flags
     if arg then
         for _, a in ipairs(arg) do
             if a == "--test" then isTestMode = true end
-            -- Banc d'essai PC avec les contraintes GPU de la 3DS (budget de sommets, lots ordonnés)
+            -- PC test bench with 3DS GPU constraints (vertex budget, ordered batches)
             if a == "--sim3ds" then Gpu.simulate3DS(); Config.SHOW_GPU_STATS = true end
             if a == "--gpustats" then Config.SHOW_GPU_STATS = true end
             if a == "--profile" then Gpu.profile = {} end
@@ -106,20 +107,20 @@ function love.load(arg)
 
     Perf.init(arg)
 
-    -- Garde-fou du tampon de sommets PICA200 (écran noir en combat, voir src/core/gpu.lua)
+    -- PICA200 vertex buffer safeguard (prevents black screen in combat, see src/core/gpu.lua)
     Gpu.install()
 
-    -- Rendu net (nearest) optimisé pour l'écran 3DS et les performances GPU PICA200
+    -- Crisp rendering (nearest) optimized for 3DS screen and PICA200 GPU performance
     love.graphics.setDefaultFilter("nearest", "nearest")
 
-    -- Construction de l'atlas pixel art (sprites, décor, icônes, police) : une seule fois
+    -- Build pixel art atlas (sprites, scenery, icons, font): runs once
     require("src.render.art").init()
-    bootMark("atlas graphique")
+    bootMark("graphics atlas")
 
-    -- Réglages de la page Paramètres (relief 3D, particules, dégâts affichés)
+    -- Settings page configuration (3D depth, particles, floating damage numbers)
     Save.applySettings()
 
-    -- Bande-son : effets et musiques (silencieux si les fichiers manquent)
+    -- Audio soundtrack: effects and music (silent if files are missing)
     Audio.init()
     local sData = Save.get()
     if sData.audio then
@@ -129,25 +130,26 @@ function love.load(arg)
     Audio.playMusic("hub")
     bootMark("audio")
 
-    -- Initialisation de la Machine d'États
+    -- State Machine initialization
     gameStateMachine = StateMachine.new()
+    gameStateMachine:add("splash", SplashState.new(gameStateMachine))
     gameStateMachine:add("menu", MenuState.new(gameStateMachine))
     gameStateMachine:add("game", GameState.new(gameStateMachine))
     gameStateMachine:add("pause", PauseState.new(gameStateMachine))
     gameStateMachine:add("gameover", GameOverState.new(gameStateMachine))
 
-    -- Par défaut : Lancement sur le Hub / Menu Principal
-    gameStateMachine:switch("menu")
-    bootMark("menu prêt")
+    -- Official splash title screen with logo (selftest advances it, src/dev/selftest.lua)
+    gameStateMachine:switch("splash")
+    bootMark("menu ready")
     Boot.save()
     if releaseModuleBundle then releaseModuleBundle() end
 
-    -- Sur console, pas d'arguments : le fichier "bench_roomload" du dossier de sauvegarde
-    -- déclenche la mesure des temps de construction de salle (résultat dans bench_log.txt)
+    -- On console, no CLI arguments: "bench_roomload" file in save directory
+    -- triggers room generation timing benchmark (output in bench_log.txt)
     local roomloadFlag = love.filesystem.getInfo and love.filesystem.getInfo("bench_roomload") ~= nil
     local playFlag = love.filesystem.getInfo and love.filesystem.getInfo("bench_play") ~= nil
     if benchMode or roomloadFlag or playFlag then
-        -- src/dev n'est embarqué dans le paquet 3DS qu'avec `build_all.py --with-bench`
+        -- src/dev is only bundled in the 3DS package with `build_all.py --with-bench`
         local ok, mod = pcall(require, "src.dev.bench")
         Bench = ok and mod or nil
     end
@@ -155,7 +157,7 @@ function love.load(arg)
         Bench.parse(arg)
         if roomloadFlag then Bench.active, Bench.roomload = true, true end
         if playFlag then
-            -- Contenu du fichier (facultatif) : numéro de la salle à jouer
+            -- Optional file content: room number to play
             Bench.active, Bench.duration = true, 30
             local spec = love.filesystem.read("bench_play") or ""
             Bench.room = tonumber(spec:match("%d+")) or Bench.room
@@ -194,7 +196,7 @@ function love.update(dt)
 end
 
 function love.draw(screen)
-    -- Une image = tous les écrans : le budget repart à zéro avant le premier écran
+    -- One frame = all screens: budget resets to zero before the first screen
     if screen == nil or screen == "top" or screen == "left" then
         Gpu.beginFrame()
     end
@@ -213,12 +215,12 @@ function love.draw(screen)
     )
     if Config.SHOW_GPU_STATS and (screen == nil or screen == "bottom") then
         local st = Gpu.stats
-        -- Texte reconstruit 4 fois par seconde : une chaîne neuve à chaque image allouait
-        -- une mise en page de police par image (pression GC visible sur la console)
+        -- Text rebuilt 4 times per second: a fresh string every frame would allocate
+        -- font layout memory on every frame (visible GC pressure on console)
         local now = love.timer.getTime()
         if now >= gpuStatsNextRefresh then
             gpuStatsNextRefresh = now + GPU_STATS_REFRESH
-            gpuStatsText = string.format("%d FPS  %d sommets  %d appels  %d rejets",
+            gpuStatsText = string.format("%d FPS  %d vertices  %d calls  %d skipped",
                 love.timer.getFPS(), st.vertices, st.calls, st.skipped)
         end
         love.graphics.origin()
@@ -233,8 +235,10 @@ end
 function love.keypressed(key)
     if key == "f3" then Config.SHOW_GPU_STATS = not Config.SHOW_GPU_STATS return end
     if key == "escape" then
-        if gameStateMachine.current == gameStateMachine.states["menu"] then
-            love.event.quit()
+        local menu = gameStateMachine.states["menu"]
+        if gameStateMachine.current == menu then
+            -- Escape closes open UI first (item card, sub-page, tab)
+            if not menu:goBack() then love.event.quit() end
             return
         end
     end
@@ -242,7 +246,7 @@ function love.keypressed(key)
     gameStateMachine:keypressed(key)
 end
 
--- Gestion du tactile sur Nintendo 3DS (LÖVEPotion)
+-- Touch handling on Nintendo 3DS (LÖVE-Potion)
 function love.touchpressed(id, x, y, dx, dy, pressure)
     local localX, localY = Screen.normalizeTouch(x, y)
     if localX and localY then
@@ -264,8 +268,10 @@ function love.touchreleased(id, x, y, dx, dy, pressure)
     end
 end
 
--- Émulation du tactile avec la souris sur PC Desktop
-function love.mousepressed(x, y, button)
+-- Mouse touch emulation on Desktop PC. On a touchscreen, LÖVE also sends
+-- a mouse event (istouch): ignored since finger input is handled by love.touchpressed.
+function love.mousepressed(x, y, button, istouch)
+    if istouch then return end
     if button == 1 then
         local localX, localY = Screen.normalizeTouch(x, y)
         if localX and localY then
@@ -274,7 +280,8 @@ function love.mousepressed(x, y, button)
     end
 end
 
-function love.mousemoved(x, y, dx, dy)
+function love.mousemoved(x, y, dx, dy, istouch)
+    if istouch then return end
     if love.mouse and love.mouse.isDown(1) then
         local localX, localY = Screen.normalizeTouch(x, y)
         if localX and localY then
@@ -283,7 +290,8 @@ function love.mousemoved(x, y, dx, dy)
     end
 end
 
-function love.mousereleased(x, y, button)
+function love.mousereleased(x, y, button, istouch)
+    if istouch then return end
     if button == 1 then
         local localX, localY = Screen.normalizeTouch(x, y)
         if localX and localY then
@@ -292,14 +300,14 @@ function love.mousereleased(x, y, button)
     end
 end
 
--- Entrées analogiques du Circle Pad 3DS
+-- Analog inputs from 3DS Circle Pad
 function love.gamepadaxis(joystick, axis, value)
     gameStateMachine:gamepadaxis(joystick, axis, value)
 end
 
--- Boutons physiques de la console 3DS (A, B, X, Y, D-Pad, Gâchettes)
+-- Physical buttons on 3DS console (A, B, X, Y, D-Pad, Shoulder triggers)
 function love.gamepadpressed(joystick, button)
-    -- SELECT : affiche / masque les performances (FPS, sommets, appels GPU) sur la console
+    -- SELECT: toggles performance stats (FPS, vertices, GPU calls) on console
     if button == "back" then
         Config.SHOW_GPU_STATS = not Config.SHOW_GPU_STATS
         return
@@ -307,9 +315,11 @@ function love.gamepadpressed(joystick, button)
     gameStateMachine:gamepadpressed(joystick, button)
 end
 
--- Gestionnaire d'erreur robuste : affiche l'erreur à l'écran au lieu de fermer la fenêtre
+-- Robust error handler: renders error to screen instead of crashing the window.
+-- Like in LÖVE 11, returns the error screen loop (one frame per call).
 function love.errorhandler(msg)
-    local errText = tostring(msg) .. "\n\n" .. debug.traceback()
+    local trace = debug.traceback()
+    local errText = tostring(msg) .. "\n\n" .. trace
     print("FATAL ERROR:\n" .. errText)
 
     pcall(function()
@@ -320,42 +330,57 @@ function love.errorhandler(msg)
         love.filesystem.write("error_log.txt", errText)
     end)
 
-    -- Autotest et banc d'essai (lancés sans écran, ex. intégration continue) : on quitte
-    -- avec un code d'erreur au lieu d'attendre devant l'écran d'erreur
+    -- Self-test and benchmark (run headless, e.g. continuous integration): exit
+    -- with error code instead of hanging on error screen
     if isTestMode or benchMode then
         os.exit(1)
     end
 
-    while true do
+    -- Bounded text: vertex guard (src/core/gpu.lua) would reject overly long text
+    local title = "ARCH3RO ERROR (START: quit):\n" .. tostring(msg):sub(1, 600)
+    trace = trace:sub(1, 1200)
+
+    local function draw()
+        if not (love.graphics and love.graphics.isActive()) then return end
+        -- Outside love.draw: reset vertex budget here, otherwise text disappears
+        -- after several frames; an error during batch recording would leave it active
+        Gpu.endRecord()
+        Gpu.beginFrame()
+        love.graphics.setScissor()
+        -- LÖVE-Potion screens: "left" and "right" (top, per eye) then "bottom"; "top"
+        -- does not exist and would crash this handler (game would exit to black screen)
+        local screens = love.graphics.getScreens and love.graphics.getScreens()
+        if screens then
+            for _, screen in ipairs(screens) do
+                love.graphics.origin()
+                love.graphics.setActiveScreen(screen)
+                if screen == "bottom" then
+                    love.graphics.clear(0.12, 0.02, 0.02)
+                    love.graphics.setColor(1, 0.8, 0.8)
+                    love.graphics.printf(trace, 10, 10, 300)
+                else
+                    love.graphics.clear(0.25, 0.05, 0.05)
+                    love.graphics.setColor(1, 1, 1)
+                    love.graphics.printf(title, 10, 10, 380)
+                end
+            end
+        else
+            love.graphics.origin()
+            love.graphics.clear(0.25, 0.05, 0.05)
+            love.graphics.setColor(1, 1, 1)
+            love.graphics.printf("ARCH3RO ERREUR :\n" .. errText, 10, 10, 380)
+        end
+        love.graphics.present()
+    end
+
+    return function()
         if love.event then
             love.event.pump()
-            for name, a in love.event.poll() do
-                if name == "quit" then return end
+            for name, a, b in love.event.poll() do
+                if name == "quit" or (name == "gamepadpressed" and b == "start") then return 1 end
             end
         end
-
-        if love.graphics and love.graphics.isActive() then
-            love.graphics.origin()
-            love.graphics.setScissor()
-            local setScreen = love.graphics.setActiveScreen or love.graphics.setScreen
-            if setScreen then
-                setScreen("top")
-                love.graphics.clear(0.25, 0.05, 0.05)
-                love.graphics.setColor(1, 1, 1)
-                love.graphics.printf("ARCH3RO ERREUR :\n" .. tostring(msg), 10, 10, 380)
-
-                setScreen("bottom")
-                love.graphics.clear(0.12, 0.02, 0.02)
-                love.graphics.setColor(1, 0.8, 0.8)
-                love.graphics.printf(debug.traceback(), 10, 10, 300)
-            else
-                love.graphics.clear(0.25, 0.05, 0.05)
-                love.graphics.setColor(1, 1, 1)
-                love.graphics.printf("ARCH3RO ERREUR :\n" .. errText, 10, 10, 380)
-            end
-            love.graphics.present()
-        end
-
+        draw()
         if love.timer then
             love.timer.sleep(0.05)
         end

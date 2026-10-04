@@ -124,6 +124,11 @@ Heroes.ACCESSORY_BY_HERO = {
     rolla = "tiara",
 }
 
+-- Position de l'accessoire par rapport à l'ancre du corps (pixels du sprite, avant échelle)
+Heroes.ACCESSORY_OFFSETS = {
+    feather = { 3, -14 }, mask = { -2, -8 }, crest = { 0, -15 }, horns = { 0, -13 }, tiara = { 0, -15 },
+}
+
 -- Arc tenu en main (pointe vers +X, corde côté archer)
 local BOW = {
     "WW...",

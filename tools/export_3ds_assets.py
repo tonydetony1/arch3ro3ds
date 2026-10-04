@@ -17,9 +17,27 @@ ARTIFACTS_DIR = "/home/tonydetony/.gemini/antigravity-ide/brain/f15e127d-8a6c-49
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS_DIR = os.path.join(PROJECT_DIR, "assets")
 
-ICON_SRC = os.path.join(ARTIFACTS_DIR, "arch3ro_icon_1789928556073.jpg")
-BANNER_SRC = os.path.join(ARTIFACTS_DIR, "arch3ro_banner_clean_1789928595778.jpg")
-LOGO_SRC = os.path.join(ARTIFACTS_DIR, "arch3ro_logo_1789928524143.jpg")
+def find_source(candidates):
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    return candidates[-1]
+
+ICON_SRC = find_source([
+    os.path.join(ARTIFACTS_DIR, "arch3ro_icon_1789928556073.jpg"),
+    os.path.join(ASSETS_DIR, "icon_hd.png"),
+    os.path.join(ASSETS_DIR, "icon.png")
+])
+BANNER_SRC = find_source([
+    os.path.join(ARTIFACTS_DIR, "arch3ro_banner_clean_1789928595778.jpg"),
+    os.path.join(ASSETS_DIR, "banner_hd.png"),
+    os.path.join(ASSETS_DIR, "banner.png")
+])
+LOGO_SRC = find_source([
+    os.path.join(ARTIFACTS_DIR, "arch3ro_logo_1789928524143.jpg"),
+    os.path.join(ASSETS_DIR, "logo_hd.png"),
+    os.path.join(ASSETS_DIR, "logo.png")
+])
 
 os.makedirs(ASSETS_DIR, exist_ok=True)
 
@@ -183,9 +201,9 @@ for lang in range(16):
     smdh[base + 0x40 : base + 0x40 + len(long_desc)] = long_desc
     smdh[base + 0xC0 : base + 0xC0 + len(publisher)] = publisher
 
-# Paramètres SMDH (Ratings, flags, region lock, etc.) à 0x2008
-# Flags : 0x00000000 (Visible, pas d'auto-save spécial, etc.)
-struct.pack_into("<I", smdh, 0x2020, 0x7FFFFFFF) # Region-free (toutes régions)
+# Paramètres SMDH (Ratings, flags, region lock, etc.)
+struct.pack_into("<I", smdh, 0x2018, 0x7FFFFFFF) # Region-free (toutes régions)
+struct.pack_into("<I", smdh, 0x2028, 0x00001005) # Flags: Visible (0x1) | Allow3D (0x4) | New3DS (0x1000)
 
 # Icônes à l'offset 0x2040 (8256)
 # 1. Icône 24x24 (1152 octets)

@@ -64,10 +64,18 @@ elif love_bin:
 else:
     print(" -> Attention: AppImage löve introuvable, utilisation de l'atlas existant.")
 
-# Texture native 3DS : LÖVE Potion charge assets/atlas.t3x à la place de assets/atlas.png
-subprocess.run([sys.executable, os.path.join(TOOLS_DIR, "png2t3x.py"),
+# Textures natives 3DS GPU : atlas, logo officiel et bannière
+png2t3x_bin = os.path.join(TOOLS_DIR, "png2t3x.py")
+subprocess.run([sys.executable, png2t3x_bin,
                 os.path.join(ROOT_DIR, "assets", "atlas.png"),
                 os.path.join(ROOT_DIR, "assets", "atlas.t3x")], check=True)
+
+# Écran titre : décor, titre détouré et autel (générés par tools/make_title_assets.py)
+for name in ("logo_3ds", "banner", "title_top", "title_fx", "title_bottom"):
+    png_path = os.path.join(ROOT_DIR, "assets", name + ".png")
+    if os.path.exists(png_path):
+        subprocess.run([sys.executable, png2t3x_bin, png_path,
+                        os.path.join(ROOT_DIR, "assets", name + ".t3x")], check=True)
 
 # -------------------------------------------------------------
 # 1. Vérification / Création de l'archive .love optimisée
@@ -123,9 +131,6 @@ with zipfile.ZipFile(love_archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
                 for f in sorted(files):
                     if f.endswith(("_hd.png", ".DS_Store", ".tmp")):
                         continue
-                    # Images du menu HOME (icône, bannière, logo) : inutiles dans le jeu
-                    if root == "assets" and f.endswith(".png") and f != "atlas.png":
-                        continue
                     # Outils de développement : jamais embarqués
                     if root.startswith(os.path.join("src", "dev")):
                         if not (WITH_BENCH and f == "bench.lua"):
@@ -149,14 +154,41 @@ print(f" -> Archive game.love : {love_size / (1024*1024):.2f} Mo ({love_size:,} 
 # 2. Vérification du fichier SMDH (Métadonnées & Icônes 3DS)
 # -------------------------------------------------------------
 smdh_path = os.path.join(ROOT_DIR, "Arch3ro.smdh")
-if not os.path.exists(smdh_path) or os.path.getsize(smdh_path) != 14016:
+export_script = os.path.join(TOOLS_DIR, "export_3ds_assets.py")
+need_smdh = (not os.path.exists(smdh_path) or 
+             os.path.getsize(smdh_path) != 14016 or
+             (os.path.exists(export_script) and os.path.getmtime(export_script) > os.path.getmtime(smdh_path)))
+if need_smdh:
     print("\n[2/5] Génération d'Arch3ro.smdh...")
-    subprocess.run([sys.executable, os.path.join(TOOLS_DIR, "export_3ds_assets.py")], check=True)
+    subprocess.run([sys.executable, export_script], check=True)
 else:
     print(f"\n[2/5] Arch3ro.smdh conforme ({os.path.getsize(smdh_path)} octets).")
 
 with open(smdh_path, "rb") as f:
     smdh_bytes = f.read()
+
+# -------------------------------------------------------------
+# 2.5. Génération de la bannière HOME Menu (Photo & Jingle sonore)
+# -------------------------------------------------------------
+banner_path = os.path.join(ROOT_DIR, "Arch3ro.bnr")
+# Visuel de l'écran titre (tools/make_title_assets.py) ; à défaut, la bannière d'origine
+banner_png = os.path.join(ROOT_DIR, "assets", "banner_home.png")
+if not os.path.exists(banner_png):
+    banner_png = os.path.join(ROOT_DIR, "assets", "banner.png")
+banner_audio = os.path.join(ROOT_DIR, "assets", "audio", "sfx", "gate_open.wav")
+bannertool_bin = os.path.join(TOOLS_DIR, "bannertool")
+
+if os.path.exists(bannertool_bin) and os.path.exists(banner_png):
+    print("\n[2.5/5] Génération de la bannière HOME Menu 3DS (Arch3ro.bnr)...")
+    cmd_b = [bannertool_bin, "makebanner", "-i", banner_png]
+    if os.path.exists(banner_audio):
+        cmd_b.extend(["-a", banner_audio])
+    cmd_b.extend(["-o", banner_path])
+    res_b = subprocess.run(cmd_b, capture_output=True, text=True)
+    if res_b.returncode == 0:
+        print(f" -> Arch3ro.bnr généré avec succès ({os.path.getsize(banner_path)} octets).")
+    else:
+        print(f" -> Avertissement bannertool : {res_b.stderr.strip()}")
 
 # -------------------------------------------------------------
 # 3. Code Lua universel de recherche de jeu pour boot.lua
@@ -176,13 +208,16 @@ OLD_BOOT_BLOCK = """    local arg0 = love.arg.getLow(love.rawGameArguments)
     -- Is this one of those fancy "fused" games?
     local can_has_game = pcall(love.filesystem.setSource, exepath)"""
 
-NEW_BOOT_RAW = """    local arg0 = "sdmc:/3ds/Arch3ro.3dsx"
-    for _, p in ipairs({"romfs:/game.love","sdmc:/3ds/Arch3ro.3dsx","sdmc:/3ds/Arch3ro/Arch3ro.3dsx"}) do
-        local f = io.open(p, "rb")
-        if f then f:close() arg0 = p break end
+# love.filesystem.init(chemin) fixe le dossier de base de PhysFS, d'où LÖVE Potion tire le
+# dossier de sauvegarde (<base>save/<identité>). Dans le CIA, le jeu est lu dans romfs:/ (lecture
+# seule) : on initialise alors avec un chemin de sdmc:/3ds/ pour sauvegarder dans
+# sdmc:/3ds/save/arch3ro, comme le 3DSX. Sinon la première écriture plante (écran noir au boot).
+NEW_BOOT_RAW = """    local a,d = love.arg and love.arg.getLow(love.rawGameArguments),"sdmc:/3ds/Arch3ro.3dsx"
+    local exepath = d
+    for _,p in ipairs({"romfs:/game.love",a,d}) do
+        if p then local f=io.open(p) if f then f:close() exepath=p break end end
     end
-    love.filesystem.init(arg0)
-    local exepath = arg0
+    love.filesystem.init(exepath:find"^romfs:" and d or exepath)
     no_game_code = false
     invalid_game_path = nil
     local can_has_game = pcall(love.filesystem.setSource, exepath)"""
@@ -297,14 +332,12 @@ if cur_elf_instr == 0xebffff56:
 elif cur_elf_instr == 0xe1a00000:
     print(" -> NOP mcuHwcInit déjà présent sur l'ELF.")
 
-# Patch 2: NOP __PHYSFS_platformCalcBaseDir dans l'ELF (VA 0x1b9404)
+# Pas de NOP __PHYSFS_platformCalcBaseDir dans l'ELF (VA 0x1b9404), contrairement au 3DSX :
+# il forcerait le dossier de base sur le répertoire courant, romfs:/ dans un CIA, donc une
+# sauvegarde impossible. PhysFS doit déduire la base du chemin passé à love.filesystem.init.
 o_calc = v2f(0x1b9404)
-cur_calc_instr = struct.unpack_from("<I", raw_elf, o_calc)[0]
-if cur_calc_instr == 0x1a00001e:
-    struct.pack_into("<I", raw_elf, o_calc, 0xe1a00000)
-    print(f" -> NOP __PHYSFS_platformCalcBaseDir appliqué sur l'ELF (offset {hex(o_calc)}).")
-elif cur_calc_instr == 0xe1a00000:
-    print(" -> NOP __PHYSFS_platformCalcBaseDir déjà présent sur l'ELF.")
+assert struct.unpack_from("<I", raw_elf, o_calc)[0] == 0x1a00001e, \
+    "lovepotion.elf inattendu : __PHYSFS_platformCalcBaseDir déjà modifié (voir les empreintes du README)"
 
 # Patch 3: Patch boot.lua dans l'ELF
 raw_elf = patch_boot_lua(raw_elf)
@@ -325,6 +358,9 @@ cmd_makerom = [
     "-target", "t",
     "-exefslogo"
 ]
+if os.path.exists(banner_path):
+    cmd_makerom.extend(["-banner", banner_path])
+
 res_make = subprocess.run(cmd_makerom, capture_output=True, text=True)
 if res_make.returncode != 0:
     print("ERREUR makerom :", res_make.stderr)
@@ -346,6 +382,9 @@ shutil.copyfile(out_3dsx, os.path.join(SDMC_3DS_DIR, "Arch3ro.3dsx"))
 shutil.copyfile(smdh_path, os.path.join(SDMC_3DS_DIR, "Arch3ro.smdh"))
 shutil.copyfile(out_3dsx, os.path.join(SDMC_3DS_DIR, "Arch3ro", "Arch3ro.3dsx"))
 shutil.copyfile(smdh_path, os.path.join(SDMC_3DS_DIR, "Arch3ro", "Arch3ro.smdh"))
+if os.path.exists(banner_path):
+    shutil.copyfile(banner_path, os.path.join(SDMC_3DS_DIR, "Arch3ro.bnr"))
+    shutil.copyfile(banner_path, os.path.join(SDMC_3DS_DIR, "Arch3ro", "Arch3ro.bnr"))
 
 # Copie de l'archive game.love sur SDMC comme filet de sécurité
 shutil.copyfile(love_archive_path, os.path.join(SDMC_LP_DIR, "game.love"))

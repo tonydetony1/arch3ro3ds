@@ -529,6 +529,25 @@ function Items.applySetBonuses(player, equipped)
     return active
 end
 
+-- Progression des statistiques : +16 % par niveau, +6 % par étoile, multiplicateur de rareté
+local LEVEL_STEP = 0.16
+local STAR_STEP = 0.06
+
+local function statScale(level, rData, stars)
+    return (1.0 + ((level or 1) - 1) * LEVEL_STEP) * rData.statMult * (1.0 + (stars or 0) * STAR_STEP)
+end
+
+-- Puissance d'un objet relative à son exemplaire de départ (niveau 1, rareté d'origine,
+-- sans étoile) : 1.0 au départ. Sert aux objets dont l'effet en combat n'est pas une
+-- statistique brute (dégâts de l'arme, tirs des familiers), pour que la Forge compte.
+function Items.powerRatio(id, level, rarityOverride, stars)
+    local item = Items.get(id)
+    if not item then return 1.0 end
+    local base = Items.getRarityData(item.rarity or "common")
+    local cur = Items.getRarityData(rarityOverride or item.rarity or "common")
+    return statScale(level, cur, stars) / statScale(1, base, 0)
+end
+
 function Items.getStats(id, level, rarityOverride, stars)
     local item = Items.get(id)
     if not item then
@@ -540,9 +559,7 @@ function Items.getStats(id, level, rarityOverride, stars)
     local rData = Items.getRarityData(curRarity)
 
     -- Facteur de niveau et de rareté
-    local levelScale = 1.0 + (level - 1) * 0.16
-    local starScale = 1.0 + (stars or 0) * 0.06
-    local totalScale = levelScale * rData.statMult * starScale
+    local totalScale = statScale(level, rData, stars)
 
     local isRareDodge = rData.tier >= 3 and item.passives and item.passives.rare and (string.find(item.passives.rare.desc, "Esquive") or string.find(item.passives.rare.desc, "Dodge"))
     local isRareCrit = rData.tier >= 3 and item.passives and item.passives.rare and (string.find(item.passives.rare.desc, "Critique") or string.find(item.passives.rare.desc, "Crit"))

@@ -53,7 +53,7 @@ function RunLoop.run()
             for name, a, b, c, d, e, f in love.event.poll() do
                 if name == "quit" then
                     if not love.quit or not love.quit() then
-                        love.audio.stop()
+                        if love.audio then love.audio.stop() end
                         return a or 0
                     end
                 end
