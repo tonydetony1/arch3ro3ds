@@ -130,4 +130,22 @@ T["weapons: a rarer weapon always has more damage per second"] = function()
     end
 end
 
+T["equipment: Bear Ring raises damage against bosses"] = function()
+    local p = { bossDamageMult = 1.0, goldMultiplier = 1.0 }
+    Items.applyCombatBonuses(p, Items.getStats("bear_ring", 1))
+    assert(math.abs(p.bossDamageMult - 1.12) < 1e-9, tostring(p.bossDamageMult))
+end
+
+T["equipment: Golden Chestplate raises gold collected"] = function()
+    local p = { bossDamageMult = 1.0, goldMultiplier = 1.0 }
+    Items.applyCombatBonuses(p, Items.getStats("golden_chestplate", 1))
+    assert(math.abs(p.goldMultiplier - 1.18) < 1e-9, tostring(p.goldMultiplier))
+end
+
+T["equipment: items without those bonuses change nothing"] = function()
+    local p = { bossDamageMult = 1.0, goldMultiplier = 1.0 }
+    Items.applyCombatBonuses(p, Items.getStats("wolf_ring", 1))
+    assert(p.bossDamageMult == 1.0 and p.goldMultiplier == 1.0)
+end
+
 return T

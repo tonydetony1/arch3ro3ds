@@ -580,7 +580,18 @@ function Items.getStats(id, level, rarityOverride, stars)
     return stats
 end
 
--- Coût d'amélioration dynamique selon le niveau et la rareté
+-- Item bonuses that only matter in combat: boss damage (Bear Ring) and gold collected
+-- (Golden Chestplate), in percent in the item stats
+function Items.applyCombatBonuses(player, stats)
+    if (stats.bossDmg or 0) > 0 then
+        player.bossDamageMult = (player.bossDamageMult or 1) + stats.bossDmg / 100
+    end
+    if (stats.goldBonus or 0) > 0 then
+        player.goldMultiplier = (player.goldMultiplier or 1) + stats.goldBonus / 100
+    end
+end
+
+-- Upgrade cost from the level and the rarity
 function Items.getUpgradeCost(level, rarity)
     local rData = Items.getRarityData(rarity)
     return Balance.upgradeCost(level, rData.tier)

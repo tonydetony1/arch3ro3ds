@@ -216,6 +216,7 @@ function GameState:applyEquipment(equipped)
         player.maxHp = player.maxHp + aStats.hp
         player.hp = player.maxHp
         player.dodgeChance = (player.dodgeChance or 0) + (aStats.dodge or 0) / 100
+        Items.applyCombatBonuses(player, aStats)
     end
 
     for _, slot in ipairs(RING_SLOTS) do
@@ -229,6 +230,7 @@ function GameState:applyEquipment(equipped)
                 player.hp = player.hp + rStats.hp
             end
             player.dodgeChance = (player.dodgeChance or 0) + (rStats.dodge or 0) / 100
+            Items.applyCombatBonuses(player, rStats)
         end
     end
 
