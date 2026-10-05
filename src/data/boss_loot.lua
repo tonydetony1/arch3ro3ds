@@ -50,4 +50,33 @@ function BossLoot.roll(saveData, rng)
     return Items.rollDrop("boss", nil, maxRarity, rng), "drop"
 end
 
+-- Banner shown when the chest is opened: header, item name, rarity name, rarity colour.
+-- `entry` = { id, isNew, copies, reason } (see GameState:dropBossChest)
+function BossLoot.bannerText(entry)
+    local item = Items.get(entry.id)
+    local rData = Items.getRarityData(item and item.rarity)
+    local header
+    if entry.reason == "new_weapon" then
+        header = "NEW WEAPON"
+    elseif entry.isNew then
+        header = "NEW ITEM"
+    else
+        header = string.format("COPY %d/3", entry.copies or 1)
+    end
+    return header, (item and item.name or tostring(entry.id)):upper(), rData.name, rData.color
+end
+
+-- Game over list: up to `maxLines` { text, color } and the number of items left out
+function BossLoot.summary(runLoot, maxLines)
+    local lines = {}
+    for i = 1, math.min(#runLoot, maxLines) do
+        local item = Items.get(runLoot[i].id)
+        lines[i] = {
+            text = (item and item.name or tostring(runLoot[i].id)):upper(),
+            color = Items.getRarityData(item and item.rarity).color,
+        }
+    end
+    return lines, math.max(0, #runLoot - maxLines)
+end
+
 return BossLoot

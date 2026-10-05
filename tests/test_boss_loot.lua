@@ -73,4 +73,25 @@ T["roll: same seed, same item"] = function()
     assert(BossLoot.roll(save, lcg(42)) == BossLoot.roll(save, lcg(42)))
 end
 
+T["bannerText: new weapon, new item and copy headers"] = function()
+    local header, title, subtitle, color = BossLoot.bannerText({ id = "rapid_daggers", isNew = true, copies = 1, reason = "new_weapon" })
+    assert(header == "NEW WEAPON" and title == "WIND DAGGERS" and subtitle == "GREAT", header .. "|" .. title .. "|" .. subtitle)
+    assert(color == Items.getRarityData("uncommon").color)
+    header = BossLoot.bannerText({ id = "bear_ring", isNew = true, copies = 1, reason = "drop" })
+    assert(header == "NEW ITEM", header)
+    header = BossLoot.bannerText({ id = "bear_ring", isNew = false, copies = 2, reason = "drop" })
+    assert(header == "COPY 2/3", header)
+end
+
+T["summary: at most N names, then the number of hidden items"] = function()
+    local loot = {
+        { id = "rapid_daggers" }, { id = "bear_ring" }, { id = "phantom_cloak" },
+    }
+    local lines, more = BossLoot.summary(loot, 2)
+    assert(#lines == 2 and more == 1)
+    assert(lines[1].text == "WIND DAGGERS" and lines[1].color == Items.getRarityData("uncommon").color)
+    lines, more = BossLoot.summary({}, 2)
+    assert(#lines == 0 and more == 0)
+end
+
 return T
