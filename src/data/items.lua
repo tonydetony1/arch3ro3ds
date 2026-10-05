@@ -396,7 +396,9 @@ local RARITY_ORDER = { "common", "uncommon", "rare", "epic", "legendary" }
 -- `slotFilter` (optionnel) limite le tirage à un emplacement ("weapon", "armor", ...).
 -- `maxRarity` (optionnel) plafonne le tirage : une rareté non débloquée par la
 -- progression ne peut pas sortir, même avec de la chance.
-function Items.rollDrop(tableName, slotFilter, maxRarity)
+-- `rng` (optional): function returning a number in [0, 1), math.random by default
+function Items.rollDrop(tableName, slotFilter, maxRarity, rng)
+    rng = rng or math.random
     local weights = Items.DROP_TABLES[tableName] or Items.DROP_TABLES.gold
     local ceiling = Balance.rarityRank(maxRarity or "legendary")
 
@@ -416,13 +418,13 @@ function Items.rollDrop(tableName, slotFilter, maxRarity)
     end
     if total <= 0 then return "starter_bow" end
 
-    local roll, acc = math.random() * total, 0
+    local roll, acc = rng() * total, 0
     for _, rarity in ipairs(RARITY_ORDER) do
         local pool = byRarity[rarity]
         if pool then
             acc = acc + weights[rarity]
             if roll <= acc then
-                return pool[math.random(1, #pool)]
+                return pool[math.floor(rng() * #pool) + 1]
             end
         end
     end
