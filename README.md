@@ -61,7 +61,7 @@
 4. Scan the release QR code below (or from our [Latest Releases](https://github.com/tonydetony1/arch3ro3ds/releases)):
 
 <div align="center">
-  <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://github.com/tonydetony1/arch3ro3ds/releases/download/v1.0.9/Arch3ro.cia" alt="FBI QR Code" width="180"/>
+  <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://github.com/tonydetony1/arch3ro3ds/releases/download/v1.0.10/Arch3ro.cia" alt="FBI QR Code" width="180"/>
   <br/>
   <sub><i>Scan with FBI to install directly to HOME Menu</i></sub>
 </div>
