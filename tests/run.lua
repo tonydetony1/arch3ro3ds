@@ -28,6 +28,7 @@ local files = {
     "tests.test_status_effects",
     "tests.test_hero_hits",
     "tests.test_skill_rules",
+    "tests.test_targeting",
 }
 
 local passed, failed = 0, 0

@@ -323,9 +323,12 @@ function Player:handleInput(dt)
     end
 end
 
-function Player:findNearestTarget(dummyPool)
-    local closestDistSq = self.detectionRadius * self.detectionRadius
-    local bestTarget = nil
+-- Nearest monster the hero can actually hit: rocks stop arrows, so a monster hiding behind one
+-- is only chosen when nothing else is in sight (the hero would shoot into the rock otherwise)
+function Player:findNearestTarget(dummyPool, obstacleManager)
+    local rangeSq = self.detectionRadius * self.detectionRadius
+    local visibleSq, nearestSq = rangeSq, rangeSq
+    local visible, nearest = nil, nil
 
     if dummyPool and dummyPool.activeCount > 0 then
         for i = 1, dummyPool.activeCount do
@@ -335,15 +338,21 @@ function Player:findNearestTarget(dummyPool)
                 local dx = target.x - self.x
                 local dy = target.y - self.y
                 local distSq = dx * dx + dy * dy
-                if distSq < closestDistSq then
-                    closestDistSq = distSq
-                    bestTarget = target
+                if distSq < nearestSq then
+                    nearestSq = distSq
+                    nearest = target
+                end
+                -- the line-of-sight test only runs for candidates that could beat the best so far
+                if distSq < visibleSq
+                    and not (obstacleManager and obstacleManager:isShotBlocked(self.x, self.y, target.x, target.y)) then
+                    visibleSq = distSq
+                    visible = target
                 end
             end
         end
     end
 
-    return bestTarget
+    return visible or nearest
 end
 
 -- Tir modulaire gérant toutes les combinaisons de flèches (Frontale, Diagonale, Arrière, Latérale)
@@ -729,7 +738,7 @@ function Player:update(dt, projectilePool, dummyPool, fctPool, obstacleManager, 
         end
 
         -- Visée et tir à l'arrêt
-        self.currentTarget = self:findNearestTarget(dummyPool)
+        self.currentTarget = self:findNearestTarget(dummyPool, obstacleManager)
         if self.currentTarget then
             local dx = self.currentTarget.x - self.x
             local dy = self.currentTarget.y - self.y

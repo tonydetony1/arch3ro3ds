@@ -222,6 +222,57 @@ function ObstacleManager:blocksProjectile(x, y, radius)
     return false
 end
 
+-- Segment against an axis-aligned box (slab method): no allocation, called per rock and per
+-- candidate target while the hero aims
+local function segmentHitsBox(x0, y0, dx, dy, bx0, by0, bx1, by1)
+    local tmin, tmax = 0, 1
+    if dx == 0 then
+        if x0 < bx0 or x0 > bx1 then return false end
+    else
+        local inv = 1 / dx
+        local t1, t2 = (bx0 - x0) * inv, (bx1 - x0) * inv
+        if t1 > t2 then t1, t2 = t2, t1 end
+        if t1 > tmin then tmin = t1 end
+        if t2 < tmax then tmax = t2 end
+        if tmin > tmax then return false end
+    end
+    if dy == 0 then
+        if y0 < by0 or y0 > by1 then return false end
+    else
+        local inv = 1 / dy
+        local t1, t2 = (by0 - y0) * inv, (by1 - y0) * inv
+        if t1 > t2 then t1, t2 = t2, t1 end
+        if t1 > tmin then tmin = t1 end
+        if t2 < tmax then tmax = t2 end
+        if tmin > tmax then return false end
+    end
+    return true
+end
+
+-- Test if a shot flying from (x0, y0) to (x1, y1) is stopped by a rock on the way (only rocks
+-- stop projectiles). Used by the hero's auto-aim to skip monsters hiding behind cover.
+function ObstacleManager:isShotBlocked(x0, y0, x1, y1, radius)
+    radius = radius or 3
+    local dx, dy = x1 - x0, y1 - y0
+    local minX, maxX = x0, x1
+    if minX > maxX then minX, maxX = maxX, minX end
+    local minY, maxY = y0, y1
+    if minY > maxY then minY, maxY = maxY, minY end
+
+    local rocks = self.rocks
+    for i = 1, #rocks do
+        local r = rocks[i]
+        local bx0, by0 = r.x - radius, r.y - radius
+        local bx1, by1 = r.x + r.w + radius, r.y + r.h + radius
+        -- cheap reject on the bounding boxes first: most rocks are nowhere near the line
+        if maxX >= bx0 and minX <= bx1 and maxY >= by0 and minY <= by1
+            and segmentHitsBox(x0, y0, dx, dy, bx0, by0, bx1, by1) then
+            return true
+        end
+    end
+    return false
+end
+
 -- Destruction d'une urne : cœur de soin ou pièces d'or
 function ObstacleManager:breakPot(pot, lootPool)
     -- Compte pour les missions "briser des urnes"
