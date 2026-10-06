@@ -193,11 +193,29 @@ function SelfTest.update(gameStateMachine, testFrames)
             -- B. Validation GLISSADE VECTORIELLE CONTRE LES MURS (WALL SLIDING)
             local testDummy = { x = 25, y = 100, radius = 10 }
             -- Mouvement diagonal contre le mur gauche (x < minX)
-            local bX, bY = Physics.moveAndSlide(testDummy, -100, 100, 0.05, 10, g.obstacleManager, false, g.mapW, g.mapH)
+            -- Map wall only: the current room's own obstacles (water, rocks) must not interfere
+            local bX, bY = Physics.moveAndSlide(testDummy, -100, 100, 0.05, 10, nil, false, g.mapW, g.mapH)
             assert(bX == true, "X axis must be blocked by left wall")
             assert(bY == false, "Y axis must NOT be blocked, allowing smooth vertical wall sliding")
             assert(testDummy.y > 100, "Entity must slide downwards along the wall")
             print("[TEST] Wall Sliding (Glissade Vectorielle) VALIDATED: Diagonal movement slides along wall without getting stuck.")
+
+            -- B2. Wind gusts push the hero through collisions, never into a rock
+            local ObstacleManager = require("src.core.obstacle_manager")
+            local windOm = ObstacleManager.new()
+            windOm:setTheme("sky", "wind")
+            windOm:generate(400, 300, 41, "arena")
+            windOm.rocks = { { x = 200, y = 200, w = 40, h = 40 } }
+            windOm.hazards = { { x = 120, y = 150, w = 200, h = 120, kind = "wind", windX = 1, windY = 0 } }
+            local hero = g.player
+            local heroX, heroY = hero.x, hero.y
+            hero.x, hero.y = 190, 220
+            for _ = 1, 5 do
+                windOm:update(0.05, hero, g.fctPool, g.dummyPool)
+                assert(not windOm:isBlocked(hero.x, hero.y, hero.radius), "Wind must not push the hero into a rock")
+            end
+            hero.x, hero.y = heroX, heroY
+            print("[TEST] Wind gusts VALIDATED: the hero is pushed through collisions.")
 
             -- C. Validation des 6 ARCHÉTYPES D'ARCHERO
             g.dummyPool:clear()
@@ -1007,12 +1025,12 @@ function SelfTest.update(gameStateMachine, testFrames)
             local Rooms = require("src.data.rooms")
             local roomErrors = Rooms.validateAll()
             assert(#roomErrors == 0, "Invalid room layout: " .. tostring(roomErrors[1]))
-            -- Aucune grille répétée dans un chapitre de 8 salles de combat
+            -- No grid repeated within a chapter (world rooms + common rooms)
             for block = 0, 4 do
                 local seen = {}
                 for room = block * 10 + 1, block * 10 + 10 do
                     if WorldManager.getRoomType(room) == "combat" then
-                        local layout = Rooms.pick("combat", room)
+                        local layout = Rooms.pick("combat", room, block + 1)
                         assert(not seen[layout.id], "Layout '" .. layout.id .. "' repeated in rooms " .. (block * 10 + 1) .. "-" .. (block * 10 + 10))
                         seen[layout.id] = true
                     end
@@ -1024,6 +1042,16 @@ function SelfTest.update(gameStateMachine, testFrames)
             for _, kind in ipairs({ "combat", "arena" }) do
                 for _, layout in ipairs(Rooms.pool(kind)) do
                     om:generate(620, 540, 12, kind, layout)
+                    local placed = om:placeSpawns(WorldManager.generateWave(3, 12, 620, 540))
+                    for _, sp in ipairs(placed) do
+                        assert(not om:isBlocked(sp.x, sp.y, 12), "Spawn blocked in layout '" .. layout.id .. "'")
+                    end
+                    layoutCount = layoutCount + 1
+                end
+            end
+            for world, pool in ipairs(Rooms.WORLDS) do
+                for _, layout in ipairs(pool) do
+                    om:generate(620, 540, 12, "combat", layout, world)
                     local placed = om:placeSpawns(WorldManager.generateWave(3, 12, 620, 540))
                     for _, sp in ipairs(placed) do
                         assert(not om:isBlocked(sp.x, sp.y, 12), "Spawn blocked in layout '" .. layout.id .. "'")

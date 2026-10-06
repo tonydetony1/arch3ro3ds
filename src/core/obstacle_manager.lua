@@ -6,6 +6,9 @@
 local Audio = require("src.audio.audio")
 local Balance = require("src.data.balance")
 local Rooms = require("src.data.rooms")
+local Physics = require("src.core.physics")
+
+local WIND_PUSH = 120 -- px/s, gusts of the sky world
 
 local ObstacleManager = {}
 ObstacleManager.__index = ObstacleManager
@@ -31,7 +34,7 @@ local HAZARD_INSET = 2
 
 -- Construction de la salle à partir d'une grille dessinée (src/data/rooms.lua).
 -- `kind` : "combat" (défaut), "arena" ou "sanctuary" ; `layout` force une grille précise.
-function ObstacleManager:generate(mapW, mapH, roomNumber, kind, layout)
+function ObstacleManager:generate(mapW, mapH, roomNumber, kind, layout, world)
     self.roomNumber = roomNumber or 1
     self.mapW, self.mapH = mapW, mapH
     self.rocks = {}
@@ -45,7 +48,7 @@ function ObstacleManager:generate(mapW, mapH, roomNumber, kind, layout)
 
     local mirrored = false
     if not layout then
-        layout, mirrored = Rooms.pick(kind or "combat", self.roomNumber)
+        layout, mirrored = Rooms.pick(kind or "combat", self.roomNumber, world)
     end
     self.layoutId = layout.id
     self.layoutMirrored = mirrored
@@ -335,10 +338,9 @@ function ObstacleManager:update(dt, player, fctPool, dummyPool)
             elseif hz.kind == "ice" then
                 player.terrainSlip = 1.0
             elseif hz.kind == "wind" then
-                -- Bourrasque : pousse le héros vers le nord-est, sans dégâts
-                local push = 120 * dt
-                player.x = player.x + push * (hz.windX or 1)
-                player.y = player.y + push * (hz.windY or -0.35)
+                -- Gust: pushes the hero, through collisions (it used to shove him into rocks)
+                Physics.moveAndSlide(player, WIND_PUSH * (hz.windX or 1), WIND_PUSH * (hz.windY or -0.35), dt,
+                    player.radius, self, false, (player.maxX or 600) + 22, (player.maxY or 440) + 22)
             elseif hz.kind == "void" and self.lavaCooldown <= 0 then
                 -- Faille du Vide : ralentit et grignote les PV
                 player.terrainSpeedMult = 0.7
@@ -1061,7 +1063,7 @@ function ObstacleManager.prefetch(spec)
         key = spec.key,
         paint = nil,
         co = coroutine.create(function()
-            om:generate(spec.mapW, spec.mapH, spec.room, spec.kind)
+            om:generate(spec.mapW, spec.mapH, spec.room, spec.kind, nil, spec.chapterIndex)
             om:bakeStatic()
             om:buildProps()
         end),

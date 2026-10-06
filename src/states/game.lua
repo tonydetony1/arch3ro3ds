@@ -339,7 +339,7 @@ function GameState:setupRoom(roomNum)
     self.camera:setBounds(self.mapW, self.mapH, spec.kind == "sanctuary" and 0 or WorldManager.skyMargin(spec.chapterIndex))
     self.player:setBounds(self.mapW, self.mapH)
     self.obstacleManager:setTheme(spec.variant, spec.hazard)
-    self.obstacleManager:generate(self.mapW, self.mapH, roomNum, spec.kind)
+    self.obstacleManager:generate(self.mapW, self.mapH, roomNum, spec.kind, nil, spec.chapterIndex)
 
     local spawns, chap
     self.waveRunner = nil
