@@ -191,9 +191,14 @@ function Player:heartHeal(base)
     return math.floor(amount * (self.healMult or 1) + 0.5)
 end
 
-function Player:takeDamage(dmg)
-    if self.isDashing or self.isInvulnerable or (self.starActive or 0) > 0 then
-        return 0, true
+-- Returns the damage dealt, whether the hit was blocked, and why ("dash", "invulnerable" or
+-- "dodge"). `canDodge`: enemy attacks (shots, blasts, contact) can be dodged, hazards cannot.
+function Player:takeDamage(dmg, canDodge)
+    if self.isDashing then return 0, true, "dash" end
+    if self.isInvulnerable or (self.starActive or 0) > 0 then return 0, true, "invulnerable" end
+    if canDodge then
+        local dodge = self:effectiveDodge()
+        if dodge > 0 and math.random() < dodge then return 0, true, "dodge" end
     end
     local finalDmg = dmg or 15
     self.hp = math.max(0, self.hp - finalDmg)

@@ -606,6 +606,32 @@ function GameState:handleMonsterDeath(target)
     end
 end
 
+-- An enemy shot or blast reaches the hero. Dash, Star bubble, revive window and dodge are all
+-- decided by Player:takeDamage (the shot used to subtract HP directly, so the Star did nothing).
+-- Returns true when the hit landed.
+local HURT_SPARK = { 1, 0.2, 0.2, 1 }
+local DODGE_SPARK = { 0.35, 0.85, 1.0, 1.0 }
+
+function GameState:hurtHero(dmg, chill)
+    local p = self.player
+    local dealt, blocked, reason = p:takeDamage(dmg, true)
+    if blocked then
+        VFX.addFCT(p.x, p.y - 12, (reason == "invulnerable") and "BLOCK" or "DODGE", false)
+        VFX.addSparks(p.x, p.y, 5, DODGE_SPARK)
+        return false
+    end
+    if chill then p:chill(EliteAffixes.CHILL_TIME) end
+    VFX.triggerHitFlash(p, 3)
+    VFX.shakeMedium()
+    VFX.addFCT(p.x, p.y - 12, dealt, false)
+    VFX.addSparks(p.x, p.y, 6, HURT_SPARK)
+    if p.hp <= 0 and not self.isGameOver then
+        self.isGameOver = true
+        self.gameOverTimer = 0
+    end
+    return true
+end
+
 -- Resolves every monster whose HP ran out from something other than an arrow or a meteor
 -- (burn, poison, orbiting blades, flying swords, chain lightning, barrels...). Without it
 -- they stayed on the field at 0 HP until the next arrow, or vanished without loot or kill credit.
@@ -889,18 +915,8 @@ function GameState:update(dt)
                     local pdy = self.player.y - proj.targetY
                     local distSq = pdx * pdx + pdy * pdy
                     if distSq <= (proj.aoeRadius * proj.aoeRadius) then
-                        local dmg = proj.damage or 20
-                        self.player:takeDamage(dmg)
-                        if proj.chill then self.player:chill(EliteAffixes.CHILL_TIME) end
-                        Audio.play("player_hurt", 0.08, 0.8)
-                        VFX.triggerHitFlash(self.player, 3)
-                        VFX.shakeMedium()
-                        VFX.addFCT(self.player.x, self.player.y - 12, dmg, false)
-                        VFX.addSparks(self.player.x, self.player.y, 6, {1, 0.2, 0.2, 1})
-
-                        if self.player.hp <= 0 and not self.isGameOver then
-                            self.isGameOver = true
-                            self.gameOverTimer = 0
+                        if self:hurtHero(proj.damage or 20, proj.chill) then
+                            Audio.play("player_hurt", 0.08, 0.8)
                         end
                     end
                     self.projectilePool:free(proj)
@@ -952,24 +968,7 @@ function GameState:update(dt)
                         local pRad = self.player.radius + proj.radius
 
                         if (pdx * pdx + pdy * pdy) < (pRad * pRad) then
-                            -- Test d'esquive (Dash I-Frames ou passif d'armure)
-                            if self.player.isDashing or self.player.isInvulnerable or (math.random() < self.player:effectiveDodge()) then
-                                VFX.addFCT(self.player.x, self.player.y - 12, "DODGE", false)
-                                VFX.addSparks(self.player.x, self.player.y, 5, {0.35, 0.85, 1.0, 1.0})
-                            else
-                                local dmg = proj.damage or 15
-                                self.player.hp = math.max(0, self.player.hp - dmg)
-                                if proj.chill then self.player:chill(EliteAffixes.CHILL_TIME) end
-                                VFX.triggerHitFlash(self.player, 3)
-                                VFX.shakeMedium()
-                                VFX.addFCT(self.player.x, self.player.y - 12, dmg, false)
-                                VFX.addSparks(self.player.x, self.player.y, 6, {1, 0.2, 0.2, 1})
-
-                                if self.player.hp <= 0 and not self.isGameOver then
-                                    self.isGameOver = true
-                                    self.gameOverTimer = 0
-                                end
-                            end
+                            self:hurtHero(proj.damage or 15, proj.chill)
                             self.projectilePool:free(proj)
                         end
                     end
