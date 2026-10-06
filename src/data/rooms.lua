@@ -299,6 +299,288 @@ Rooms.SANCTUARY = {
     } },
 }
 
+-- Rooms of each world (chapter 1 forest, 2 desert, 3 crystal, 4 volcano, 5 sky, 6 void):
+-- 4 per world, one "total" room covered by the world's hazard. 'h' is the world hazard
+-- (plain ground in the forest). Damaging total rooms keep a hazard-free path and safe spawns.
+Rooms.WORLDS = {
+    [1] = {
+        { id = "marsh", total = true, grid = {
+            "o....m.m....o",
+            ".~~~~...~~~~.",
+            ".~~~~.m.~~~~.",
+            "..m.......m..",
+            "~~~~..#..~~~~",
+            "~~~~.....~~~~",
+            "..~~~...~~~..",
+            "..~~~...~~~..",
+            ".....o.o.....",
+        } },
+        { id = "stump_clearing", grid = {
+            ".....m.m.....",
+            "..#.......#..",
+            "....#...#....",
+            ".m....o....m.",
+            "..#.......#..",
+            "....#...#....",
+            "......b......",
+            "..#.......#..",
+            ".............",
+        } },
+        { id = "winding_stream", grid = {
+            "....m...m....",
+            "~~~~~~.~~~~~~",
+            "......m......",
+            ".#.........#.",
+            "~~~.~~~~~~~~~",
+            ".....m.......",
+            "~~~~~~~~~.~~~",
+            ".............",
+            ".............",
+        } },
+        { id = "grove", grid = {
+            ".....m.m.....",
+            ".###.....###.",
+            ".............",
+            "..m.#####.m..",
+            ".............",
+            ".###.....###.",
+            "......o......",
+            "....##.##....",
+            ".............",
+        } },
+    },
+    [2] = {
+        { id = "sand_sea", total = true, grid = {
+            "hhhhhm.mhhhhh",
+            "hhhhhh.hhhhhh",
+            "hm.........mh",
+            "hh.hhh.hhh.hh",
+            "hh.hh#.#hh.hh",
+            "hh.hhh.hhh.hh",
+            "hh.........hh",
+            "hhhhhh.hhhhhh",
+            "hhhhhh.hhhhhh",
+        } },
+        { id = "oasis", grid = {
+            ".....m.m.....",
+            "..hh.....hh..",
+            ".m.#.~~~.#.m.",
+            "...~~~~~~~...",
+            "..#~~~~~~~#..",
+            "...~~~~~~~...",
+            "..h.#...#.h..",
+            "..hh.....hh..",
+            ".............",
+        } },
+        { id = "canyon", grid = {
+            ".....m.m.....",
+            "..###...###..",
+            "..#.......#..",
+            "..#.m...m.#..",
+            "......h......",
+            "..#..hhh..#..",
+            "..#.......#..",
+            "..###...###..",
+            ".............",
+        } },
+        { id = "dunes", grid = {
+            "hh...m.m.....",
+            ".hh.......#..",
+            "..hh..m......",
+            "...hh....hh..",
+            ".#..hh..hh...",
+            ".m...hhhh..m.",
+            "......hh.....",
+            "...#.....hh..",
+            "..........hh.",
+        } },
+    },
+    [3] = {
+        { id = "ice_rink", total = true, grid = {
+            "hhhhhm.mhhhhh",
+            "hhhhhhhhhhhhh",
+            "hhm#hhhhh#mhh",
+            "hhhhhhhhhhhhh",
+            "hhhhh#h#hhhhh",
+            "hhmhhhhhhhmhh",
+            "hh#hhhhhhh#hh",
+            "hhhhhhhhhhhhh",
+            "hhhhhh.hhhhhh",
+        } },
+        { id = "frozen_lake", grid = {
+            ".....m.m.....",
+            ".hhhhhhhhhhh.",
+            ".hh~~~~~~~hh.",
+            ".hh~~~~~~~hh.",
+            ".m..~~~~~..m.",
+            ".hh~~~~~~~hh.",
+            ".hhhhhhhhhhh.",
+            "..#.......#..",
+            ".............",
+        } },
+        { id = "crystal_forest", grid = {
+            ".....m.m.....",
+            "..#.......#..",
+            ".m....h....m.",
+            "....#...#....",
+            "..#..hhh..#..",
+            ".m..#...#..m.",
+            "......h......",
+            "..#.......#..",
+            ".............",
+        } },
+        { id = "ice_lanes", grid = {
+            ".....m.m.....",
+            "hhhhhhhhhhhhh",
+            "....#...#....",
+            "hhhhhhhhhhhhh",
+            ".m....b....m.",
+            "hhhhhhhhhhhhh",
+            "...#.....#...",
+            "hhhhhhhhhhhhh",
+            ".............",
+        } },
+    },
+    [4] = {
+        { id = "lava_rivers", total = true, grid = {
+            "...m.....m...",
+            "hhhhh...hhhhh",
+            "h..hh...hh..h",
+            "..m.......m..",
+            "hhhhh...hhhhh",
+            "hhhhh...hhhhh",
+            "..b.......b..",
+            "hhhh.....hhhh",
+            "hhhh.....hhhh",
+        } },
+        { id = "caldera", grid = {
+            ".....m.m.....",
+            "..hhhhhhhhh..",
+            ".mh.......hm.",
+            "..h..#.#..h..",
+            "..h...m...h..",
+            "..hhhh.hhhh..",
+            ".............",
+            "..#.......#..",
+            ".............",
+        } },
+        { id = "lava_flows", grid = {
+            ".....m.m.....",
+            "hh...........",
+            ".hhh....#..m.",
+            "...hhh.......",
+            ".m...hhh..#..",
+            "...#...hhh...",
+            ".........hhh.",
+            "...........hh",
+            ".............",
+        } },
+        { id = "forge", grid = {
+            ".....m.m.....",
+            "..b.......b..",
+            ".hh..#.#..hh.",
+            ".hh.......hh.",
+            "...m..b..m...",
+            ".hh.......hh.",
+            ".hh..#.#..hh.",
+            "..b.......b..",
+            ".............",
+        } },
+    },
+    [5] = {
+        { id = "storm", total = true, grid = {
+            "hhhhhm.mhhhhh",
+            "hhhhhhhhhhhhh",
+            "hhm#hhhhh#mhh",
+            "hhhhhh.hhhhhh",
+            ".....h.h.....",
+            "hhmhhhhhhhmhh",
+            "hhhhhhhhhhhhh",
+            "hh#hhhhhhh#hh",
+            "hhhhhh.hhhhhh",
+        } },
+        { id = "archipelago", grid = {
+            ".....m.m.....",
+            ".~~~.....~~~.",
+            ".~~~.~~~.~~~.",
+            ".m...hhh...m.",
+            "~~~.~~.~~.~~~",
+            "...m.....m...",
+            ".~~~.~~~.~~~.",
+            ".~~~.....~~~.",
+            ".............",
+        } },
+        { id = "wind_corridor", grid = {
+            ".....m.m.....",
+            "hh..#...#..hh",
+            "hh.........hh",
+            "hhm..#.#..mhh",
+            "hh.........hh",
+            "hh.m.....m.hh",
+            "hh..#...#..hh",
+            "hh.........hh",
+            ".............",
+        } },
+        { id = "floating_temple", grid = {
+            ".....m.m.....",
+            ".#.........#.",
+            "...#.....#...",
+            ".m...h.h...m.",
+            "..#..~~~..#..",
+            "...m.....m...",
+            "...#.....#...",
+            ".#.........#.",
+            ".............",
+        } },
+    },
+    [6] = {
+        { id = "fracture", total = true, grid = {
+            "..m.......m..",
+            "hh..h...h..hh",
+            "hh..h...h..hh",
+            ".............",
+            ".m.........m.",
+            "hh..h...h..hh",
+            "hh..h...h..hh",
+            ".............",
+            ".............",
+        } },
+        { id = "spiral", grid = {
+            ".....m.m.....",
+            ".hhhhh..hhhh.",
+            ".h.........h.",
+            ".h.hhh.hh..h.",
+            ".h.hm...h..h.",
+            ".h.hhhhhh..h.",
+            ".h.........h.",
+            ".hhhh...hhhh.",
+            ".............",
+        } },
+        { id = "eye", grid = {
+            ".....m.m.....",
+            ".............",
+            "...hhhhhhh...",
+            ".m.h.....h.m.",
+            "...h..#..h...",
+            "...hhh.hhh...",
+            ".............",
+            "..#.......#..",
+            ".............",
+        } },
+        { id = "monoliths", grid = {
+            ".....m.m.....",
+            ".##.......##.",
+            ".............",
+            "...##.h.##...",
+            ".m...hhh...m.",
+            "...##.h.##...",
+            ".............",
+            ".##.......##.",
+            ".............",
+        } },
+    },
+}
+
 local POOLS = { combat = Rooms.COMBAT, arena = Rooms.ARENA, sanctuary = Rooms.SANCTUARY }
 -- Zone centrale (colonnes, lignes) qui doit rester libre pour le boss et les PNJ
 local CENTER = { c0 = 5, c1 = 9, r0 = 3, r1 = 7 }
@@ -359,11 +641,23 @@ local function shuffled(list, seed)
     return out
 end
 
--- Choix déterministe par numéro de salle : une course reprise retrouve la même salle.
--- Combat : le pool du bloc de 10 salles est mélangé une fois, puis chaque salle de combat
--- du bloc en prend la case suivante -> aucune grille répétée dans un chapitre (pool >= 8).
--- Une salle sur deux est jouée en miroir gauche-droite.
-function Rooms.pick(kind, roomNumber)
+-- Deterministic pick by room number: a resumed run finds the same room again.
+-- Combat: the 7 combat slots of a chapter (rooms 1-4 and 6-8) get, when the world is
+-- known, its 4 own rooms (the total one at slot 5, right after the angel) and 3 common
+-- rooms; the common pool of the 10-room block is shuffled once, so no grid repeats within a
+-- chapter. Every other room is played mirrored left-right.
+local WORLD_SLOTS = { [2] = 1, [4] = 2, [5] = "total", [7] = 3 }
+local COMMON_SLOTS = { [1] = 1, [3] = 2, [6] = 3 }
+
+local function worldRooms(world)
+    local total, others = nil, {}
+    for _, l in ipairs(Rooms.WORLDS[world] or {}) do
+        if l.total then total = l else others[#others + 1] = l end
+    end
+    return total, others
+end
+
+function Rooms.pick(kind, roomNumber, world)
     roomNumber = math.max(1, roomNumber or 1)
     local block = math.floor((roomNumber - 1) / ROOMS_PER_BLOCK)
     local slot = (roomNumber - 1) % ROOMS_PER_BLOCK + 1
@@ -378,10 +672,15 @@ function Rooms.pick(kind, roomNumber)
 
     if kind == "combat" then
         local combatIndex = slot > ANGEL_SLOT and slot - 1 or slot
-        local order = shuffled(eligible, block + 1)
-        return order[(combatIndex - 1) % n + 1], (combatIndex + block) % 2 == 0
+        local mirrored = (combatIndex + block) % 2 == 0
+        local total, others = worldRooms(world)
+        local own = total and WORLD_SLOTS[combatIndex]
+        if own == "total" then return total, mirrored end
+        if own then return shuffled(others, block + 1)[own], mirrored end
+        local index = (total and COMMON_SLOTS[combatIndex]) or combatIndex
+        return shuffled(eligible, block + 1)[(index - 1) % n + 1], mirrored
     end
-    -- Arènes et sanctuaires : rotation simple (le boss rush enchaîne des salles voisines)
+    -- Arenas and sanctuaries: simple rotation (boss rush chains neighbouring rooms)
     return eligible[(roomNumber - 1 + block) % n + 1], block % 2 == 1
 end
 
@@ -569,6 +868,14 @@ function Rooms.validateAll()
         for _, layout in ipairs(pool) do
             for _, grid in ipairs({ layout.grid, Rooms.mirror(layout.grid) }) do
                 local ok, err = Rooms.validate({ id = layout.id, grid = grid }, kind)
+                if not ok then errors[#errors + 1] = err end
+            end
+        end
+    end
+    for _, pool in pairs(Rooms.WORLDS) do
+        for _, layout in ipairs(pool) do
+            for _, grid in ipairs({ layout.grid, Rooms.mirror(layout.grid) }) do
+                local ok, err = Rooms.validate({ id = layout.id, grid = grid }, "combat")
                 if not ok then errors[#errors + 1] = err end
             end
         end
