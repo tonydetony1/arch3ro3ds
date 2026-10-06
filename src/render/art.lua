@@ -17,6 +17,7 @@ local SPRITE_MODULES = {
     "src.render.sprites.monsters_extra",
     "src.render.sprites.props",
     "src.render.sprites.sanctuary",
+    "src.render.sprites.biomes",
     "src.render.sprites.icons",
     "src.render.sprites.items",
     "src.render.sprites.fx",

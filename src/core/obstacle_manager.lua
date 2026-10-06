@@ -443,6 +443,11 @@ local C = Palette.C
 
 local BLOCK_HEIGHT = 14
 local STUMP_LIFT = 5
+-- Single-cell obstacle drawn per world (same collision box as the forest stump)
+local STUMP_SPRITES = {
+    sand = "obstacle_cactus", crystal = "obstacle_ice", lava = "obstacle_obsidian",
+    sky = "obstacle_floatstone", void = "obstacle_monolith",
+}
 
 local WATER_DEEP = Palette.hex("1d4f91")
 local WATER_MID = Palette.hex("2a78c2")
@@ -920,7 +925,7 @@ function ObstacleManager:buildProps()
     for i, r in ipairs(self.rocks) do
         local prop = { baseY = r.y + r.h, rect = r }
         if isStump(i, r) then
-            prop.sprite = "stump_l"
+            prop.sprite = STUMP_SPRITES[self.themeVariant or ""] or "stump_l"
             prop.x = r.x + r.w / 2
             prop.y = r.y + r.h / 2 - STUMP_LIFT
         elseif love.graphics.newCanvas then

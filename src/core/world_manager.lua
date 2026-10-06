@@ -158,7 +158,7 @@ WorldManager.THEMES = {
         ground = "4f9b45", groundLight = "5dac4d", groundDark = "438a3e", edge = "356f39",
         skyTop = "4f9be8", skyBottom = "cdeeff",
         wallTree = "tall_tree_a", wallTreeSmall = "tall_tree_b",
-        decals = { "tuft_a", "tuft_b", "tuft_c", "flowers_w", "flowers_y", "flowers_p", "pebbles" },
+        decals = { "tuft_a", "tuft_b", "tuft_c", "flowers_w", "flowers_y", "flowers_p", "pebbles", "mushroom" },
         patchLight = "patch_light", patchDark = "patch_dark", patchExtra = "patch_dirt",
         hazard = nil,
     },
@@ -167,7 +167,7 @@ WorldManager.THEMES = {
         ground = "d6ac72", groundLight = "e4c48c", groundDark = "c09a63", edge = "a07c4a",
         skyTop = "e8a34f", skyBottom = "ffe6b8",
         wallTree = "cactus", wallTreeSmall = "cactus",
-        decals = { "bones", "pebbles", "tuft_c", "bones" },
+        decals = { "bones", "pebbles", "tuft_c", "dry_grass", "bones", "dry_grass" },
         patchLight = "patch_dirt", patchDark = "patch_dark", patchExtra = "patch_dirt",
         hazard = "sand",                      -- sables mouvants : ralentissent
     },
@@ -176,7 +176,7 @@ WorldManager.THEMES = {
         ground = "3f4a7a", groundLight = "4d5a90", groundDark = "323a63", edge = "232a4d",
         skyTop = "141a33", skyBottom = "2a2f57",
         wallTree = "crystal_spire", wallTreeSmall = "crystal_spire",
-        decals = { "pebbles", "ice_patch", "pebbles" },
+        decals = { "pebbles", "ice_patch", "crystal_shard", "frost" },
         patchLight = "patch_light", patchDark = "patch_dark", patchExtra = "patch_dirt",
         hazard = "ice",                       -- plaques de glace : dérapage
     },
@@ -185,7 +185,7 @@ WorldManager.THEMES = {
         ground = "4a3b3b", groundLight = "5c4747", groundDark = "3a2e2e", edge = "241c1c",
         skyTop = "6b1f14", skyBottom = "e8632a",
         wallTree = "tall_tree_b", wallTreeSmall = "tall_tree_b",
-        decals = { "pebbles", "lava_crack", "bones" },
+        decals = { "pebbles", "lava_crack", "bones", "ash_pile", "charred_twig" },
         patchLight = "patch_dark", patchDark = "patch_dirt", patchExtra = "patch_dark",
         hazard = "lava",                      -- mares de lave : dégâts continus
     },
@@ -195,7 +195,7 @@ WorldManager.THEMES = {
         ground = "8b9bb4", groundLight = "c0cbdc", groundDark = "5a6988", edge = "3a4466",
         skyTop = "3d7dd6", skyBottom = "dff2ff",
         wallTree = "crystal_spire", wallTreeSmall = "crystal_spire",
-        decals = { "pebbles", "ice_patch" },
+        decals = { "pebbles", "ice_patch", "feather", "cloud_wisp", "flowers_w" },
         patchLight = "patch_light", patchDark = "patch_dark", patchExtra = "patch_light",
         hazard = "wind",                      -- bourrasques : le héros est poussé
     },
@@ -204,7 +204,7 @@ WorldManager.THEMES = {
         ground = "2a1f3d", groundLight = "3d2c57", groundDark = "1a1229", edge = "0f0a18",
         skyTop = "140a24", skyBottom = "5c2a7a",
         wallTree = "crystal_spire", wallTreeSmall = "crystal_spire",
-        decals = { "pebbles", "bones" },
+        decals = { "pebbles", "bones", "void_debris", "rune_mark", "void_grass" },
         patchLight = "patch_dark", patchDark = "patch_dirt", patchExtra = "patch_dark",
         hazard = "void",                      -- failles du Vide : dégâts et ralentissement
     },
