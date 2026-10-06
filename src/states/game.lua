@@ -1117,8 +1117,8 @@ function GameState:update(dt)
             end
         end
     end
-    self:resolveDeaths()
 
+    self:resolveDeaths()
 
     -- 7.b ARÈNE DE SURVIE : nouvelle vague toutes les 15 s (ou dès l'arène nettoyée)
     if self.gameMode == "survival" and self.phase == "combat" and not self.isGameOver then
