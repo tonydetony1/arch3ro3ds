@@ -13,6 +13,19 @@ local Admin = require("src.data.admin")
 local Dummy = {}
 Dummy.__index = Dummy
 
+-- Elemental statuses. A freeze never stacks or refreshes (it used to be renewed by every hit,
+-- locking a monster, boss included, for as long as the hero kept shooting) and is followed by
+-- a short immunity. Burn and poison deal a share of max HP, scaled down on bosses.
+local FREEZE_TIME = 1.4
+local BOSS_FREEZE_TIME = 0.5
+local FREEZE_IMMUNITY = 2.0
+local BOSS_DOT_SCALE = 0.25
+local FIRE_TIME = 2.4
+local FIRE_TICK = 0.35
+local FIRE_SHARE = 0.04
+local POISON_TICK = 0.60
+local POISON_SHARE = 0.05
+
 function Dummy.create(index)
     local self = setmetatable({}, Dummy)
     self.id = index
@@ -217,6 +230,7 @@ function Dummy:spawn(x, y, hp, monsterType)
         poison = 0,
         poisonTimer = 0,
         freeze = 0,
+        freezeImmune = 0,
     }
 end
 
@@ -241,17 +255,20 @@ function Dummy:takeDamage(dmg, hitDirX, hitDirY, elements)
     self.wobble = 0.35  -- Déformation d'impact
 
     -- Application des effets élémentaires
-    if elements and self.status then
+    -- (a hit only renews the duration: resetting the tick timer too would stop the damage
+    -- over time from ever ticking while the target is shot faster than the tick rate)
+    local status = self.status
+    if elements and status then
         if elements.fire then
-            self.status.fire = 2.4 -- 2.4s de brûlure
-            self.status.fireTimer = 0
+            if status.fire <= 0 then status.fireTimer = 0 end
+            status.fire = FIRE_TIME
         end
         if elements.poison then
-            self.status.poison = 999.0 -- Poison permanent
-            self.status.poisonTimer = 0
+            if status.poison <= 0 then status.poisonTimer = 0 end
+            status.poison = 999.0 -- Poison permanent
         end
-        if elements.ice then
-            self.status.freeze = 1.4 -- 1.4s de gel total
+        if elements.ice and status.freeze <= 0 and (status.freezeImmune or 0) <= 0 then
+            status.freeze = self.isBoss and BOSS_FREEZE_TIME or FREEZE_TIME
         end
     end
 
@@ -301,43 +318,58 @@ function Dummy:update(dt, player, projectilePool, obstacleManager, dummyPool, fc
     end
 
     -- 3. Gestion des statuts élémentaires (Feu, Poison, Glace)
+    local frozen = false
     if self.status then
-        -- Glace / Gel : immobilise totalement le monstre
-        if self.status.freeze and self.status.freeze > 0 then
-            self.status.freeze = self.status.freeze - dt
-            self.vx = 0
-            self.vy = 0
-            self.dashVx = 0
-            self.dashVy = 0
-            return true
+        local status = self.status
+        local dotScale = self.isBoss and BOSS_DOT_SCALE or 1
+
+        -- Glace / Gel : immobilise totalement le monstre, puis courte immunité
+        if status.freeze > 0 then
+            frozen = true
+            status.freeze = status.freeze - dt
+            if status.freeze <= 0 then
+                status.freeze = 0
+                status.freezeImmune = FREEZE_IMMUNITY
+            end
+        elseif (status.freezeImmune or 0) > 0 then
+            status.freezeImmune = status.freezeImmune - dt
         end
 
         -- Feu : DoT continu rapide
-        if self.status.fire and self.status.fire > 0 then
-            self.status.fire = self.status.fire - dt
-            self.status.fireTimer = (self.status.fireTimer or 0) + dt
-            if self.status.fireTimer >= 0.35 then
-                self.status.fireTimer = 0
-                local dot = math.max(3, math.floor(self.maxHp * 0.04))
+        if status.fire > 0 then
+            status.fire = status.fire - dt
+            status.fireTimer = status.fireTimer + dt
+            if status.fireTimer >= FIRE_TICK then
+                status.fireTimer = 0
+                local dot = math.max(3, math.floor(self.maxHp * FIRE_SHARE * dotScale))
                 self.hp = self.hp - dot
                 VFX.addFCT(self.x, self.y - 14, dot, false)
                 VFX.addSparks(self.x, self.y, 3, {1.0, 0.4, 0.1, 1.0})
-                if self.hp <= 0 then return false end
             end
         end
 
         -- Poison : DoT régulier permanent
-        if self.status.poison and self.status.poison > 0 then
-            self.status.poisonTimer = (self.status.poisonTimer or 0) + dt
-            if self.status.poisonTimer >= 0.60 then
-                self.status.poisonTimer = 0
-                local dot = math.max(4, math.floor(self.maxHp * 0.05))
+        if status.poison > 0 then
+            status.poisonTimer = status.poisonTimer + dt
+            if status.poisonTimer >= POISON_TICK then
+                status.poisonTimer = 0
+                local dot = math.max(4, math.floor(self.maxHp * POISON_SHARE * dotScale))
                 self.hp = self.hp - dot
                 VFX.addFCT(self.x, self.y - 14, dot, false)
                 VFX.addSparks(self.x, self.y, 3, {0.2, 0.9, 0.3, 1.0})
-                if self.hp <= 0 then return false end
             end
         end
+    end
+
+    -- Killed by a status: the game resolves the death (loot, kill count), see GameState:resolveDeaths
+    if self.hp <= 0 then return true end
+
+    if frozen then
+        self.vx = 0
+        self.vy = 0
+        self.dashVx = 0
+        self.dashVy = 0
+        return true
     end
 
     if isHitStopped then return true end

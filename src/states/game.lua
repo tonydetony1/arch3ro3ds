@@ -606,6 +606,19 @@ function GameState:handleMonsterDeath(target)
     end
 end
 
+-- Resolves every monster whose HP ran out from something other than an arrow or a meteor
+-- (burn, poison, orbiting blades, flying swords, chain lightning, barrels...). Without it
+-- they stayed on the field at 0 HP until the next arrow, or vanished without loot or kill credit.
+function GameState:resolveDeaths()
+    local pool = self.dummyPool
+    for i = pool.activeCount, 1, -1 do
+        local target = pool.items[pool.activeList[i]]
+        if target and target.alive and target.hp <= 0 then
+            self:handleMonsterDeath(target)
+        end
+    end
+end
+
 function GameState:dropLoot(x, y, isBoss)
     local dropCount = isBoss and 6 or math.random(1, 3)
 
@@ -1105,6 +1118,8 @@ function GameState:update(dt)
             end
         end
     end
+    self:resolveDeaths()
+
 
     -- 7.b ARÈNE DE SURVIE : nouvelle vague toutes les 15 s (ou dès l'arène nettoyée)
     if self.gameMode == "survival" and self.phase == "combat" and not self.isGameOver then
