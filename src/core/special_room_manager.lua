@@ -7,10 +7,31 @@ local Config = require("src.data.config")
 local UI = require("src.ui.ui_components")
 local Audio = require("src.audio.audio")
 local Skills = require("src.data.skills")
+local PlayerStats = require("src.data.player_stats")
 local VFX = require("src.render.vfx_manager")
 
 local SpecialRoomManager = {}
 SpecialRoomManager.__index = SpecialRoomManager
+
+-- Pacts the Devil can offer this hero. Dark Multishot is left out once the hero already fires
+-- the maximum number of front arrows: the pact would cost 20% of max HP for nothing.
+local DEVIL_PACTS = {
+    { skillId = "devil_multishot", title = "Dark Multishot +1", desc = "Permanently fire +1 front arrow", icon = "multishot" },
+    { skillId = "devil_rage", title = "Demonic Rage", desc = "+35% permanent attack damage", icon = "damage" },
+    { skillId = "devil_haste", title = "Infernal Haste", desc = "+25% attack speed and move speed", icon = "speed" },
+    { skillId = "devil_ghost", title = "Spectral Form", desc = "Walk through obstacles and walls freely", icon = "shield" },
+}
+
+function SpecialRoomManager.devilPacts(player)
+    local frontCapped = player and (player.frontArrows or 1) >= PlayerStats.max_front_arrows
+    local offers = {}
+    for _, pact in ipairs(DEVIL_PACTS) do
+        if not (frontCapped and pact.skillId == "devil_multishot") then
+            offers[#offers + 1] = pact
+        end
+    end
+    return offers
+end
 
 -- Lucky wheel segments (start of run) and boss wheel (after each boss).
 -- "boost" multiplies a hero stat by `mult`: the label must show exactly that percentage.
@@ -206,32 +227,7 @@ function SpecialRoomManager:setup(roomType, player, roomNumber, variant, opts)
         -- 2. DEVIL'S PACT (Sacrifice 20% Max HP for Forbidden Power)
         local cost = math.max(15, math.floor((player.maxHp or 200) * 0.20))
 
-        local devilSkills = {
-            {
-                skillId = "devil_multishot",
-                title = "Dark Multishot +1",
-                desc = "Permanently fire +1 front arrow",
-                icon = "multishot",
-            },
-            {
-                skillId = "devil_rage",
-                title = "Demonic Rage",
-                desc = "+35% permanent attack damage",
-                icon = "damage",
-            },
-            {
-                skillId = "devil_haste",
-                title = "Infernal Haste",
-                desc = "+25% attack speed and move speed",
-                icon = "speed",
-            },
-            {
-                skillId = "devil_ghost",
-                title = "Spectral Form",
-                desc = "Walk through obstacles and walls freely",
-                icon = "shield",
-            },
-        }
+        local devilSkills = SpecialRoomManager.devilPacts(player)
         local chosen = devilSkills[math.random(1, #devilSkills)]
 
         self.devilPact = {

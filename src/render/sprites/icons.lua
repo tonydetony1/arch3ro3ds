@@ -160,7 +160,11 @@ function Icons.define(atlas)
     end
 end
 
+-- Skill icons that reuse a general icon of the atlas
+local SKILL_ICON_ALIAS = { gold = "icon_coin" }
+
 function Icons.skillIcon(iconType)
+    if SKILL_ICON_ALIAS[iconType] then return SKILL_ICON_ALIAS[iconType] end
     local key = "skill_" .. tostring(iconType)
     if ICONS[key] then return "icon_" .. key end
     return "icon_star"

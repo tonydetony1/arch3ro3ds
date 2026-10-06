@@ -474,7 +474,7 @@ function GameState:openDraft()
     Audio.play("level_up", 0, 0.9)
     self.isDrafting = true
     self.draftCursor = 2
-    self.draftOptions = Skills.getRandomDraft(3, self.acquiredSkills)
+    self.draftOptions = Skills.getRandomDraft(3, self.acquiredSkills, self.player)
     VFX.shakeLight()
 end
 

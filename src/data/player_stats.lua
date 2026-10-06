@@ -9,6 +9,7 @@ local PlayerStats = {
     initial_weapon = "starter_bow",
     dodge_cap = 0.60,          -- dodge chance never goes above this (talents and skills stack)
     heart_heal_ratio = 0.10,   -- a heart heals at least this share of max HP
+    max_front_arrows = 3,      -- Player:shoot fans at most this many front arrows
 }
 
 return PlayerStats
