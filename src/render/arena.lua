@@ -99,6 +99,10 @@ end
 -- ============================================================================
 -- Dégradé du ciel en bandes pleines (4 sommets par bande, aucun Canvas)
 local SKY_BANDS = 8
+-- Overflow past the screen: heavy shake (11 px) + 3D layer offset (10 px) horizontally,
+-- heavy shake vertically
+local SKY_PAD_X = 24
+local SKY_PAD_Y = 16
 local function buildSkyBands(theme)
     local top = Palette.hex(theme and theme.skyTop or "4f9be8")
     local bottom = Palette.hex(theme and theme.skyBottom or "cdeeff")
@@ -122,18 +126,25 @@ function Arena:drawSky(camX, camY)
         self._skyTheme = self.theme
     end
 
+    -- The sky overflows the screen so the shake and the 3D layer offset never uncover the
+    -- background clear colour (a blue bar at the screen edge)
     Depth.push(Depth.SKY)
     local skyName = "ov_sky_" .. (self.themeId or 1)
     local f = Art.has(skyName) and Art.frame(skyName, 1)
     if f then
         -- Dégradé précuit dessiné en blanc : même lot que les îles et nuages (1 appel GPU)
         love.graphics.setColor(1, 1, 1, 1)
-        Art.drawEx(skyName, 1, -16, 0, 0, (w + 32) / f.w, h / f.h)
+        Art.drawEx(skyName, 1, -SKY_PAD_X, -SKY_PAD_Y, 0, (w + 2 * SKY_PAD_X) / f.w, (h + 2 * SKY_PAD_Y) / f.h)
     else
         local bandH = math.ceil(h / SKY_BANDS)
+        local last = #self.skyBands
         for i, c in ipairs(self.skyBands) do
+            local y0 = (i - 1) * bandH
+            local y1 = i * bandH
+            if i == 1 then y0 = -SKY_PAD_Y end
+            if i == last then y1 = h + SKY_PAD_Y end
             love.graphics.setColor(c[1], c[2], c[3], 1)
-            love.graphics.rectangle("fill", -16, (i - 1) * bandH, w + 32, bandH)
+            love.graphics.rectangle("fill", -SKY_PAD_X, y0, w + 2 * SKY_PAD_X, y1 - y0)
         end
     end
     Depth.pop()

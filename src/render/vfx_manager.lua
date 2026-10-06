@@ -164,6 +164,22 @@ function VFX.shakeLight()  VFX.shake(2.5, 0.10) end -- Tir puissant / flèche
 function VFX.shakeMedium() VFX.shake(6.5, 0.18) end -- Joueur blessé / contact
 function VFX.shakeHeavy()  VFX.shake(11.0, 0.26) end -- Coup critique / explosion / mort boss
 
+-- Kill feedback. A regular mob gets a micro shake that never restarts one already running
+-- (a pack dying together is one pulse, not a rolling quake) and no freeze frame; a boss keeps
+-- the heavy shake and the hit-stop.
+local KILL_SHAKE_INTENSITY = 2.0
+local KILL_SHAKE_DURATION = 0.08
+local BOSS_KILL_HIT_STOP = 0.14
+
+function VFX.onKill(isBoss)
+    if isBoss then
+        VFX.shakeHeavy()
+        VFX.hitStop(BOSS_KILL_HIT_STOP)
+    elseif VFX.shakeTimer <= 0 then
+        VFX.shake(KILL_SHAKE_INTENSITY, KILL_SHAKE_DURATION)
+    end
+end
+
 function VFX.getShakeOffset()
     return VFX.shakeOffsetX, VFX.shakeOffsetY
 end
@@ -251,8 +267,9 @@ function VFX.update(dt)
         VFX.shakeTimer = math.max(0, VFX.shakeTimer - dt)
         local progress = VFX.shakeTimer / VFX.shakeDuration
         local curIntensity = VFX.shakeIntensity * progress
-        VFX.shakeOffsetX = (math.random() * 2 - 1) * curIntensity
-        VFX.shakeOffsetY = (math.random() * 2 - 1) * curIntensity
+        -- Whole pixels only: a fractional translate blurs the pixel art on the 3DS
+        VFX.shakeOffsetX = math.floor((math.random() * 2 - 1) * curIntensity + 0.5)
+        VFX.shakeOffsetY = math.floor((math.random() * 2 - 1) * curIntensity + 0.5)
     else
         VFX.shakeIntensity = 0
         VFX.shakeOffsetX = 0

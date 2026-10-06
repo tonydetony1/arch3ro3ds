@@ -549,15 +549,13 @@ function GameState:handleMonsterDeath(target)
     Save.recordKill(target.type)
     Save.addQuestProgress("kills", 1)
     if target.isBoss then Save.addQuestProgress("bosses", 1) end
-    VFX.shakeHeavy()
+    VFX.onKill(target.isBoss)
     if target.isBoss then
-        -- Mort du boss : arrêt sur image, flash blanc puis ralenti
-        VFX.hitStop(0.14)
+        -- Boss death: hit-stop (in VFX.onKill), white flash, then slow motion
         VFX.addSparks(target.x, target.y, 8, { 1.0, 0.85, 0.3, 1.0 })
         self.slowmoTimer = 0.9
         self.flashTimer = 0.22
     else
-        VFX.hitStop(0.04)
         VFX.addSparks(target.x, target.y, 5, { 1.0, 1.0, 1.0, 1.0 })
     end
     AIController.onDeath(target, self.dummyPool, self.fctPool)
@@ -1334,6 +1332,10 @@ function GameState:drawTop(eye)
 
     self.camera:detach()
 
+    -- The shake moves the world only: the vignette, banners, flashes and the room wipe stay
+    -- locked to the screen, so full-screen overlays never leave a gap at the edges
+    love.graphics.pop()
+
     -- 8. Atmosphère écran (vignettage, lumière)
     self.arena:drawAtmosphere()
     Perf.sec("h:atmo")
@@ -1369,8 +1371,6 @@ function GameState:drawTop(eye)
         love.graphics.setColor(0.65, 0.05, 0.08, deathAlpha * 0.45)
         love.graphics.rectangle("fill", 0, 0, Config.TOP_WIDTH, Config.TOP_HEIGHT)
     end
-
-    love.graphics.pop()
 end
 
 -- ============================================================================

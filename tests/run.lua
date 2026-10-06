@@ -23,6 +23,7 @@ local files = {
     "tests.test_talent_caps",
     "tests.test_boss_loot",
     "tests.test_loot_bounds",
+    "tests.test_vfx_shake",
 }
 
 local passed, failed = 0, 0
