@@ -1063,13 +1063,14 @@ function GameState:update(dt)
                             -- 2. Perforation (Piercing Shot) : continue sa course à travers les cibles
                             elseif proj.canPierce and proj.pierceCount and proj.pierceCount > 0 then
                                 proj.pierceCount = proj.pierceCount - 1
-                                proj.damage = math.max(5, math.floor(proj.damage * 0.75))
+                                proj:onPierce()
                                 proj.lastHitTargetId = target.id
                                 VFX.addSparks(target.x, target.y, 4, {1, 1, 0.5, 1})
 
                             -- 3. Ricochet vers une cible proche
                             elseif proj.bouncesLeft > 0 then
                                 proj.bouncesLeft = proj.bouncesLeft - 1
+                                proj:onRicochet()
                                 proj.lastHitTargetId = target.id
 
                                 local nextTarget = nil

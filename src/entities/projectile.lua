@@ -1,6 +1,7 @@
 local Config = require("src.data.config")
 local VFX = require("src.render.vfx_manager")
 local EliteAffixes = require("src.core.elite_affixes")
+local CombatRules = require("src.data.combat_rules")
 
 local Projectile = {}
 Projectile.__index = Projectile
@@ -70,7 +71,7 @@ function Projectile:spawn(startX, startY, dirX, dirY, weapon, isCrit, bounces, i
     self.hasDetonated = false
 
     local baseDmg = weapon.damage or 15
-    self.damage = self.isCrit and math.floor(baseDmg * 2.0) or baseDmg
+    self.damage = self.isCrit and math.floor(baseDmg * (weapon.crit_mult or CombatRules.BASE_CRIT_MULTIPLIER)) or baseDmg
     self.baseDamage = self.damage
 
     self.radius = self.isCrit and ((weapon.radius or 3) * 1.3) or (weapon.radius or 3)
@@ -126,6 +127,15 @@ function Projectile:spawn(startX, startY, dirX, dirY, weapon, isCrit, bounces, i
     self.lastHitTargetId = nil
     -- Tir d'une élite "frost" : ralentit le héros à l'impact
     self.chill = (isEnemy and EliteAffixes.chillsShots(EliteAffixes.shooter)) or false
+end
+
+-- Damage lost on each ricochet to a nearby monster and on each piercing hit (see CombatRules)
+function Projectile:onRicochet()
+    self.damage = CombatRules.scaled(self.damage, CombatRules.RICOCHET_FACTOR)
+end
+
+function Projectile:onPierce()
+    self.damage = CombatRules.scaled(self.damage, CombatRules.PIERCE_FACTOR)
 end
 
 -- Projectile lobé en cloche qui passe par-dessus les murs et les obstacles
@@ -296,6 +306,7 @@ function Projectile:update(dt, mapW, mapH, obstacleManager, dummyPool, player)
 
         if didBounce then
             self.wallBouncesLeft = self.wallBouncesLeft - 1
+            self.damage = CombatRules.scaled(self.damage, CombatRules.WALL_BOUNCE_FACTOR)
             VFX.addSparks(self.x, self.y, 4, self.color)
             return true
         end

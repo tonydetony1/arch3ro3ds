@@ -9,6 +9,7 @@ local AIController = require("src.core.ai_controller")
 local VFX = require("src.render.vfx_manager")
 local EliteAffixes = require("src.core.elite_affixes")
 local Admin = require("src.data.admin")
+local CombatRules = require("src.data.combat_rules")
 
 local Dummy = {}
 Dummy.__index = Dummy
@@ -272,8 +273,8 @@ function Dummy:takeDamage(dmg, hitDirX, hitDirY, elements)
         end
     end
 
-    -- Hit-stop : fige l'animation et les mouvements pendant 1 frame (~0.025s)
-    self.hitStop = 0.025
+    -- An arrow does not stop a monster (CombatRules.HIT_STUN is 0)
+    self.hitStop = CombatRules.HIT_STUN
 
     -- Knockback : recul physique réactif
     if hitDirX and hitDirY then

@@ -11,6 +11,7 @@ local Palette = require("src.render.palette")
 local PixelFont = require("src.ui.pixel_font")
 local HeroSprites = require("src.render.sprites.heroes")
 local EliteAffixes = require("src.core.elite_affixes")
+local CombatRules = require("src.data.combat_rules")
 
 local Player = {}
 
@@ -41,6 +42,8 @@ function Player.new(startX, startY)
     self.y = startY or (Config.TOP_HEIGHT / 2 + 10)
     self.vx = 0
     self.vy = 0
+    self.pushX = 0 -- shockwave impulse, see Player:push
+    self.pushY = 0
 
     -- Caractéristiques de base
     self.baseSpeed = PlayerStats.base_speed
@@ -287,24 +290,36 @@ function Player:handleInput(dt)
     local hasInput = (inputX ~= 0 or inputY ~= 0)
     self.hasInput = hasInput
 
-    -- Physique d'accélération et glissade (le terrain modifie vitesse et adhérence)
+    -- Direct movement: the stick drives the speed directly (no acceleration, no residual
+    -- slide), so the hero starts and stops instantly and can stutter-step between shots.
+    -- Only the ice keeps the old inertia.
     local chilled = (self.chillTimer or 0) > 0
     local speed = self.speed * (self.terrainSpeedMult or 1.0) * (chilled and EliteAffixes.CHILL_SPEED or 1)
-    local grip = 25 * (1.0 - (self.terrainSlip or 0) * 0.82)
+    local slip = self.terrainSlip or 0
+    local onIce = slip > 0.05
+    local grip = 25 * (1.0 - slip * 0.82)
     local targetVx = inputX * speed
     local targetVy = inputY * speed
 
     if hasInput then
-        self.vx = self.vx + (targetVx - self.vx) * math.min(1.0, dt * grip)
-        self.vy = self.vy + (targetVy - self.vy) * math.min(1.0, dt * grip)
+        if onIce then
+            self.vx = self.vx + (targetVx - self.vx) * math.min(1.0, dt * grip)
+            self.vy = self.vy + (targetVy - self.vy) * math.min(1.0, dt * grip)
+        else
+            self.vx, self.vy = targetVx, targetVy
+        end
         self.isMoving = true
         self.wasMoving = true
         self.targetAngle = math.atan2(self.vy, self.vx)
         self.currentTarget = nil -- Le moindre input annule instantanément le cycle de tir en cours !
     else
-        local friction = 24 * (1.0 - (self.terrainSlip or 0) * 0.85)
-        self.vx = self.vx * math.max(0, 1.0 - dt * friction)
-        self.vy = self.vy * math.max(0, 1.0 - dt * friction)
+        if onIce then
+            local friction = 24 * (1.0 - slip * 0.85)
+            self.vx = self.vx * math.max(0, 1.0 - dt * friction)
+            self.vy = self.vy * math.max(0, 1.0 - dt * friction)
+        else
+            self.vx, self.vy = 0, 0
+        end
 
         if math.abs(self.vx) < 1.0 and math.abs(self.vy) < 1.0 then
             self.vx = 0
@@ -358,7 +373,7 @@ end
 -- Tir modulaire gérant toutes les combinaisons de flèches (Frontale, Diagonale, Arrière, Latérale)
 function Player:shoot(projectilePool)
     local isCrit = (math.random() < self.critChance)
-    local bounces = self.hasRicochet and 1 or 0
+    local bounces = self.hasRicochet and CombatRules.RICOCHET_BOUNCES or 0
     local effectiveDmg = math.floor(self.currentWeapon.damage * (self.damageMult + self.furyBonus))
     local rad = (self.currentWeapon.radius or 3) + self.arrowRadiusBonus
 
@@ -377,6 +392,7 @@ function Player:shoot(projectilePool)
         return_damage_mult = self.currentWeapon.return_damage_mult,
         is_hitscan = self.currentWeapon.is_hitscan,
         sprite = self.currentWeapon.sprite,
+        crit_mult = self.critMultiplier,
     }
 
     local extra = {
@@ -390,25 +406,31 @@ function Player:shoot(projectilePool)
 
     Audio.playWeapon(self.weaponId)
 
-    local function spawnProj(ang)
+    -- `factor`: damage share of this arrow (front arrows split the damage, see CombatRules)
+    local function spawnProj(ang, factor)
         local p = projectilePool:obtain()
         if p then
             local dx = math.cos(ang)
             local dy = math.sin(ang)
             p:spawn(self.x + dx * 10, self.y + dy * 10, dx, dy, wData, isCrit, bounces, false, extra)
+            if factor and factor ~= 1 then
+                p.damage = CombatRules.scaled(p.damage, factor)
+                p.baseDamage = p.damage
+            end
         end
     end
+    local frontFactor = CombatRules.frontArrowFactor(self.frontArrows)
 
     -- 1. Flèches Frontales
     if self.frontArrows <= 1 then
         spawnProj(self.currentAngle)
     elseif self.frontArrows == 2 then
-        spawnProj(self.currentAngle - 0.10)
-        spawnProj(self.currentAngle + 0.10)
+        spawnProj(self.currentAngle - 0.10, frontFactor)
+        spawnProj(self.currentAngle + 0.10, frontFactor)
     else
-        spawnProj(self.currentAngle - 0.18)
-        spawnProj(self.currentAngle)
-        spawnProj(self.currentAngle + 0.18)
+        spawnProj(self.currentAngle - 0.18, frontFactor)
+        spawnProj(self.currentAngle, frontFactor)
+        spawnProj(self.currentAngle + 0.18, frontFactor)
     end
 
     -- 2. Flèches Diagonales
@@ -581,6 +603,24 @@ function Player:updateStar(dt)
     end
 end
 
+-- Shockwave impulse (boss phase change). It is separate from the stick-driven velocity, which
+-- now stops instantly, and fades out on its own.
+function Player:push(vx, vy)
+    self.pushX, self.pushY = vx, vy
+end
+
+function Player:updatePush(dt, obstacleManager, isGateOpen)
+    if self.pushX == 0 and self.pushY == 0 then return end
+    local Physics = require("src.core.physics")
+    Physics.moveAndSlide(self, self.pushX, self.pushY, dt, self.radius, obstacleManager, false,
+        self.maxX + 22, self.maxY + 22, isGateOpen)
+    local keep = math.max(0, 1.0 - dt * CombatRules.PUSH_DECAY)
+    self.pushX, self.pushY = self.pushX * keep, self.pushY * keep
+    if math.abs(self.pushX) < 1.0 and math.abs(self.pushY) < 1.0 then
+        self.pushX, self.pushY = 0, 0
+    end
+end
+
 function Player:setBounds(mapW, mapH)
     self.minX = 22
     self.maxX = (mapW or Config.TOP_WIDTH) - 22
@@ -665,6 +705,7 @@ function Player:update(dt, projectilePool, dummyPool, fctPool, obstacleManager, 
         if blockedX then self.vx = 0 end
         if blockedY then self.vy = 0 end
     end
+    self:updatePush(dt, obstacleManager, isGateOpen)
 
     -- Dissipation progressive des silhouettes d'esquive
     for g = 1, #self.ghostTrails do

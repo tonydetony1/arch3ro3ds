@@ -180,7 +180,7 @@ function bossCtx.fx(event, d, a, b)
         local player = bossCtx.player
         local dx, dy = player.x - d.x, player.y - d.y
         local len = math.max(1, math.sqrt(dx * dx + dy * dy))
-        player.vx, player.vy = dx / len * PHASE_PUSH, dy / len * PHASE_PUSH
+        player:push(dx / len * PHASE_PUSH, dy / len * PHASE_PUSH)
     elseif event == "summon" then
         VFX.addSparks(d.x, d.y, 10, VFX_PHASE)
         VFX.shakeMedium()
