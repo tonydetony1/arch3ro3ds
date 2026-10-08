@@ -29,6 +29,7 @@ local files = {
     "tests.test_hero_hits",
     "tests.test_skill_rules",
     "tests.test_targeting",
+    "tests.test_spear_beam",
     "tests.test_combat_physics",
 }
 

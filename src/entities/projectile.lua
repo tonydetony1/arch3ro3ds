@@ -52,6 +52,7 @@ function Projectile.create(index)
     self.laserEndY = 0
     self.laserTimer = 0
     self.laserDuration = 0.12
+    self.beamFired = false
     self.playerRef = nil
     return self
 end
@@ -88,6 +89,7 @@ function Projectile:spawn(startX, startY, dirX, dirY, weapon, isCrit, bounces, i
     self.isReturning = false
     self.returnDamageMult = weapon.return_damage_mult or 0.65
     self.isHitscan = weapon.is_hitscan or false
+    self.beamFired = false
     self.laserTimer = 0
     self.playerRef = extra and extra.playerRef or nil
 

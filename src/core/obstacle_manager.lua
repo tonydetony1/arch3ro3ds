@@ -246,7 +246,7 @@ local function segmentHitsBox(x0, y0, dx, dy, bx0, by0, bx1, by1)
         if t2 < tmax then tmax = t2 end
         if tmin > tmax then return false end
     end
-    return true
+    return tmin -- where along the segment (0..1) it first enters the box; a number is truthy
 end
 
 -- Test if a shot flying from (x0, y0) to (x1, y1) is stopped by a rock on the way (only rocks
@@ -271,6 +271,21 @@ function ObstacleManager:isShotBlocked(x0, y0, x1, y1, radius)
         end
     end
     return false
+end
+
+-- How far a shot from (x0, y0) to (x1, y1) gets before the first rock, as a fraction of the
+-- segment (1 = it is never stopped). Used to cut the hitscan beam short.
+function ObstacleManager:shotReach(x0, y0, x1, y1, radius)
+    radius = radius or 3
+    local dx, dy = x1 - x0, y1 - y0
+    local reach = 1
+    local rocks = self.rocks
+    for i = 1, #rocks do
+        local r = rocks[i]
+        local t = segmentHitsBox(x0, y0, dx, dy, r.x - radius, r.y - radius, r.x + r.w + radius, r.y + r.h + radius)
+        if t and t < reach then reach = t end
+    end
+    return reach
 end
 
 -- Destruction d'une urne : cœur de soin ou pièces d'or

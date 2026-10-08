@@ -7,6 +7,7 @@ local Items = require("src.data.items")
 local Skills = require("src.data.skills")
 local Save = require("src.data.save")
 local WorldManager = require("src.core.world_manager")
+local Physics = require("src.core.physics")
 local Rooms = require("src.data.rooms")
 local Pool = require("src.core.pool")
 local Camera = require("src.core.camera")
@@ -632,6 +633,129 @@ function GameState:hurtHero(dmg, chill)
     return true
 end
 
+-- Damage, effects and skill hooks of one arrow (or beam) hitting one monster. Returns whether
+-- the monster died and whether it was executed. The caller handles the death and the arrow.
+function GameState:applyArrowHit(proj, target)
+    -- Coup de grâce / Exécution instantanée (Faux de la Mort < 30% PV)
+    local isExecute = false
+    if proj.executeThreshold and not target.isBoss and (target.hp / math.max(1, target.maxHp)) <= proj.executeThreshold then
+        isExecute = true
+        proj.damage = target.hp
+    end
+
+    -- Dégâts + Knockback physique (amplifié pour la Faux) + Effets Élémentaires
+    local dmgOut = self:masteryDamage(target, proj.damage)
+    Audio.play(proj.isCrit and "crit" or "hit", 0.12, proj.isCrit and 0.75 or 0.45)
+    -- Toucher Obscur (marque) et Toucher Sacré (vol de vie)
+    if self.player.hasDarkTouch then target.darkMark = 3.0 end
+    if (self.player.holyTouch or 0) > 0 and self.player.hp < self.player.maxHp then
+        local heal = math.max(1, math.floor(self.player.maxHp * self.player.holyTouch))
+        self.player.hp = math.min(self.player.maxHp, self.player.hp + heal)
+    end
+    local isDead = target:takeDamage(dmgOut, proj.dirX, proj.dirY, proj.elements, proj.knockbackMult)
+
+    if isExecute then
+        VFX.addFCT(target.x, target.y - 16, "EXECUTE!", true)
+        VFX.shakeHeavy()
+    end
+
+    -- Hit-Flash 3 frames blanc pur sur le monstre touché
+    VFX.triggerHitFlash(target, 3)
+
+    -- Floating Combat Text
+    VFX.addFCT(target.x, target.y - 8, proj.damage, proj.isCrit or isExecute)
+    VFX.addSparks(target.x, target.y, proj.isCrit and 8 or 4, proj.isCrit and {1, 0.85, 0.2, 1} or {1, 1, 1, 1})
+
+    -- Foudre en chaîne (Arc électrique vers ennemis proches)
+    if proj.elements and proj.elements.lightning then
+        local shocked = 0
+        for nb = 1, self.dummyPool.activeCount do
+            if shocked >= 2 then break end
+            local nIdx = self.dummyPool.activeList[nb]
+            local other = self.dummyPool.items[nIdx]
+            if other and other.alive and other.id ~= target.id then
+                local ldx = other.x - target.x
+                local ldy = other.y - target.y
+                if (ldx * ldx + ldy * ldy) <= (130 * 130) then
+                    shocked = shocked + 1
+                    local lDmg = math.max(4, math.floor(proj.damage * 0.50))
+                    other:takeDamage(lDmg, ldx / 130, ldy / 130)
+                    VFX.addFCT(other.x, other.y - 10, lDmg, true)
+                    VFX.addSparks(other.x, other.y, 4, {0.45, 0.75, 1.0, 1.0})
+
+                    -- Synergie Tempête Magnétique : zone électrique au sol
+                    if self.player.hasSynergyMagneticStorm then
+                        VFX.addSparks(other.x, other.y, 6, {0.4, 0.8, 1.0, 1.0})
+                        VFX.addFCT(other.x, other.y - 14, "STORM", true)
+                    end
+                end
+            end
+        end
+    end
+
+    -- Screen Shake et Hit-Stop (Micro-pause 0.05s) sur coup critique
+    if proj.isCrit or isExecute then
+        VFX.shakeHeavy()
+        VFX.hitStop(0.05)
+    end
+
+    -- Hooks onHit des compétences
+    for _, sk in ipairs(self.acquiredSkills) do
+        if sk.hooks and sk.hooks.onHit then
+            sk.hooks.onHit(target, proj, self.player, proj.damage, self.fctPool)
+        end
+    end
+    return isDead, isExecute
+end
+
+-- Scratch lists of GameState:fireBeam, reused so a shot allocates nothing
+local beamTargets, beamOrder = {}, {}
+
+-- A hitscan beam (Brightspear) hits every monster on its line at once, from the nearest to the
+-- farthest, and stops at the first rock. Each target after the first takes less damage (the
+-- piercing rule). It used to test the collision at the far end of the beam only, so it never hit.
+function GameState:fireBeam(proj)
+    if proj.beamFired then return end
+    proj.beamFired = true
+    local sx, sy = proj.laserStartX, proj.laserStartY
+    local ex, ey = proj.laserEndX, proj.laserEndY
+    if self.obstacleManager then
+        local reach = self.obstacleManager:shotReach(sx, sy, ex, ey, proj.radius)
+        if reach < 1 then
+            ex, ey = sx + (ex - sx) * reach, sy + (ey - sy) * reach
+            proj.laserEndX, proj.laserEndY = ex, ey
+        end
+    end
+
+    local pool = self.dummyPool
+    local n = 0
+    for i = 1, pool.activeCount do
+        local m = pool.items[pool.activeList[i]]
+        if m and m.alive and not m.isBurrowed then
+            local distSq, t = Physics.distToSegmentSq(m.x, m.y, sx, sy, ex, ey)
+            local reachR = m.radius + proj.radius
+            if distSq <= reachR * reachR then
+                local j = n
+                while j >= 1 and beamOrder[j] > t do
+                    beamOrder[j + 1], beamTargets[j + 1] = beamOrder[j], beamTargets[j]
+                    j = j - 1
+                end
+                beamOrder[j + 1], beamTargets[j + 1] = t, m
+                n = n + 1
+            end
+        end
+    end
+
+    for i = 1, n do
+        local m = beamTargets[i]
+        beamTargets[i] = nil
+        if m.alive then
+            if self:applyArrowHit(proj, m) then self:handleMonsterDeath(m) end
+            proj:onPierce()
+        end
+    end
+end
+
 -- Resolves every monster whose HP ran out from something other than an arrow or a meteor
 -- (burn, poison, orbiting blades, flying swords, chain lightning, barrels...). Without it
 -- they stayed on the field at 0 HP until the next arrow, or vanished without loot or kill credit.
@@ -906,7 +1030,7 @@ function GameState:update(dt)
             if proj.isLobbed and proj.hasDetonated and not proj.isEnemy then
                 self:explodeMeteor(proj)
                 self.projectilePool:free(proj)
-            elseif self.obstacleManager and self.obstacleManager:checkProjectileHit(proj, self.dummyPool, self.fctPool, self.player, self.lootPool) then
+            elseif not proj.isHitscan and self.obstacleManager and self.obstacleManager:checkProjectileHit(proj, self.dummyPool, self.fctPool, self.player, self.lootPool) then
                 self.projectilePool:free(proj)
             elseif proj.isEnemy then
                 if proj.isLobbed and proj.hasDetonated then
@@ -973,6 +1097,8 @@ function GameState:update(dt)
                         end
                     end
                 end
+            elseif proj.isHitscan then
+                self:fireBeam(proj)
             else
                 -- COLLISION PROJECTILE JOUEUR AVEC LES MONSTRES
                 local px1, py1, pw1, ph1 = proj:getAABB()
@@ -985,75 +1111,7 @@ function GameState:update(dt)
                         local dx, dy, dw, dh = target:getAABB()
 
                         if checkAABB(px1, py1, pw1, ph1, dx, dy, dw, dh) then
-                            -- Coup de grâce / Exécution instantanée (Faux de la Mort < 30% PV)
-                            local isExecute = false
-                            if proj.executeThreshold and not target.isBoss and (target.hp / math.max(1, target.maxHp)) <= proj.executeThreshold then
-                                isExecute = true
-                                proj.damage = target.hp
-                            end
-
-                            -- Dégâts + Knockback physique (amplifié pour la Faux) + Effets Élémentaires
-                            local dmgOut = self:masteryDamage(target, proj.damage)
-                            Audio.play(proj.isCrit and "crit" or "hit", 0.12, proj.isCrit and 0.75 or 0.45)
-                            -- Toucher Obscur (marque) et Toucher Sacré (vol de vie)
-                            if self.player.hasDarkTouch then target.darkMark = 3.0 end
-                            if (self.player.holyTouch or 0) > 0 and self.player.hp < self.player.maxHp then
-                                local heal = math.max(1, math.floor(self.player.maxHp * self.player.holyTouch))
-                                self.player.hp = math.min(self.player.maxHp, self.player.hp + heal)
-                            end
-                            local isDead = target:takeDamage(dmgOut, proj.dirX, proj.dirY, proj.elements, proj.knockbackMult)
-
-                            if isExecute then
-                                VFX.addFCT(target.x, target.y - 16, "EXECUTE!", true)
-                                VFX.shakeHeavy()
-                            end
-
-                            -- Hit-Flash 3 frames blanc pur sur le monstre touché
-                            VFX.triggerHitFlash(target, 3)
-
-                            -- Floating Combat Text
-                            VFX.addFCT(target.x, target.y - 8, proj.damage, proj.isCrit or isExecute)
-                            VFX.addSparks(target.x, target.y, proj.isCrit and 8 or 4, proj.isCrit and {1, 0.85, 0.2, 1} or {1, 1, 1, 1})
-
-                            -- Foudre en chaîne (Arc électrique vers ennemis proches)
-                            if proj.elements and proj.elements.lightning then
-                                local shocked = 0
-                                for nb = 1, dCount do
-                                    if shocked >= 2 then break end
-                                    local nIdx = self.dummyPool.activeList[nb]
-                                    local other = self.dummyPool.items[nIdx]
-                                    if other and other.alive and other.id ~= target.id then
-                                        local ldx = other.x - target.x
-                                        local ldy = other.y - target.y
-                                        if (ldx * ldx + ldy * ldy) <= (130 * 130) then
-                                            shocked = shocked + 1
-                                            local lDmg = math.max(4, math.floor(proj.damage * 0.50))
-                                            other:takeDamage(lDmg, ldx / 130, ldy / 130)
-                                            VFX.addFCT(other.x, other.y - 10, lDmg, true)
-                                            VFX.addSparks(other.x, other.y, 4, {0.45, 0.75, 1.0, 1.0})
-
-                                            -- Synergie Tempête Magnétique : zone électrique au sol
-                                            if self.player.hasSynergyMagneticStorm then
-                                                VFX.addSparks(other.x, other.y, 6, {0.4, 0.8, 1.0, 1.0})
-                                                VFX.addFCT(other.x, other.y - 14, "STORM", true)
-                                            end
-                                        end
-                                    end
-                                end
-                            end
-
-                            -- Screen Shake et Hit-Stop (Micro-pause 0.05s) sur coup critique
-                            if proj.isCrit or isExecute then
-                                VFX.shakeHeavy()
-                                VFX.hitStop(0.05)
-                            end
-
-                            -- Hooks onHit des compétences
-                            for _, sk in ipairs(self.acquiredSkills) do
-                                if sk.hooks and sk.hooks.onHit then
-                                    sk.hooks.onHit(target, proj, self.player, proj.damage, self.fctPool)
-                                end
-                            end
+                            local isDead = self:applyArrowHit(proj, target)
 
                             -- 1. Boomerang / Tornade : Traverse tous les monstres à l'aller et au retour
                             if proj.behavior == "boomerang" then
