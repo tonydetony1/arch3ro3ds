@@ -453,7 +453,7 @@ function SplashState:drawBottom()
     end
     UI.drawPillButton(BTN_X, BTN_Y, BTN_W, BTN_H, "TOUCH TO PLAY", "emerald", self.pressed, "swords")
 
-    PixelFont.printf("Developed by TonyDeTony  -  v1.0.11", 0, 226, BOT_W, "center", FOOTER_COLOR, "tiny")
+    PixelFont.printf("Developed by TonyDeTony  -  v1.0.12", 0, 226, BOT_W, "center", FOOTER_COLOR, "tiny")
     if t < FADE_IN then
         love.graphics.setColor(0, 0, 0, 1 - t / FADE_IN)
         love.graphics.rectangle("fill", 0, 0, BOT_W, Config.BOTTOM_HEIGHT)
