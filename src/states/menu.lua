@@ -928,10 +928,7 @@ function MenuState:drawHeroesTab()
 
     -- Nom & Titre
     UI.drawText(string.format("%s - %s", hData.name:upper(), hData.title:upper()), cx + 10, cy + 8, hData.color, {0.05, 0.05, 0.05, 1.0})
-    local prevF = love.graphics.getFont()
-    love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawText(hData.desc, cx + 10, cy + 24, {0.75, 0.80, 0.90, 1.0})
-    love.graphics.setFont(prevF)
+    PixelFont.printf(hData.desc, cx + 10, cy + 26, cw - 20, "left", {0.75, 0.80, 0.90, 1.0}, "tiny", 1, nil, 1)
 
     -- Encadré Bento du passif unique
     UI.drawBentoCard(cx + 8, cy + 42, cw - 16, 42, {
@@ -941,11 +938,9 @@ function MenuState:drawHeroesTab()
     })
     UI.drawIcon("sparkles", cx + 20, cy + 54, 9, hData.accentColor)
     UI.drawText(hData.passiveName, cx + 32, cy + 46, hData.accentColor)
-    love.graphics.setFont(UI.getFont("tiny"))
     UI.setFont("tiny")
     UI.drawTextAligned(hData.passiveDesc, cx + 12, cy + 60, cw - 24, "left", {0.85, 0.90, 0.98, 1.0})
     UI.setFont("main")
-    love.graphics.setFont(prevF)
 
     -- Micro-badges des stats de base du héros
     UI.drawPillBadge(cx + 8, cy + 96, 84, 22, string.format("+%d BASE ATK", hData.baseAtkBonus), {0.20, 0.08, 0.10, 0.9}, {0.80, 0.25, 0.28, 0.85}, {1.0, 0.45, 0.45, 1.0}, "swords")
@@ -1043,7 +1038,6 @@ function MenuState:drawTalentsTab()
     end
 
     -- 2. 4 bento cards (2x2 grid), one per talent of Talents.LIST
-    local prevF = love.graphics.getFont()
     for i, talent in ipairs(Talents.LIST) do
         local x, y, w, h = talentCardRect(i)
         local c = talent.color
@@ -1055,13 +1049,15 @@ function MenuState:drawTalentsTab()
             borderWidth = isSel and 2 or 1,
         })
         UI.drawIcon(talent.icon, x + 14, y + 18, 8, c)
-        UI.drawText(string.format("%s (%s)", talent.name, talent.effect), x + 28, y + 6, c)
+        -- Name in the bold font, per-level effect and current total in the tiny one (fits 150 px)
+        UI.drawText(talent.name, x + 28, y + 5, c)
+        local nameW = PixelFont.getWidth(talent.name, "main")
+        PixelFont.print("(" .. talent.effect .. ")", x + 28 + nameW + 4, y + 8, c, "tiny")
         if isSel then UI.drawIcon("check", x + w - 12, y + 18, 7, c) end
-        love.graphics.setFont(UI.getFont("tiny"))
         local lvl = talents[talent.id] or 0
-        local levelText = Talents.isMaxed(talent.id, talents) and "MAX" or string.format("Level %d", lvl)
-        UI.drawText(string.format("%s  (%s)", levelText, Talents.totalText(talent, lvl)), x + 28, y + 20, {0.80, 0.85, 0.95, 1.0})
-        love.graphics.setFont(prevF)
+        local levelText = Talents.isMaxed(talent.id, talents) and "MAX" or string.format("LEVEL %d", lvl)
+        PixelFont.printf(string.format("%s  (%s)", levelText, Talents.totalText(talent, lvl)), x + 28, y + 22, w - 44,
+            "left", {0.80, 0.85, 0.95, 1.0}, "tiny", 1, nil, 1)
     end
 
     -- 3. Bento Bottom: Upgrade action (308x52)
