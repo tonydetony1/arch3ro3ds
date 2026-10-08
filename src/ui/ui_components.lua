@@ -277,6 +277,30 @@ function UI.drawItemCard(x, y, w, h, item, level, isEquipped, isSelected, rarity
     end
 end
 
+-- Compact square item tile (Forge grid and slots, 35-40 px): rarity background, icon,
+-- level in the main font at the bottom right, a check mark when equipped
+function UI.drawItemTile(x, y, size, item, level, isEquipped, isSelected, rarityOverride)
+    local curRarity = rarityOverride or (item and item.rarity) or "common"
+    local rData = ItemsData.getRarityData(curRarity)
+    x, y = floor(x), floor(y)
+    if isSelected then Skin.roundRect(C.yellow, x - 2, y - 2, size + 4, size + 4, 3) end
+    Skin.roundRect(C.ink, x, y, size, size, 3)
+    Skin.roundRect(rData.bg, x + 1, y + 1, size - 2, size - 2, 2)
+    love.graphics.setColor(rData.border[1], rData.border[2], rData.border[3], 1)
+    love.graphics.rectangle("fill", x + 1, y + size - 4, size - 2, 3)
+    UI.drawItemIcon(item and item.icon or "bow", x + size / 2, y + floor(size * 0.45), size * 0.28, rData.color)
+    if level and level > 0 then
+        local text = tostring(level)
+        local bw = PixelFont.getWidth(text, "main") + 6
+        Skin.roundRect(C.ink, x + size - bw - 1, y + size - 13, bw, 12, 2)
+        PixelFont.print(text, x + size - bw + 2, y + size - 13, C.white, "main")
+    end
+    if isEquipped then
+        love.graphics.setColor(1, 1, 1, 1)
+        Art.draw("icon_check", 1, x + 7, y + 7)
+    end
+end
+
 -- ============================================================================
 -- 6. RAYONS DE LUMIÈRE (GACHA, SALLES SPÉCIALES)
 -- ============================================================================

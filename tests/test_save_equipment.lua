@@ -69,13 +69,14 @@ local function newInventory()
     return inv
 end
 
--- Center of an item card in the backpack grid (no scrolling)
+-- Center of an item tile in the backpack grid (no scrolling, ALL filter): 8 columns of
+-- 35 px tiles every 38 px from (9, 86), see src/states/inventory.lua
 local function cardCenter(inv, itemId)
-    for i, id in ipairs(inv.saveData.inventory) do
+    for i, id in ipairs(inv.visible) do
         if id == itemId then
-            local col, row = (i - 1) % 4, math.floor((i - 1) / 4)
-            local x, y = 11 + col * 76 + 35, 108 + row * 54 + 24
-            assert(y <= 194, "card not visible without scrolling: " .. itemId)
+            local col, row = (i - 1) % 8, math.floor((i - 1) / 8)
+            local x, y = 9 + col * 38 + 17, 86 + row * 38 + 17
+            assert(y <= 196, "card not visible without scrolling: " .. itemId)
             return x, y
         end
     end
@@ -365,12 +366,12 @@ T["forge: modal buttons fit inside the sheet without overlapping"] = function()
     local inv = newInventory()
     for _, id in ipairs({ "wolf_ring", "serpent_ring", "starter_bow", "rapid_daggers" }) do
         inv:openModal(id, nil)
-        local prevRight = 22
+        local prevRight = 4
         for _, b in ipairs(inv.modalButtons) do
             assert(b.x >= prevRight, "buttons overlap for " .. id)
             prevRight = b.x + b.w
         end
-        assert(prevRight <= 22 + 276, "buttons overflow the sheet for " .. id)
+        assert(prevRight <= 4 + 312, "buttons overflow the sheet for " .. id)
     end
     inv:openModal("serpent_ring", nil)
     assert(buttonIds(inv) == "equip_ring1,equip_ring2,upgrade,fuse", "got " .. buttonIds(inv))
@@ -425,8 +426,8 @@ local function newMenu()
     return menu
 end
 
-local TALENT_CENTERS = { strength = { 81, 80 }, vitality = { 239, 80 }, agility = { 81, 120 }, recovery = { 239, 120 }, glory = { 244, 41 } }
-local UPGRADE_BTN = { 160, 167 }
+local TALENT_CENTERS = { strength = { 81, 64 }, vitality = { 239, 64 }, agility = { 81, 128 }, recovery = { 239, 128 }, glory = { 262, 17 } }
+local UPGRADE_BTN = { 160, 182 }
 
 T["hub talents: tap a card, then upgrade exactly that talent"] = function()
     local d = resetSave()

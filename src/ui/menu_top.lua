@@ -353,7 +353,31 @@ function PAGES.quests(menu, save, t)
     }
 end
 
+-- Bestiary: the selected monster on the dais, its kills and mastery
+local function bestiaryPage(menu)
+    local Bestiary = require("src.data.bestiary")
+    local entry = Bestiary.entry(menu.bestiarySelected) or Bestiary.ENTRIES[1]
+    local kills = Save.getBestiary()[entry.type] or 0
+    local nextTier = Bestiary.nextTier(kills)
+    local seen = kills > 0
+    return {
+        star = "monster", monster = entry.type, seen = seen, leftH = 52, rightH = 70,
+        cards = function()
+            cardTitle(LEFT_X, "KILLS")
+            PixelFont.printf(tostring(kills), LEFT_X, CARD_Y + 20, CARD_W, "center", C.white, "main", 2)
+            cardTitle(RIGHT_X, "MASTERY")
+            PixelFont.printf(string.format("+%d%%", floor(Bestiary.bonusFor(kills) * 100 + 0.5)), RIGHT_X, CARD_Y + 20,
+                CARD_W, "center", C.mint, "main", 2)
+            PixelFont.printf(nextTier and ("NEXT " .. nextTier.kills) or "MAXED", RIGHT_X, CARD_Y + 46, CARD_W, "center",
+                C.fog, "main")
+        end,
+        title = seen and (entry.name:upper() .. " - " .. entry.family:upper()) or "UNKNOWN MONSTER",
+        hints = { { "B", "BACK" } },
+    }
+end
+
 function PAGES.heroes(menu, save, t)
+    if menu.heroSubPage == "bestiary" then return bestiaryPage(menu) end
     local heroId = menu.selectedHeroPreview or save.selectedHero or "atreus"
     local h = Heroes.get(heroId)
     local atk, hp = menu:powerTotals(heroId, h, t)
@@ -525,6 +549,14 @@ function MenuTop.draw(menu, t)
         drawChest(page.chestType, t)
     elseif page.star == "seal" then
         drawSeal(page.totalLevel)
+    elseif page.star == "monster" then
+        local frame = Art.frame(page.monster, 1)
+        local scale = (frame and frame.h > 26) and 2 or 3
+        Palette.set(C.ink, 0.30)
+        love.graphics.ellipse("fill", W / 2, FEET_Y + 2, 20, 5)
+        love.graphics.setColor(page.seen and 1 or 0.15, page.seen and 1 or 0.15, page.seen and 1 or 0.2, 1)
+        Art.drawEx(page.monster, (floor(t * 3) % 2) + 1, W / 2, FEET_Y - 4, 0, scale, scale)
+        love.graphics.setColor(1, 1, 1, 1)
     elseif page.star == "logo" then
         PixelFont.printf("ARCH3RO", 0, 62, W, "center", C.yellow, "main", 4)
         PixelFont.printf("3DS", 0, 106, W, "center", C.cyan, "main", 3)

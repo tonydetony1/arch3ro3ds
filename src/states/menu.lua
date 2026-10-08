@@ -704,210 +704,202 @@ function MenuState:getShopOffers()
     }
 end
 
+local SHOP_CARD_Y, SHOP_CARD_W, SHOP_CARD_H, SHOP_CARD_STEP = 34, 101, 166, 105
+local SHOP_BTN_Y, SHOP_BTN_H = 156, 40
+local SHOP_ICONS = { gold = "icon_coin", energy = "icon_bolt", gem = "icon_gem" }
+
 function MenuState:drawShopPage()
-    local W = Config.BOTTOM_WIDTH
+    local C = Palette.C
     local shop = Save.getShop()
     local offers = self:getShopOffers()
-
-    UI.drawBentoCard(6, 4, W - 12, 22, {})
-    UI.drawText("DAILY SHOP", 14, 7, Palette.C.yellow)
     self:drawSubtabs(CHEST_SUBTABS, "shop", SUBTAB_SPAN.chests)
+    self:drawWallet()
 
     for i, offer in ipairs(offers) do
-        local x = 6 + (i - 1) * 103
+        local x = 4 + (i - 1) * SHOP_CARD_STEP
         local bought = shop.bought[i]
-        UI.drawBentoCard(x, 30, 99, 150, { accentColor = bought and { 0.35, 0.40, 0.50, 0.8 } or { 1.0, 0.82, 0.20, 0.9 } })
-        UI.drawIcon(offer.icon, x + 49, 62, 22)
-        UI.setFont("tiny")
-        UI.drawTextAligned(offer.label:upper(), x + 4, 88, 91, "center", Palette.C.white)
-        UI.setFont("main")
-        if offer.kind == "item" then
-            UI.drawItemIcon(Items.get(offer.id) and Items.get(offer.id).icon or "bow", x + 49, 120, 14)
-        else
-            UI.drawTextAligned("x" .. (offer.amount or 1), x + 4, 112, 91, "center", Palette.C.silver)
-        end
+        Skin.panel(x, SHOP_CARD_Y, SHOP_CARD_W, SHOP_CARD_H, bought and "dark" or "raised")
         if bought then
-            UI.drawPillBadge(x + 8, 152, 83, 20, "PURCHASED", { 0.14, 0.17, 0.24, 0.95 }, { 0.30, 0.35, 0.45, 0.8 }, Palette.C.fog, "check")
+            Skin.panel(x + 6, SHOP_BTN_Y, SHOP_CARD_W - 12, SHOP_BTN_H, "dark")
         else
-            local theme = (offer.currency == "gems") and "violet" or "gold"
-            UI.drawPillButton(x + 8, 150, 83, 22, offer.price .. ((offer.currency == "gems") and " GEMS" or " GOLD"),
-                theme, self.pressedBtn == ("shop_" .. i), offer.currency == "gems" and "gem" or "gold")
+            local canBuy = (offer.currency == "gems") and (self.saveData.gems >= offer.price)
+                or (offer.currency ~= "gems" and self.saveData.gold >= offer.price)
+            Skin.button(x + 6, SHOP_BTN_Y, SHOP_CARD_W - 12, SHOP_BTN_H,
+                canBuy and ((offer.currency == "gems") and "purple" or "gold") or "gray", self.pressedBtn == ("shop_" .. i))
         end
     end
+    love.graphics.setColor(1, 1, 1, 1)
+    for i, offer in ipairs(offers) do
+        local x = 4 + (i - 1) * SHOP_CARD_STEP
+        local cx = x + math.floor(SHOP_CARD_W / 2)
+        if offer.kind == "item" then
+            UI.drawItemIcon(Items.get(offer.id) and Items.get(offer.id).icon or "bow", cx, SHOP_CARD_Y + 40, 18)
+        else
+            Art.drawEx(SHOP_ICONS[offer.icon] or "icon_star", 1, cx, SHOP_CARD_Y + 40, 0, 3, 3)
+        end
+        PixelFont.printf(offer.label:upper(), x + 4, SHOP_CARD_Y + 74, SHOP_CARD_W - 8, "center", C.white, "main", 1, nil, 2, 12)
+        if offer.kind ~= "item" then
+            PixelFont.printf("x" .. (offer.amount or 1), x, SHOP_CARD_Y + 102, SHOP_CARD_W, "center", C.silver, "main")
+        end
+        if shop.bought[i] then
+            PixelFont.printf("SOLD", x, SHOP_BTN_Y + 14, SHOP_CARD_W, "center", C.fog, "main")
+        else
+            Art.draw(offer.currency == "gems" and "icon_gem" or "icon_coin", 1, x + 22, SHOP_BTN_Y + 19)
+            PixelFont.print(tostring(offer.price), x + 32, SHOP_BTN_Y + 13, C.white, "main")
+        end
+    end
+end
 
-    UI.setFont("tiny")
-    UI.drawTextAligned("New offers available every day", 6, 186, W - 12, "center", Palette.C.steel)
-    UI.setFont("main")
+-- Gold and gems at the right of the sub-tab row (chests and shop pages)
+function MenuState:drawWallet()
+    love.graphics.setColor(1, 1, 1, 1)
+    Art.draw("icon_coin", 1, 214, 17)
+    PixelFont.print(tostring(self.saveData.gold or 0), 222, 11, Palette.C.yellow, "main")
+    Art.draw("icon_gem", 1, 274, 17)
+    PixelFont.print(tostring(self.saveData.gems or 0), 282, 11, Palette.C.mint, "main")
 end
 
 -- ============================================================================
 -- PAGE : BESTIARY (fiches, éliminations et maîtrise)
 -- ============================================================================
-function MenuState:drawBestiaryPage()
-    local counters = Save.getBestiary()
-    local W = Config.BOTTOM_WIDTH
-    local t = love.timer.getTime()
+-- Layout of the BESTIARY page: 8 x 3 grid, the selected monster is detailed on the top
+-- screen and in the strip under the grid
+local BEST_BACK = { x = 4, y = 4, w = 70, h = 26 }
+local BEST_COLS, BEST_CELL_W, BEST_CELL_H, BEST_STEP_X, BEST_STEP_Y = 8, 36, 40, 39, 42
+local BEST_X0, BEST_Y0 = 5, 34
+local BEST_INFO = { x = 4, y = 162, w = 312, h = 38 }
 
-    UI.drawBentoCard(6, 4, W - 12, 24, {})
-    UI.drawText("BESTIARY", 14, 8, Palette.C.yellow)
-    UI.setFont("tiny")
-    UI.drawTextAligned("MASTERY: 50 / 200 / 500 KILLS", 14, 10, W - 90, "right", Palette.C.fog)
-    UI.setFont("main")
-    UI.drawPillButton(W - 68, 5, 60, 20, "BACK", "gray", self.pressedBtn == "bestiary_back")
-
-    -- Monster grid (6 x 3)
-    for i, entry in ipairs(Bestiary.ENTRIES) do
-        local col = (i - 1) % 6
-        local row = math.floor((i - 1) / 6)
-        local cx = 5 + col * 52
-        local cy = 30 + row * 48
-        local kills = counters[entry.type] or 0
-        local isSel = (self.bestiarySelected == entry.type)
-        local isBoss = (entry.family == "Boss")
-
-        UI.drawBentoCard(cx, cy, 50, 46, { accentColor = isSel and { 1.0, 0.85, 0.25, 0.9 } or (isBoss and { 0.9, 0.25, 0.3, 0.8 } or nil) })
-        love.graphics.setColor(1, 1, 1, kills > 0 and 1 or 0.3)
-        local frame = Art.frame(entry.type, 1)
-        if frame then
-            local scale = (frame.h > 26) and 0.5 or 1
-            Art.drawEx(entry.type, (math.floor(t * 3) % 2) + 1, cx + 25, cy + 8 + math.min(24, frame.h * scale), 0, scale, scale)
-        end
-        love.graphics.setColor(1, 1, 1, 1)
-        UI.setFont("tiny")
-        UI.drawTextAligned(kills > 0 and entry.name:upper() or "???", cx + 1, cy + 32, 48, "center",
-            isSel and Palette.C.yellow or Palette.C.silver)
-        UI.drawTextAligned(tostring(kills), cx + 1, cy + 39, 48, "center", Palette.C.white)
-        UI.setFont("main")
-
-        for tier = 1, 3 do
-            local reached = kills >= Bestiary.THRESHOLDS[tier].kills
-            Skin.rect(reached and Palette.C.yellow or Palette.C.slate, cx + 17 + (tier - 1) * 6, cy + 2, 4, 3)
-        end
-    end
-
-    -- Detail card of selected monster
-    local entry = Bestiary.entry(self.bestiarySelected) or Bestiary.ENTRIES[1]
-    local kills = counters[entry.type] or 0
-    UI.drawBentoCard(5, 174, W - 10, 28, { accentColor = { 0.45, 0.75, 1.0, 0.9 } })
-    UI.drawText(entry.name:upper(), 12, 176, Palette.C.white)
-    UI.setFont("tiny")
-    UI.drawTextAligned(string.format("%s | %s | WEAKNESS: %s", entry.family:upper(), entry.attack:upper(), entry.weakness:upper()), 12, 176, W - 24, "right", Palette.C.fog)
-    UI.drawTextAligned(entry.desc, 12, 186, W - 24, "left", Palette.C.silver)
-
-    local bonus = Bestiary.bonusFor(kills)
-    local nextTier = Bestiary.nextTier(kills)
-    local infoText = string.format("MASTERY: +%d%% DAMAGE", math.floor(bonus * 100 + 0.5))
-    if nextTier then
-        infoText = infoText .. string.format("  (NEXT TIER: %d)", nextTier.kills)
-    end
-    UI.drawTextAligned(infoText, 12, 194, W - 24, "right", Palette.C.yellow)
-    UI.setFont("main")
+local function bestiaryCell(i)
+    return BEST_X0 + ((i - 1) % BEST_COLS) * BEST_STEP_X, BEST_Y0 + math.floor((i - 1) / BEST_COLS) * BEST_STEP_Y
 end
 
--- ============================================================================
--- ONGLET 2 : HÉROS (BENTO GRID 2026 : ROSTER TOP BAR & DETAIL SPEC TILES)
--- ============================================================================
+function MenuState:drawBestiaryPage()
+    local C = Palette.C
+    local counters = Save.getBestiary()
+    local t = love.timer.getTime()
+
+    Skin.button(BEST_BACK.x, BEST_BACK.y - 1, BEST_BACK.w, BEST_BACK.h + 1, "gray", self.pressedBtn == "bestiary_back")
+    for i, entry in ipairs(Bestiary.ENTRIES) do
+        local x, y = bestiaryCell(i)
+        local isSel = (self.bestiarySelected == entry.type)
+        Skin.roundRect(isSel and C.yellow or ((entry.family == "Boss") and C.wine or C.ink), x, y, BEST_CELL_W, BEST_CELL_H, 3)
+        Skin.roundRect(C.night, x + 1, y + 1, BEST_CELL_W - 2, BEST_CELL_H - 2, 2)
+        local kills = counters[entry.type] or 0
+        for tier = 1, 3 do
+            Skin.rect(kills >= Bestiary.THRESHOLDS[tier].kills and C.yellow or C.slate, x + 7 + (tier - 1) * 8, y + 3, 6, 3)
+        end
+    end
+    Skin.panel(BEST_INFO.x, BEST_INFO.y, BEST_INFO.w, BEST_INFO.h, "dark")
+
+    love.graphics.setColor(1, 1, 1, 1)
+    PixelFont.printf("BACK", BEST_BACK.x, BEST_BACK.y + 7, BEST_BACK.w, "center", C.white, "main")
+    PixelFont.print("BESTIARY", 84, 11, C.yellow, "main")
+    PixelFont.printf("MASTERY 50/200/500", 150, 11, 162, "right", C.fog, "main")
+    for i, entry in ipairs(Bestiary.ENTRIES) do
+        local x, y = bestiaryCell(i)
+        local kills = counters[entry.type] or 0
+        local frame = Art.frame(entry.type, 1)
+        if frame then
+            local scale = (frame.h > 24 or frame.w > 30) and 0.5 or 1
+            love.graphics.setColor(1, 1, 1, kills > 0 and 1 or 0.3)
+            Art.drawEx(entry.type, (math.floor(t * 3) % 2) + 1, x + BEST_CELL_W / 2, y + 28, 0, scale, scale)
+        end
+        love.graphics.setColor(1, 1, 1, 1)
+        PixelFont.printf(tostring(kills), x, y + 28, BEST_CELL_W, "center", kills > 0 and C.white or C.steel, "main")
+    end
+    local entry = Bestiary.entry(self.bestiarySelected) or Bestiary.ENTRIES[1]
+    local kills = counters[entry.type] or 0
+    local seen = kills > 0
+    PixelFont.printf(seen and entry.name:upper() or "???", BEST_INFO.x + 8, BEST_INFO.y + 5, 150, "left", C.yellow, "main", 1, nil, 1)
+    PixelFont.printf(string.format("+%d%% DAMAGE", math.floor(Bestiary.bonusFor(kills) * 100 + 0.5)), BEST_INFO.x,
+        BEST_INFO.y + 5, BEST_INFO.w - 8, "right", C.mint, "main")
+    PixelFont.printf(seen and ("WEAK TO " .. entry.weakness:upper()) or "DEFEAT IT TO LEARN MORE", BEST_INFO.x + 8,
+        BEST_INFO.y + 21, BEST_INFO.w - 16, "left", C.silver, "main", 1, nil, 1)
+end
+
+-- Layout of the HEROES tab (drawing and touch)
+local HERO_CARD_Y, HERO_CARD_W, HERO_CARD_H, HERO_CARD_STEP = 4, 60, 100, 63
+local HERO_PASSIVE = { x = 4, y = 108, w = 206, h = 92 }
+local HERO_BESTIARY = { x = 214, y = 108, w = 102, h = 40 }
+local HERO_ACTION = { x = 214, y = 152, w = 102, h = 48 }
+
+local function heroCardX(i) return 4 + (i - 1) * HERO_CARD_STEP end
+
 function MenuState:drawHeroesTab()
+    local C = Palette.C
     local hList = Heroes.getAll()
     local curPreview = self.selectedHeroPreview or self.saveData.selectedHero or "atreus"
     local hData = Heroes.get(curPreview)
     local isSelected = (self.saveData.selectedHero == curPreview)
     local isUnlocked = self.saveData.unlockedHeroes and self.saveData.unlockedHeroes[curPreview]
-    local t = love.timer.getTime()
+    local unlocked = self.saveData.unlockedHeroes or {}
 
-    -- 1. Grille supérieure des 5 avatars Bento (58px chacun, hauteur 48px)
+    -- 1. Roster cards (primitives)
     for i, h in ipairs(hList) do
-        local ax = 6 + (i - 1) * 62
-        local ay = 6
-        local aw = 58
-        local ah = 48
+        local x = heroCardX(i)
         local isCur = (h.id == curPreview)
-        local isAct = (self.saveData.selectedHero == h.id)
-        local isUnl = self.saveData.unlockedHeroes and self.saveData.unlockedHeroes[h.id]
+        Skin.roundRect(isCur and C.yellow or C.ink, x, HERO_CARD_Y, HERO_CARD_W, HERO_CARD_H, 3)
+        Skin.roundRect(C.night, x + 1, HERO_CARD_Y + 1, HERO_CARD_W - 2, HERO_CARD_H - 2, 2)
+        love.graphics.setColor(h.color[1], h.color[2], h.color[3], 1)
+        love.graphics.rectangle("fill", x + 2, HERO_CARD_Y + 2, HERO_CARD_W - 4, 3)
+        Skin.rect(C.slate, x + 6, HERO_CARD_Y + 60, HERO_CARD_W - 12, 2)
+    end
+    -- 2. Passive panel and right column
+    local p = HERO_PASSIVE
+    Skin.panel(p.x, p.y, p.w, p.h, "dark")
+    Skin.rect(C.slate, p.x + 6, p.y + 36, p.w - 12, 1)
+    local bb = HERO_BESTIARY
+    Skin.button(bb.x, bb.y, bb.w, bb.h, "purple", self.pressedBtn == "open_bestiary")
+    local ab = HERO_ACTION
+    local canAfford = (hData.costType == "gold" and self.saveData.gold >= hData.cost)
+        or (hData.costType == "gems" and self.saveData.gems >= hData.cost)
+    if isSelected then
+        Skin.panel(ab.x, ab.y, ab.w, ab.h, "raised")
+    elseif isUnlocked then
+        Skin.button(ab.x, ab.y, ab.w, ab.h, "green", self.pressedBtn == "select_hero")
+    else
+        Skin.button(ab.x, ab.y, ab.w, ab.h, canAfford and "gold" or "gray", self.pressedBtn == "unlock_hero")
+    end
 
-        local borderCol = isCur and {1.0, 0.85, 0.25, 1.0} or (isAct and {0.25, 0.85, 0.45, 1.0} or {0.18, 0.23, 0.33, 0.85})
-        UI.drawBentoCard(ax, ay, aw, ah, {
-            r = 7,
-            bg = isCur and {0.12, 0.16, 0.24, 0.98} or {0.08, 0.10, 0.15, 0.95},
-            borderColor = borderCol,
-            borderWidth = (isCur or isAct) and 1.5 or 1,
-            accentColor = isCur and h.color or nil,
-        })
-
-        -- Portrait pixel du héros
-        love.graphics.setColor(1, 1, 1, isUnl and 1 or 0.4)
+    -- 3. Sprites and texts
+    love.graphics.setColor(1, 1, 1, 1)
+    for i, h in ipairs(hList) do
+        local x = heroCardX(i)
+        local isUnl = unlocked[h.id]
+        local cx = x + math.floor(HERO_CARD_W / 2)
+        love.graphics.setColor(1, 1, 1, isUnl and 1 or 0.45)
         local variant = (h.id ~= "atreus") and h.id or nil
-        Art.drawEx("hero_body", 1, ax + aw / 2, ay + 32, 0, 2, 2, false, variant)
+        Art.drawEx("hero_body", 1, cx, HERO_CARD_Y + 58, 0, 3, 3, false, variant)
         local acc = HeroSprites.ACCESSORY_BY_HERO[h.id]
         if acc and isUnl then
             local o = HeroSprites.ACCESSORY_OFFSETS[acc]
-            Art.drawEx("hero_acc_" .. acc, 1, ax + aw / 2 + o[1] * 2, ay + 32 + o[2] * 2, 0, 2, 2)
+            Art.drawEx("hero_acc_" .. acc, 1, cx + o[1] * 3, HERO_CARD_Y + 58 + o[2] * 3, 0, 3, 3)
         end
         love.graphics.setColor(1, 1, 1, 1)
-        if not isUnl then
-            UI.drawIcon("lock", ax + aw / 2, ay + 20, 12)
+        if not isUnl then Art.drawEx("icon_lock", 1, cx, HERO_CARD_Y + 34, 0, 2, 2) end
+        local isCur, isAct = (h.id == curPreview), (self.saveData.selectedHero == h.id)
+        PixelFont.printf(h.name:upper(), x, HERO_CARD_Y + 66, HERO_CARD_W, "center",
+            isCur and C.yellow or (isUnl and C.silver or C.fog), "main", 1, nil, 1)
+        if isAct then
+            Art.drawEx("icon_check", 1, cx, HERO_CARD_Y + 87, 0, 2, 2)
+        elseif not isUnl then
+            Art.draw(h.costType == "gems" and "icon_gem" or "icon_coin", 1, x + 12, HERO_CARD_Y + 87)
+            PixelFont.print(tostring(h.cost), x + 20, HERO_CARD_Y + 82, h.costType == "gems" and C.mint or C.yellow, "main")
         end
-
-        UI.setFont("tiny")
-        local nameCol = isAct and { 0.35, 0.95, 0.55, 1.0 } or (isCur and { 1.0, 0.90, 0.40, 1.0 } or { 0.70, 0.75, 0.85, 1.0 })
-        UI.drawTextAligned(h.name:upper(), ax, ay + 37, aw, "center", nameCol)
-        UI.setFont("main")
     end
-
-    -- 2. Bento Gauche : Dossier Spécifications du Héros (194x138)
-    local cx, cy, cw, ch = 6, 58, 194, 138
-    UI.drawBentoCard(cx, cy, cw, ch, {
-        r = 8,
-        bg = {0.09, 0.11, 0.17, 0.96},
-        borderColor = {hData.color[1] * 0.7, hData.color[2] * 0.7, hData.color[3] * 0.7, 0.85},
-        accentColor = hData.color,
-        isElevated = true,
-    })
-
-    -- Nom & Titre
-    UI.drawText(string.format("%s - %s", hData.name:upper(), hData.title:upper()), cx + 10, cy + 8, hData.color, {0.05, 0.05, 0.05, 1.0})
-    PixelFont.printf(hData.desc, cx + 10, cy + 26, cw - 20, "left", {0.75, 0.80, 0.90, 1.0}, "tiny", 1, nil, 1)
-
-    -- Encadré Bento du passif unique
-    UI.drawBentoCard(cx + 8, cy + 42, cw - 16, 42, {
-        r = 6,
-        bg = {0.07, 0.09, 0.13, 0.95},
-        borderColor = {0.18, 0.24, 0.34, 0.75},
-    })
-    UI.drawIcon("sparkles", cx + 20, cy + 54, 9, hData.accentColor)
-    UI.drawText(hData.passiveName, cx + 32, cy + 46, hData.accentColor)
-    UI.setFont("tiny")
-    UI.drawTextAligned(hData.passiveDesc, cx + 12, cy + 60, cw - 24, "left", {0.85, 0.90, 0.98, 1.0})
-    UI.setFont("main")
-
-    -- Micro-badges des stats de base du héros
-    UI.drawPillBadge(cx + 8, cy + 96, 84, 22, string.format("+%d BASE ATK", hData.baseAtkBonus), {0.20, 0.08, 0.10, 0.9}, {0.80, 0.25, 0.28, 0.85}, {1.0, 0.45, 0.45, 1.0}, "swords")
-    UI.drawPillBadge(cx + 100, cy + 96, 84, 22, string.format("+%d MAX HP", hData.baseHpBonus), {0.08, 0.20, 0.12, 0.9}, {0.25, 0.75, 0.40, 0.85}, {0.45, 1.0, 0.65, 1.0}, "heart")
-
-    -- 3. Bento Right: Status & Action Button (108x138)
-    UI.drawPillButton(14, 176, 178, 18, "BESTIARY", "violet", self.pressedBtn == "open_bestiary", "hero")
-
-    local bx, by, bw, bh = 206, 58, 108, 138
-    UI.drawBentoCard(bx, by, bw, bh, {
-        r = 8,
-        bg = {0.08, 0.10, 0.15, 0.96},
-        borderColor = {0.18, 0.24, 0.34, 0.85},
-    })
-
+    PixelFont.print("PASSIVE", p.x + 8, p.y + 5, C.fog, "main")
+    Art.draw("icon_star", 1, p.x + 12, p.y + 25)
+    PixelFont.printf(hData.passiveName, p.x + 22, p.y + 19, p.w - 28, "left", C.yellow, "main", 1, nil, 1)
+    PixelFont.printf(hData.passiveDesc, p.x + 8, p.y + 42, p.w - 16, "left", C.white, "main", 1, nil, 4, 12)
+    PixelFont.printf("BESTIARY", bb.x, bb.y + 14, bb.w, "center", C.white, "main")
     if isSelected then
-        UI.drawIcon("check", bx + bw / 2, by + 40, 20, {0.25, 0.95, 0.45, 1.0})
-        UI.drawTextAligned("EQUIPPED", bx, by + 68, bw, "center", {0.35, 0.95, 0.55, 1.0})
-        UI.drawPillBadge(bx + 8, by + 96, bw - 16, 26, "ACTIVE HERO", {0.08, 0.24, 0.14, 0.9}, {0.25, 0.80, 0.45, 0.9}, {0.80, 1.0, 0.88, 1.0})
+        Art.drawEx("icon_check", 1, ab.x + 18, ab.y + 24, 0, 2, 2)
+        PixelFont.print("ACTIVE", ab.x + 32, ab.y + 18, C.mint, "main")
     elseif isUnlocked then
-        UI.drawIcon("hero", bx + bw / 2, by + 40, 18, {0.45, 0.75, 1.0, 1.0})
-        UI.drawTextAligned("UNLOCKED", bx, by + 68, bw, "center", {0.70, 0.80, 0.95, 1.0})
-        UI.drawPillButton(bx + 8, by + 96, bw - 16, 30, "SELECT", "emerald", self.pressedBtn == "select_hero", "check")
+        PixelFont.printf("SELECT", ab.x, ab.y + 18, ab.w, "center", C.white, "main")
     else
-        UI.drawIcon("lock", bx + bw / 2, by + 34, 18, {0.95, 0.80, 0.20, 1.0})
-        local costStr = string.format("%d %s", hData.cost, hData.costType:upper())
-        UI.drawTextAligned(costStr, bx, by + 58, bw, "center", {1.0, 0.88, 0.30, 1.0})
-        local canAfford = (hData.costType == "gold" and self.saveData.gold >= hData.cost) or (hData.costType == "gems" and self.saveData.gems >= hData.cost)
-        UI.drawPillButton(bx + 8, by + 96, bw - 16, 30, "UNLOCK", canAfford and "gold" or "gray", self.pressedBtn == "unlock_hero", hData.costType)
+        PixelFont.printf("UNLOCK", ab.x, ab.y + 10, ab.w, "center", C.white, "main")
+        PixelFont.printf(hData.cost .. " " .. hData.costType:upper(), ab.x, ab.y + 25, ab.w, "center", C.white, "main")
     end
 end
 
@@ -915,10 +907,12 @@ end
 -- TAB 4: PERMANENT TALENTS (SACRED SEAL)
 -- The player picks a talent (card or GLORY badge), then buys it with the bottom button.
 -- ============================================================================
-local TALENT_CARD_W, TALENT_CARD_H = 150, 36
-local TALENT_CARD_POS = { { 6, 62 }, { 164, 62 }, { 6, 102 }, { 164, 102 } } -- Talents.LIST order
-local GLORY_BADGE = { x = 186, y = 32, w = 116, h = 18 }
-local TALENT_BTN = { x = 24, y = 148, w = 272, h = 38 }
+local TALENT_CARD_W, TALENT_CARD_H = 154, 60
+local TALENT_CARD_POS = { { 4, 34 }, { 162, 34 }, { 4, 98 }, { 162, 98 } } -- Talents.LIST order
+local GLORY_BADGE = { x = 212, y = 7, w = 100, h = 20 }
+local TALENT_BTN = { x = 4, y = 164, w = 312, h = 36 }
+local TALENT_THEMES = { strength = "red", vitality = "green", agility = "blue", recovery = "gold" }
+local TALENT_SPRITES = { strength = "icon_sword", vitality = "icon_heart", agility = "icon_skill_boots", recovery = "icon_skill_heal" }
 local TALENT_FEEDBACK_TIME = 1.5
 
 local function talentCardRect(index)
@@ -938,95 +932,79 @@ local function talentAt(tx, ty)
 end
 
 function MenuState:drawTalentsTab()
-    local botW = Config.BOTTOM_WIDTH
+    local C = Palette.C
     local talents = Save.getTalents()
     local cost, totalLevel = Save.getTalentCost()
     local selected = self.selectedTalent
     local canUpgrade = Talents.canUpgrade(selected, talents) and (self.saveData.gold >= cost)
-    local t = love.timer.getTime()
 
-    -- 1. Bento Top: Sacred Seal & Overview (308x52)
-    local hx, hy, hw, hh = 6, 6, 308, 52
-    UI.drawBentoCard(hx, hy, hw, hh, {
-        r = 8,
-        bg = {0.09, 0.11, 0.17, 0.96},
-        borderColor = {0.45, 0.20, 0.65, 0.85},
-        accentColor = {0.80, 0.35, 1.0, 0.85},
-        isElevated = true,
-    })
-
-    -- Rotating rune
-    love.graphics.push()
-    love.graphics.translate(hx + 30, hy + 26)
-    love.graphics.rotate(t * 0.8)
-    UI.drawIcon("rune", 0, 0, 20, {0.95, 0.50, 1.0, 1.0})
-    love.graphics.pop()
-
-    UI.drawText("SACRED TALENT SEAL", hx + 58, hy + 10, {1.0, 0.88, 0.25, 1.0})
-    UI.drawPillBadge(hx + 58, hy + 26, 116, 18, string.format("TOTAL LEVEL: %d", totalLevel), {0.18, 0.10, 0.28, 0.9}, {0.70, 0.30, 0.90, 0.9}, {0.95, 0.85, 1.0, 1.0})
-
-    -- Glory: one-time purchase, selectable like a card until owned
+    -- 1. Header: total level and the one-time GLORY talent
+    Skin.panel(4, 4, 312, 26, "dark")
     local g = GLORY_BADGE
-    if Talents.isMaxed("glory", talents) then
-        UI.drawPillBadge(g.x, g.y, g.w, g.h, "GLORY ACTIVE", {0.12, 0.22, 0.16, 0.9}, {0.35, 0.95, 0.55, 0.9}, {0.85, 1.0, 0.90, 1.0}, "check")
-    elseif selected == "glory" then
-        UI.drawPillBadge(g.x, g.y, g.w, g.h, "GLORY SELECTED", {0.30, 0.22, 0.08, 0.95}, {1.0, 0.85, 0.30, 1.0}, {1.0, 0.92, 0.55, 1.0}, "star")
-    else
-        UI.drawPillBadge(g.x, g.y, g.w, g.h, "GLORY: LOCKED", {0.18, 0.12, 0.12, 0.9}, {0.65, 0.25, 0.25, 0.8}, {0.95, 0.80, 0.80, 1.0}, "lock")
-    end
+    local gloryOwned = Talents.isMaxed("glory", talents)
+    Skin.pill(g.x, g.y, g.w, g.h, gloryOwned and "green" or (selected == "glory" and "gold" or "red"))
+    Skin.disc(C.ink, 18, 17, 11)
+    Skin.disc(C.plum, 18, 17, 10)
+    Skin.disc(C.magenta, 18, 16, 8)
 
-    -- 2. 4 bento cards (2x2 grid), one per talent of Talents.LIST
+    -- 2. Talent cards: icon disc, name, per-level effect, level pips, total
     for i, talent in ipairs(Talents.LIST) do
         local x, y, w, h = talentCardRect(i)
-        local c = talent.color
         local isSel = (selected == talent.id)
-        UI.drawBentoCard(x, y, w, h, {
-            r = 6,
-            bg = isSel and {c[1] * 0.24, c[2] * 0.24, c[3] * 0.24, 0.98} or {0.09, 0.11, 0.16, 0.95},
-            borderColor = isSel and {c[1], c[2], c[3], 1.0} or {c[1] * 0.45, c[2] * 0.45, c[3] * 0.45, 0.8},
-            borderWidth = isSel and 2 or 1,
-        })
-        UI.drawIcon(talent.icon, x + 14, y + 18, 8, c)
-        -- Name in the bold font, per-level effect and current total in the tiny one (fits 150 px)
-        UI.drawText(talent.name, x + 28, y + 5, c)
-        local nameW = PixelFont.getWidth(talent.name, "main")
-        PixelFont.print("(" .. talent.effect .. ")", x + 28 + nameW + 4, y + 8, c, "tiny")
-        if isSel then UI.drawIcon("check", x + w - 12, y + 18, 7, c) end
+        if isSel then Skin.roundRect(C.yellow, x - 1, y - 1, w + 2, h + 2, 4) end
+        Skin.panel(x, y, w, h, isSel and "raised" or "dark")
+        local th = Skin.theme(TALENT_THEMES[talent.id] or "gray")
+        Skin.disc(C.ink, x + 17, y + 17, 13)
+        Skin.disc(th.dark, x + 17, y + 17, 12)
+        Skin.disc(th.main, x + 17, y + 16, 10)
         local lvl = talents[talent.id] or 0
-        local levelText = Talents.isMaxed(talent.id, talents) and "MAX" or string.format("LEVEL %d", lvl)
-        PixelFont.printf(string.format("%s  (%s)", levelText, Talents.totalText(talent, lvl)), x + 28, y + 22, w - 44,
-            "left", {0.80, 0.85, 0.95, 1.0}, "tiny", 1, nil, 1)
+        local filled = (lvl == 0) and 0 or ((lvl - 1) % 10 + 1)
+        for pip = 1, 10 do
+            local px = x + 6 + (pip - 1) * 14
+            Skin.roundRect(C.ink, px, y + 33, 13, 8, 2)
+            Skin.rect(pip <= filled and th.main or C.night, px + 1, y + 34, 11, 6)
+        end
     end
 
-    -- 3. Bento Bottom: Upgrade action (308x52)
-    local ax, ay, aw, ah = 6, 142, 308, 52
-    UI.drawBentoCard(ax, ay, aw, ah, {
-        r = 8,
-        bg = {0.08, 0.10, 0.15, 0.96},
-        borderColor = {0.18, 0.23, 0.33, 0.85},
-    })
-
-    local selTalent = Talents.get(selected)
-    local btnText = "SELECT A TALENT"
-    if selTalent and Talents.isMaxed(selected, talents) then
-        btnText = selTalent.name .. " MAXED"
-    elseif selTalent then
-        btnText = string.format("UPGRADE %s  (%d GOLD)", selTalent.name, cost)
-    end
+    -- 3. Upgrade button with the price
     local b = TALENT_BTN
-    UI.drawPillButton(b.x, b.y, b.w, b.h, btnText, canUpgrade and "violet" or "gray", self.pressedBtn == "upgrade_talent", "rune")
+    local oy = Skin.button(b.x, b.y, b.w, b.h, canUpgrade and "purple" or "gray", self.pressedBtn == "upgrade_talent")
+    local selTalent = Talents.get(selected)
+    local maxed = selTalent and Talents.isMaxed(selected, talents)
+    if selTalent and not maxed then Skin.pill(b.x + b.w - 90, b.y + oy + 7, 82, 20, "gold") end
 
-    -- Info line: result of the last purchase, otherwise the Glory effect
-    UI.setFont("tiny")
+    love.graphics.setColor(1, 1, 1, 1)
+    Art.draw("icon_star", 1, 18, 16)
+    PixelFont.print("TOTAL LEVEL " .. totalLevel, 34, 10, C.yellow, "main")
+    Art.draw(gloryOwned and "icon_check" or (selected == "glory" and "icon_star" or "icon_lock"), 1, g.x + 13, g.y + 10)
+    PixelFont.print("GLORY", g.x + 24, g.y + 4, C.white, "main")
+    for i, talent in ipairs(Talents.LIST) do
+        local x, y = talentCardRect(i)
+        Art.draw(TALENT_SPRITES[talent.id] or "icon_star", 1, x + 17, y + 16)
+        PixelFont.print(talent.name, x + 34, y + 5, C.white, "main")
+        PixelFont.print(talent.effect, x + 34, y + 18, C.fog, "main")
+        local lvl = talents[talent.id] or 0
+        PixelFont.print(Talents.isMaxed(talent.id, talents) and "MAX" or ("LV " .. lvl), x + 6, y + 45, C.silver, "main")
+        PixelFont.printf(Talents.totalText(talent, lvl), x, y + 45, TALENT_CARD_W - 8, "right", C.mint, "main")
+    end
+
+    -- Button text: feedback of the last purchase first, then the selected talent
+    local text, color = "SELECT A TALENT", C.white
     if self.talentUpgradeTimer and self.talentUpgradeTimer > 0 and self.lastUpgradedTalent then
         local done = Talents.get(self.lastUpgradedTalent)
-        UI.drawTextAligned(string.format("TALENT UPGRADED: +1 %s!", done and done.name or self.lastUpgradedTalent:upper()), 0, 188, botW, "center", {0.35, 0.95, 0.55, 1.0})
+        text, color = "+1 " .. (done and done.name or self.lastUpgradedTalent:upper()), C.mint
     elseif self.talentFailTimer and self.talentFailTimer > 0 then
-        UI.drawTextAligned(string.format("NOT ENOUGH GOLD: %d NEEDED", cost), 0, 188, botW, "center", {1.0, 0.45, 0.45, 1.0})
-    elseif selected == "glory" then
-        UI.drawTextAligned("GLORY: " .. Talents.GLORY.desc, 0, 188, botW, "center", {1.0, 0.88, 0.30, 1.0})
+        text, color = "NOT ENOUGH GOLD", C.pink
+    elseif maxed then
+        text = selTalent.name .. " MAXED"
+    elseif selTalent then
+        text = "UPGRADE " .. selTalent.name
     end
-    UI.setFont("main")
+    PixelFont.print(text, b.x + 10, b.y + oy + 11, color, "main")
+    if selTalent and not maxed then
+        Art.draw("icon_coin", 1, b.x + b.w - 76, b.y + oy + 17)
+        PixelFont.print(tostring(cost), b.x + b.w - 66, b.y + oy + 11, C.white, "main")
+    end
 end
 
 -- Buys one level of the selected talent (touch button, A, Return)
@@ -1079,110 +1057,54 @@ end
 -- ONGLET 5 : COFFRES (BENTO GRID 2026 : MONOLITHES DORÉ & OBSIDIENNE)
 -- ============================================================================
 -- Both chest monoliths share one layout (drawing and touch area)
-local CHEST_CARD_Y, CHEST_CARD_H, CHEST_CARD_W = 30, 166, 150
+local CHEST_CARD_Y, CHEST_CARD_H, CHEST_CARD_W = 34, 166, 154
 local CHEST_CARDS = {
-    { id = "gold", x = 6, btn = "open_gold" },
-    { id = "obsidian", x = 164, btn = "open_obsidian" },
+    { id = "gold", x = 4, btn = "open_gold", name = "GOLDEN", theme = "gold", currency = "icon_coin", sprite = "menu_chest_gold" },
+    { id = "obsidian", x = 162, btn = "open_obsidian", name = "OBSIDIAN", theme = "purple", currency = "icon_gem",
+      sprite = "menu_chest_obsidian" },
 }
 
 function MenuState:drawChestsTab()
-    local W = Config.BOTTOM_WIDTH
-    local canGold = (self.saveData.gold >= Balance.COSTS.goldChest)
-    local canObs = (self.saveData.gems >= Balance.COSTS.obsidianChest)
-
-    UI.drawBentoCard(6, 4, W - 12, 22, {})
-    UI.drawText("CHESTS", 14, 7, Palette.C.yellow)
+    local C = Palette.C
     self:drawSubtabs(CHEST_SUBTABS, "chests", SUBTAB_SPAN.chests)
-
-    local prevF = love.graphics.getFont()
+    self:drawWallet()
     local y, w, h = CHEST_CARD_Y, CHEST_CARD_W, CHEST_CARD_H
+    local t = love.timer.getTime()
 
-    -- 1. MONOLITH 1 : GOLDEN CHEST
-    local c1x = CHEST_CARDS[1].x
-    UI.drawBentoCard(c1x, y, w, h, {
-        r = 8,
-        bg = {0.10, 0.12, 0.18, 0.96},
-        borderColor = {0.75, 0.55, 0.15, 0.90},
-        accentColor = {1.0, 0.82, 0.20, 0.90},
-        isElevated = true,
-    })
-    UI.drawPillBadge(c1x + 14, y + 8, w - 28, 18, "COMMON / RARE", {0.25, 0.16, 0.05, 0.9}, {0.85, 0.65, 0.15, 0.9}, {1.0, 0.90, 0.35, 1.0})
-    self:drawChestSprite(c1x + w / 2, y + 48, "gold", 0)
-    UI.drawTextAligned("GOLDEN CHEST", c1x, y + 74, w, "center", {1.0, 0.88, 0.25, 1.0})
-    love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawTextAligned("Weapons & Equipment", c1x, y + 88, w, "center", {0.70, 0.75, 0.85, 1.0})
-    love.graphics.setFont(prevF)
-    UI.drawPillButton(c1x + 12, y + 102, w - 24, 34, Balance.COSTS.goldChest .. " GOLD", canGold and "gold" or "gray", self.pressedBtn == "open_gold", "gold")
-    love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawTextAligned("Instant open", c1x, y + 144, w, "center", {0.50, 0.55, 0.65, 0.8})
-    love.graphics.setFont(prevF)
-
-    -- 2. MONOLITH 2 : OBSIDIAN CHEST
-    local c2x = CHEST_CARDS[2].x
-    UI.drawBentoCard(c2x, y, w, h, {
-        r = 8,
-        bg = {0.10, 0.12, 0.18, 0.96},
-        borderColor = {0.65, 0.25, 0.85, 0.90},
-        accentColor = {0.85, 0.35, 1.0, 0.90},
-        isElevated = true,
-    })
-    UI.drawPillBadge(c2x + 14, y + 8, w - 28, 18, "EPIC GUARANTEED", {0.20, 0.08, 0.28, 0.9}, {0.75, 0.30, 0.95, 0.9}, {0.95, 0.80, 1.0, 1.0})
-    self:drawChestSprite(c2x + w / 2, y + 48, "obsidian", 0)
-    UI.drawTextAligned("OBSIDIAN CHEST", c2x, y + 74, w, "center", {0.90, 0.45, 1.0, 1.0})
-    love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawTextAligned("Superior Equipment", c2x, y + 88, w, "center", {0.70, 0.75, 0.85, 1.0})
-    love.graphics.setFont(prevF)
-    UI.drawPillButton(c2x + 12, y + 102, w - 24, 34, Balance.COSTS.obsidianChest .. " GEMS", canObs and "violet" or "gray", self.pressedBtn == "open_obsidian", "gem")
-    love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawTextAligned("High tier gear", c2x, y + 144, w, "center", {0.50, 0.55, 0.65, 0.8})
-    love.graphics.setFont(prevF)
+    for _, card in ipairs(CHEST_CARDS) do
+        local isGold = (card.id == "gold")
+        local price = isGold and Balance.COSTS.goldChest or Balance.COSTS.obsidianChest
+        local funds = isGold and self.saveData.gold or self.saveData.gems
+        local th = Skin.theme(card.theme)
+        if self.selectedChest == card.id then Skin.roundRect(C.yellow, card.x - 1, y - 1, w + 2, h + 2, 4) end
+        Skin.panel(card.x, y, w, h, "dark")
+        Skin.roundRect(th.dark, card.x + 1, y + 1, w - 2, 17, 2)
+        Skin.rect(th.main, card.x + 3, y + 1, w - 6, 14)
+        Skin.disc(th.main, card.x + w / 2, y + 62, 40, 0.18)
+        Skin.button(card.x + 6, y + 118, w - 12, 44, (funds >= price) and card.theme or "gray", self.pressedBtn == card.btn)
+        card.price = price
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+    for _, card in ipairs(CHEST_CARDS) do
+        PixelFont.printf(card.name, card.x, y + 4, w, "center", C.white, "main")
+        local frame = Art.frame(card.sprite, 1)
+        local bob = math.floor(math.sin(t * 2.5 + (card.id == "gold" and 0 or 1.5)) * 1.5)
+        Art.drawEx(card.sprite, 1, card.x + w / 2 - frame.w, y + 102 - frame.h * 2 + bob, 0, 2, 2)
+        local labelW = PixelFont.getWidth(tostring(card.price), "main", 2) + 22
+        local lx = math.floor(card.x + (w - labelW) / 2)
+        Art.drawEx(card.currency, 1, lx + 7, y + 138, 0, 2, 2)
+        PixelFont.print(tostring(card.price), lx + 22, y + 128, C.white, "main", 2)
+    end
 end
 
--- Rendu soigné d'un sprite de coffre
+-- Chest sprite of the opening sequence: shakes, then bursts open (src/render/sprites/menu_art.lua)
 function MenuState:drawChestSprite(cx, cy, chestType, shake)
-    local t = love.timer.getTime()
-    local chestPulse = 1.0 + math.sin(t * 3.0 + (chestType == "gold" and 0 or 1.5)) * 0.035
-    local auraAlpha = 0.16 + 0.08 * math.sin(t * 3.6 + (chestType == "gold" and 0 or 1.5))
-
-    love.graphics.push()
-    love.graphics.translate(cx + shake, cy)
-    love.graphics.scale(chestPulse, chestPulse)
-
-    if chestType == "gold" then
-        love.graphics.setColor(1.0, 0.85, 0.20, auraAlpha)
-    else
-        love.graphics.setColor(0.80, 0.30, 1.0, auraAlpha)
-    end
-    love.graphics.ellipse("fill", 0, 6, 30, 18)
-
-    if chestType == "gold" then
-        love.graphics.setColor(0.42, 0.25, 0.12, 1.0)
-        love.graphics.rectangle("fill", -24, -14, 48, 30, 4, 4)
-        love.graphics.setColor(1.0, 0.82, 0.18, 1.0)
-        love.graphics.rectangle("fill", -20, -14, 8, 30)
-        love.graphics.rectangle("fill", 12, -14, 8, 30)
-        local glint = 0.5 + 0.5 * math.sin(t * 4.5)
-        love.graphics.setColor(1, 1, 1, glint * 0.35)
-        love.graphics.rectangle("fill", -19, -13, 3, 28)
-        love.graphics.rectangle("fill", 13, -13, 3, 28)
-        love.graphics.setColor(1.0, 0.85, 0.20, 1.0)
-        love.graphics.circle("fill", 0, 2, 4)
-        love.graphics.setColor(0.1, 0.1, 0.1, 1.0)
-        love.graphics.circle("fill", 0, 2, 1.8)
-    else
-        love.graphics.setColor(0.24, 0.10, 0.32, 1.0)
-        love.graphics.rectangle("fill", -24, -14, 48, 30, 4, 4)
-        love.graphics.setColor(0.85, 0.35, 1.0, 1.0)
-        love.graphics.polygon("fill", -16, -14, -12, -4, -16, 6, -20, -4)
-        love.graphics.polygon("fill", 16, -14, 20, -4, 16, 6, 12, -4)
-        local gemGlint = 0.5 + 0.5 * math.sin(t * 4.5 + 1.0)
-        love.graphics.setColor(1, 1, 1, gemGlint * 0.45)
-        love.graphics.polygon("fill", -15, -12, -13, -4, -15, 4, -18, -4)
-        love.graphics.setColor(1.0, 0.45, 1.0, 1.0)
-        love.graphics.polygon("fill", 0, -5, 6, 2, 0, 9, -6, 2)
-    end
-
-    love.graphics.pop()
+    local name = (chestType == "obsidian") and "menu_chest_obsidian" or "menu_chest_gold"
+    local frame = Art.frame(name, 1)
+    local glow = (chestType == "obsidian") and Palette.C.magenta or Palette.C.amber
+    Skin.disc(glow, cx, cy, 44, 0.18)
+    love.graphics.setColor(1, 1, 1, 1)
+    Art.drawEx(name, 1, math.floor(cx - frame.w * 1.5 + shake), math.floor(cy - frame.h * 1.5), 0, 3, 3)
 end
 
 -- ============================================================================
@@ -1274,23 +1196,24 @@ end
 function PRESS.heroes(self, tx, ty)
     local W = Config.BOTTOM_WIDTH
     if self.heroSubPage == "bestiary" then
-        if tx >= W - 68 and tx <= W - 8 and ty >= 5 and ty <= 25 then return "bestiary_back" end
+        if inRect(BEST_BACK, tx, ty) then return "bestiary_back" end
         for i, entry in ipairs(Bestiary.ENTRIES) do
-            local cx = 5 + ((i - 1) % 6) * 52
-            local cy = 30 + math.floor((i - 1) / 6) * 48
-            if tx >= cx and tx <= cx + 50 and ty >= cy and ty <= cy + 46 then return "bestiary_" .. entry.type end
+            local cx, cy = bestiaryCell(i)
+            if tx >= cx - 1 and tx <= cx + BEST_CELL_W + 1 and ty >= cy - 1 and ty <= cy + BEST_CELL_H + 1 then
+                return "bestiary_" .. entry.type
+            end
         end
         return nil
     end
 
-    if tx >= 14 and tx <= 192 and ty >= 176 and ty <= 194 then return "open_bestiary" end
-    -- One of the 5 hero avatars at the top
+    if inRect(HERO_BESTIARY, tx, ty) then return "open_bestiary" end
     for i, h in ipairs(Heroes.getAll()) do
-        local ax = 6 + (i - 1) * 62
-        if tx >= ax and tx <= ax + 58 and ty >= 6 and ty <= 54 then return "hero_" .. h.id end
+        local x = heroCardX(i)
+        if tx >= x and tx <= x + HERO_CARD_W and ty >= HERO_CARD_Y and ty <= HERO_CARD_Y + HERO_CARD_H then
+            return "hero_" .. h.id
+        end
     end
-    -- Right action button
-    if tx >= 206 and tx <= 316 and ty >= 58 and ty <= 198 then
+    if inRect(HERO_ACTION, tx, ty) and self.saveData.selectedHero ~= self.selectedHeroPreview then
         return self:isPreviewUnlocked() and "select_hero" or "unlock_hero"
     end
     return nil
@@ -1312,13 +1235,16 @@ function PRESS.chests(self, tx, ty)
 
     if self.chestSubPage == "shop" then
         for i = 1, 3 do
-            local x = 6 + (i - 1) * 103
-            if tx >= x + 8 and tx <= x + 91 and ty >= 150 and ty <= 172 then return "shop_" .. i end
+            local x = 4 + (i - 1) * SHOP_CARD_STEP
+            if tx >= x and tx <= x + SHOP_CARD_W and ty >= SHOP_BTN_Y - 4 and ty <= SHOP_BTN_Y + SHOP_BTN_H then
+                return "shop_" .. i
+            end
         end
         return nil
     end
     for _, card in ipairs(CHEST_CARDS) do
         if tx >= card.x and tx <= card.x + CHEST_CARD_W and ty >= CHEST_CARD_Y and ty <= CHEST_CARD_Y + CHEST_CARD_H then
+            self.selectedChest = card.id
             return card.btn
         end
     end
@@ -1599,7 +1525,9 @@ function MenuState:navigate(button)
         return self:moveTalentSelection(button)
     elseif tab == "quests" and horizontal then
         self.questSubPage = cycleIn(QUEST_SUBTABS, self.questSubPage, step, "id")
-    elseif tab == "chests" and horizontal then
+    elseif tab == "chests" and horizontal and self.chestSubPage == "chests" then
+        self.selectedChest = (self.selectedChest == "obsidian") and "gold" or "obsidian"
+    elseif tab == "chests" and not horizontal then
         self.chestSubPage = cycleIn(CHEST_SUBTABS, self.chestSubPage, step, "id")
     elseif tab == "play" and horizontal then
         local n = #self.chapters
@@ -1628,6 +1556,8 @@ function MenuState:confirm()
         self:upgradeSelectedTalent()
     elseif self.currentTab == "heroes" and self.heroSubPage == "roster" then
         RELEASE.heroes(self, self:isPreviewUnlocked() and "select_hero" or "unlock_hero")
+    elseif self.currentTab == "chests" and self.chestSubPage == "chests" then
+        RELEASE.chests(self, (self.selectedChest == "obsidian") and "open_obsidian" or "open_gold")
     end
 end
 
