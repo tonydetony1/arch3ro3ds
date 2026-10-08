@@ -568,7 +568,8 @@ function HUD:drawLive(game, boss)
     PixelFont.print(tostring(floor(game.goldEarnedRun or 0)), 248, 7, C.yellow, "main")
     PixelFont.printf(floor(player.xp or 0) .. "/" .. floor(player.nextLevelXp or 0) .. " XP", XP_BAR.x, XP_BAR.y + 4,
         XP_BAR.w, "center", C.white, "tiny")
-    PixelFont.printf(string.format("%d/%d", math.max(0, floor(player.hp)), player.maxHp), HP_BAR.x, HP_BAR.y + 3,
+    -- Digit rows 2-8 of the cell: drawing at y + 2 puts them on the bar's middle row
+    PixelFont.printf(string.format("%d/%d", math.max(0, floor(player.hp)), player.maxHp), HP_BAR.x, HP_BAR.y + 2,
         HP_BAR.w, "center", C.white, "main")
     PixelFont.print(tostring(game.kills or 0), HERO.x + 287, HERO.y + 21, C.white, "main")
 

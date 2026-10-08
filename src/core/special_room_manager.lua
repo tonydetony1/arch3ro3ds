@@ -9,8 +9,19 @@ local Audio = require("src.audio.audio")
 local Skills = require("src.data.skills")
 local PlayerStats = require("src.data.player_stats")
 local VFX = require("src.render.vfx_manager")
+local Palette = require("src.render.palette")
+local Skin = require("src.ui.skin")
+local PixelFont = require("src.ui.pixel_font")
+local Art = require("src.render.art")
 
 local SpecialRoomManager = {}
+
+-- Lucky wheel layout (bottom screen). Labels stay upright and sit between the hub and the
+-- icons, so the hub never covers them; icons, pegs and texts are atlas sprites (batched).
+local WHEEL = { cx = 160, cy = 114, rad = 78, hub = 12, iconR = 60, labelR = 38 }
+local WHEEL_BTN = { x = 30, y = 197, w = 260, h = 40 }
+local WHEEL_ICON = { gold = "icon_coin", heart = "icon_heart", swords = "icon_sword", gem = "icon_gem",
+    energy = "icon_bolt", star = "icon_star" }
 SpecialRoomManager.__index = SpecialRoomManager
 
 -- Pacts the Devil can offer this hero. Dark Multishot is left out once the hero already fires
@@ -437,6 +448,95 @@ end
 -- ============================================================================
 -- RENDU BOTTOM SCREEN (320x240 - INTERFACE TACTILE GUMMY)
 -- ============================================================================
+-- ============================================================================
+-- LUCKY WHEEL (bottom screen)
+-- ============================================================================
+-- Primitives first (rim, sectors, separators, hub, needle), then every sprite (pegs, icons,
+-- labels, button) so the auto-batcher merges them: ~30 GPU calls for the whole screen.
+function SpecialRoomManager:drawWheelBottom()
+    local C = Palette.C
+    local w = WHEEL
+    local segs = self.wheelSegments
+    local count = #segs
+    local segArc = (math.pi * 2) / count
+    local cos, sin, floor = math.cos, math.sin, math.floor
+
+    love.graphics.setColor(C.night[1], C.night[2], C.night[3], 1)
+    love.graphics.rectangle("fill", 0, 0, 320, 240)
+
+    -- Rim and sectors
+    Skin.disc(C.ink, w.cx, w.cy, w.rad + 5)
+    Skin.disc(C.amber, w.cx, w.cy, w.rad + 3)
+    for i, seg in ipairs(segs) do
+        local a1 = self.wheelAngle + (i - 1) * segArc
+        love.graphics.setColor(seg.color[1], seg.color[2], seg.color[3], 1)
+        love.graphics.arc("fill", "pie", w.cx, w.cy, w.rad, a1, a1 + segArc, 12)
+        if self.wheelStopped and self.winningIndex == i then
+            local pulse = (math.sin(self.winAnimTimer * 8) + 1) * 0.5
+            love.graphics.setColor(1, 1, 1, 0.20 + pulse * 0.25)
+            love.graphics.arc("fill", "pie", w.cx, w.cy, w.rad, a1, a1 + segArc, 12)
+        end
+    end
+    love.graphics.setColor(C.ink[1], C.ink[2], C.ink[3], 0.7)
+    love.graphics.setLineWidth(2)
+    for i = 1, count do
+        local a = self.wheelAngle + (i - 1) * segArc
+        love.graphics.line(w.cx, w.cy, w.cx + cos(a) * w.rad, w.cy + sin(a) * w.rad)
+    end
+    love.graphics.setLineWidth(1)
+
+    -- Hub (small, so it never covers the labels)
+    Skin.disc(C.ink, w.cx, w.cy, w.hub + 2)
+    Skin.disc(C.amber, w.cx, w.cy, w.hub)
+    Skin.disc(C.yellow, w.cx, w.cy - 1, w.hub - 5)
+
+    -- Needle with its elastic kick on each peg
+    love.graphics.push()
+    love.graphics.translate(w.cx, w.cy - w.rad - 6)
+    love.graphics.rotate(self.needleAngle or 0)
+    love.graphics.setColor(C.ink[1], C.ink[2], C.ink[3], 1)
+    love.graphics.polygon("fill", -9, -4, 9, -4, 0, 17)
+    love.graphics.setColor(C.red[1], C.red[2], C.red[3], 1)
+    love.graphics.polygon("fill", -7, -3, 7, -3, 0, 14)
+    Skin.disc(C.yellow, 0, -2, 3)
+    love.graphics.pop()
+
+    -- Sprites: pegs, icons (2x) and upright labels
+    for i = 1, count do
+        local a = self.wheelAngle + (i - 1) * segArc
+        Skin.rect(C.yellow, floor(w.cx + cos(a) * (w.rad + 1)) - 1, floor(w.cy + sin(a) * (w.rad + 1)) - 1, 3, 3)
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+    for i, seg in ipairs(segs) do
+        local m = self.wheelAngle + (i - 0.5) * segArc
+        local icon = WHEEL_ICON[seg.icon]
+        if icon then
+            Art.drawEx(icon, 1, floor(w.cx + cos(m) * w.iconR), floor(w.cy + sin(m) * w.iconR), 0, 2, 2)
+        end
+    end
+    for i, seg in ipairs(segs) do
+        local m = self.wheelAngle + (i - 0.5) * segArc
+        local lx, ly = floor(w.cx + cos(m) * w.labelR), floor(w.cy + sin(m) * w.labelR)
+        PixelFont.printf(seg.short or seg.label, lx - 20, ly - 6, 40, "center", C.white, "main")
+    end
+
+    PixelFont.printf("LUCKY WHEEL", 0, 4, 320, "center", C.yellow, "main")
+
+    -- Action button: spin, spinning, then claim with the reward spelled out
+    local b = WHEEL_BTN
+    if self.isSpinning then
+        Skin.panel(b.x, b.y, b.w, b.h, "raised")
+        local dots = string.rep(".", floor(self.animTime * 4) % 4)
+        PixelFont.printf("SPINNING" .. dots, b.x, b.y + 13, b.w, "center", C.silver, "main")
+        return
+    end
+    local claim = self.wheelStopped and self.spinReward
+    local pressed = (self.pressedBtn == (claim and "wheel_claim" or "wheel_spin"))
+    local oy = Skin.button(b.x, b.y, b.w, b.h, claim and "gold" or "green", pressed)
+    local label = claim and ("CLAIM " .. self.spinReward.label) or "SPIN  (A)"
+    PixelFont.printf(label, b.x, b.y + oy + 9, b.w, "center", C.white, "main", 2)
+end
+
 function SpecialRoomManager:drawBottom()
     if not self.isActive then return end
 
@@ -600,175 +700,7 @@ function SpecialRoomManager:drawBottom()
         end
 
     elseif self.activeType == "wheel" then
-        -- --------------------------------------------------------------------
-        -- 3. ÉCRAN DU BAS : LA ROUE DE LA FORTUNE TACTILE
-        -- --------------------------------------------------------------------
-        love.graphics.setColor(0.06, 0.08, 0.14, 1.0)
-        love.graphics.rectangle("fill", 0, 0, 320, 240)
-
-        love.graphics.setFont(UI.getFont("title"))
-        UI.drawTextAligned("LUCKY WHEEL", 0, 7, 320, "center", {1.0, 0.88, 0.35, 1.0}, {0.1, 0.05, 0.02, 0.9})
-        love.graphics.setFont(UI.getFont("small"))
-        UI.drawTextAligned("Try your luck before entering the dungeon!", 0, 24, 320, "center", {0.85, 0.90, 0.98, 1.0})
-
-        local cx, cy = 160, 106
-        local rad = 66
-        local count = #self.wheelSegments
-        local segArc = (math.pi * 2) / count
-
-        -- 1. Ombre portée douce
-        love.graphics.setColor(0.03, 0.04, 0.06, 0.6)
-        love.graphics.circle("fill", cx + 2, cy + 4, rad + 5)
-
-        -- 2. Cerclage extérieur luxueux (biseau métallique & or)
-        love.graphics.setColor(0.18, 0.14, 0.10, 1.0)
-        love.graphics.circle("fill", cx, cy, rad + 4)
-        love.graphics.setColor(0.85, 0.68, 0.22, 1.0)
-        love.graphics.setLineWidth(3.0)
-        love.graphics.circle("line", cx, cy, rad + 2)
-        love.graphics.setLineWidth(1.0)
-
-        -- 3. Secteurs de la roue avec icônes et textes rotatifs
-        for i, seg in ipairs(self.wheelSegments) do
-            local a1 = self.wheelAngle + (i - 1) * segArc
-            local a2 = a1 + segArc
-            local midAngle = a1 + segArc * 0.5
-            local isWinning = (self.wheelStopped and self.winningIndex == i)
-
-            -- Remplissage couleur du secteur
-            love.graphics.setColor(seg.color[1], seg.color[2], seg.color[3], 0.95)
-            love.graphics.arc("fill", "pie", cx, cy, rad, a1, a2)
-
-            -- Surbrillance pulsante si secteur gagnant
-            if isWinning then
-                local winPulse = (math.sin(self.winAnimTimer * 8) + 1) * 0.5
-                love.graphics.setColor(1.0, 1.0, 0.60, 0.30 + winPulse * 0.25)
-                love.graphics.arc("fill", "pie", cx, cy, rad, a1, a2)
-            end
-
-            -- Rayon séparateur doré
-            love.graphics.setColor(1.0, 0.90, 0.45, 0.75)
-            love.graphics.setLineWidth(1.2)
-            love.graphics.line(cx, cy, cx + math.cos(a1) * rad, cy + math.sin(a1) * rad)
-            love.graphics.setLineWidth(1.0)
-
-            -- Éléments visuels rotatifs (Icône + Label)
-            love.graphics.push()
-            love.graphics.translate(cx, cy)
-            love.graphics.rotate(midAngle)
-
-            -- Icône vectorielle vers l'extérieur
-            if seg.icon then
-                UI.drawIcon(seg.icon, 45, 0, 10, {1, 1, 1, 0.95})
-            end
-
-            -- Label condensé vers le centre
-            local prevFont = love.graphics.getFont()
-            love.graphics.setFont(UI.getFont("tiny"))
-            local lbl = seg.short or seg.label
-            local textW = love.graphics.getFont():getWidth(lbl)
-            UI.drawText(lbl, 23 - textW * 0.5, -4, {1, 1, 1, 1}, {0.1, 0.1, 0.1, 0.9})
-            love.graphics.setFont(prevFont)
-
-            love.graphics.pop()
-        end
-
-        -- 4. Picots métalliques dorés sur le pourtour (Pins)
-        for i = 1, count do
-            local pegA = self.wheelAngle + (i - 1) * segArc
-            local px = cx + math.cos(pegA) * (rad + 1)
-            local py = cy + math.sin(pegA) * (rad + 1)
-
-            -- Picot en bronze/or avec éclat
-            love.graphics.setColor(0.98, 0.85, 0.30, 1.0)
-            love.graphics.circle("fill", px, py, 2.4)
-            love.graphics.setColor(1, 1, 1, 0.9)
-            love.graphics.circle("fill", px - 0.7, py - 0.7, 0.9)
-        end
-
-        -- 5. Bordure extérieure
-        love.graphics.setColor(1.0, 0.85, 0.25, 1.0)
-        love.graphics.setLineWidth(2.5)
-        love.graphics.circle("line", cx, cy, rad)
-        love.graphics.setLineWidth(1.0)
-
-        -- 6. Moyeu central rubis / or
-        love.graphics.setColor(0.12, 0.14, 0.18, 1.0)
-        love.graphics.circle("fill", cx, cy, 18)
-        love.graphics.setColor(0.95, 0.80, 0.25, 1.0)
-        love.graphics.setLineWidth(2.0)
-        love.graphics.circle("line", cx, cy, 18)
-        love.graphics.setLineWidth(1.0)
-        -- Gemme centrale
-        love.graphics.setColor(0.90, 0.25, 0.30, 1.0)
-        love.graphics.circle("fill", cx, cy, 10)
-        love.graphics.setColor(1.0, 0.85, 0.35, 1.0)
-        love.graphics.circle("fill", cx, cy, 4)
-        love.graphics.setColor(1, 1, 1, 0.9)
-        love.graphics.circle("fill", cx - 2, cy - 2, 1.8)
-
-        -- 7. Aiguille indicatrice dynamique (Ticker Needle avec physique élastique)
-        local needlePivotX = cx
-        local needlePivotY = cy - rad - 5
-        love.graphics.push()
-        love.graphics.translate(needlePivotX, needlePivotY)
-        love.graphics.rotate(self.needleAngle or 0)
-
-        -- Ombre de l'aiguille
-        love.graphics.setColor(0.04, 0.04, 0.06, 0.45)
-        love.graphics.polygon("fill", -6, -2, 6, -2, 0, 17)
-
-        -- Corps de l'aiguille rouge vif laqué
-        love.graphics.setColor(0.96, 0.18, 0.22, 1.0)
-        love.graphics.polygon("fill", -7, -3, 7, -3, 0, 16)
-        love.graphics.setColor(1.0, 0.85, 0.30, 1.0)
-        love.graphics.setLineWidth(1.2)
-        love.graphics.polygon("line", -7, -3, 7, -3, 0, 16)
-        love.graphics.setLineWidth(1.0)
-
-        -- Vis pivot dorée
-        love.graphics.setColor(1.0, 0.88, 0.35, 1.0)
-        love.graphics.circle("fill", 0, -2, 3.5)
-        love.graphics.setColor(0.20, 0.15, 0.10, 1.0)
-        love.graphics.circle("fill", 0, -2, 1.6)
-
-        -- Étincelle lumineuse au contact d'un picot
-        if (self.needleSpark or 0) > 0.05 then
-            love.graphics.setColor(1.0, 0.95, 0.50, self.needleSpark * 0.9)
-            love.graphics.circle("fill", 0, 16, 3.2 * self.needleSpark)
-        end
-
-        love.graphics.pop()
-
-        -- 8. Zone interactive basse (Boutons et états)
-        if not self.isSpinning and not self.wheelStopped then
-            local isP = (self.pressedBtn == "wheel_spin")
-            local dy = isP and 3 or 0
-            love.graphics.setColor(0.10, 0.42, 0.18, 1.0)
-            love.graphics.rectangle("fill", 60, 186 + 3, 200, 42, 8, 8)
-            love.graphics.setColor(isP and {0.20, 0.75, 0.32} or {0.28, 0.90, 0.42})
-            love.graphics.rectangle("fill", 60, 186 + dy, 200, 40, 8, 8)
-            love.graphics.setFont(UI.getFont("normal"))
-            UI.drawTextAligned("SPIN WHEEL", 60, 196 + dy, 200, "center", {1, 1, 1, 1})
-            love.graphics.setFont(UI.getFont("tiny"))
-            UI.drawTextAligned("(or tap the wheel directly)", 0, 228, 320, "center", {0.65, 0.70, 0.80, 0.8})
-        elseif self.isSpinning then
-            love.graphics.setFont(UI.getFont("normal"))
-            local dots = string.rep(".", math.floor(self.animTime * 4) % 4)
-            UI.drawTextAligned("Spinning" .. dots, 0, 196, 320, "center", {1.0, 0.85, 0.30, 1.0})
-        elseif self.wheelStopped and self.spinReward then
-            local isP = (self.pressedBtn == "wheel_claim")
-            local dy = isP and 3 or 0
-            love.graphics.setColor(0.55, 0.40, 0.08, 1.0)
-            love.graphics.rectangle("fill", 50, 186 + 3, 220, 42, 8, 8)
-            love.graphics.setColor(isP and {0.90, 0.70, 0.18} or {1.0, 0.85, 0.25})
-            love.graphics.rectangle("fill", 50, 186 + dy, 220, 40, 8, 8)
-            love.graphics.setFont(UI.getFont("normal"))
-            local claimTxt = "CLAIMED: " .. self.spinReward.label
-            UI.drawTextAligned(claimTxt, 50, 196 + dy, 220, "center", {0.12, 0.08, 0.02, 1})
-            love.graphics.setFont(UI.getFont("tiny"))
-            UI.drawTextAligned("Tap to claim and fight!", 0, 228, 320, "center", {0.85, 0.85, 0.60, 0.9})
-        end
+        self:drawWheelBottom()
 
     elseif self.activeType == "merchant" then
         -- --------------------------------------------------------------------
@@ -855,11 +787,11 @@ function SpecialRoomManager:touchpressed(id, x, y)
 
     elseif self.activeType == "wheel" then
         if not self.isSpinning and not self.wheelStopped then
-            local cx, cy, rad = 160, 106, 66
-            local dx = x - cx
-            local dy = y - cy
-            local isWheelTouch = (dx * dx + dy * dy <= (rad + 14) * (rad + 14))
-            local isBtnTouch = (y >= 170 and y <= 240)
+            local dx = x - WHEEL.cx
+            local dy = y - WHEEL.cy
+            local reach = WHEEL.rad + 8
+            local isWheelTouch = (dx * dx + dy * dy <= reach * reach)
+            local isBtnTouch = (y >= WHEEL_BTN.y - 4)
             if isBtnTouch or isWheelTouch then
                 self.pressedBtn = "wheel_spin"
             end
