@@ -464,12 +464,15 @@ T["hub talents: glory badge, d-pad and failure feedback"] = function()
     assert(d.talents.recovery == 1 and menu.talentFailTimer > 0, "no gold: nothing bought, message shown")
 end
 
-local QUEST_SUBTAB_CENTERS = { quests = { 169, 13 }, weekly = { 227, 13 }, achievements = { 285, 13 } }
+-- Touch geometry of the hub (src/states/menu.lua): 7 tabs of 45 px from x = 2 at y = 208..239,
+-- full-width sub-tab row at y = 4..30
+local function tabCenter(index) return 24 + (index - 1) * 45, 222 end
+local QUEST_SUBTAB_CENTERS = { quests = { 54, 17 }, weekly = { 159, 17 }, achievements = { 264, 17 } }
 
 T["hub quests: every subtab is reachable from every page"] = function()
     resetSave()
     local menu = newMenu()
-    tap(menu, 26 + 44, 220) -- QUESTS tab
+    tap(menu, tabCenter(2)) -- QUESTS tab
     assert(menu.currentTab == "quests" and menu.questSubPage == "quests")
     for _, from in ipairs({ "quests", "weekly", "achievements" }) do
         for _, to in ipairs({ "quests", "weekly", "achievements" }) do
@@ -494,7 +497,7 @@ T["hub quests: a finished weekly mission can be claimed"] = function()
     local quest = list[1]
     w.progress[quest.kind] = quest.goal
     local gold, gems = d.gold, d.gems
-    tap(menu, 281, 32 + 14)
+    tap(menu, 279, 34 + 15) -- CLAIM button of the first weekly row
     assert(w.claimed[quest.id], "weekly mission claimed")
     assert(d.gold > gold or d.gems > gems, "reward granted")
 end
@@ -502,11 +505,11 @@ end
 T["hub chests: SHOP subtab, chest quest progress"] = function()
     local d = resetSave()
     local menu = newMenu()
-    tap(menu, 26 + 5 * 44, 220) -- CHESTS tab
+    tap(menu, tabCenter(6)) -- CHESTS tab
     assert(menu.currentTab == "chests" and menu.chestSubPage == "chests")
-    tap(menu, 285, 13)
+    tap(menu, 155, 17) -- SHOP subtab
     assert(menu.chestSubPage == "shop")
-    tap(menu, 227, 13)
+    tap(menu, 53, 17) -- CHESTS subtab
     assert(menu.chestSubPage == "chests")
     local before = Save.getDailyQuests().progress.chests or 0
     tap(menu, 81, 150) -- golden chest
@@ -519,7 +522,7 @@ T["hub play: every mode card is selectable, including Arena"] = function()
     local menu = newMenu()
     local modes = { "ascension", "infinite", "boss_rush", "survival" }
     for i, mode in ipairs(modes) do
-        tap(menu, 60, 100 + (i - 1) * 24 + 11)
+        tap(menu, 4 + (i - 1) * 79 + 38, 124) -- mode chips row
         assert(menu.selectedMode == mode, "mode card " .. i .. " selects " .. mode)
     end
     menu:gamepadpressed(nil, "dpdown")
@@ -529,10 +532,10 @@ end
 T["hub: leaving the forge closes the item sheet"] = function()
     resetSave()
     local menu = newMenu()
-    tap(menu, 26 + 3 * 44, 220) -- FORGE tab
+    tap(menu, tabCenter(4)) -- FORGE tab
     assert(menu.currentTab == "equipment")
     menu.inventory:openModal("bear_ring", nil)
-    tap(menu, 26 + 4 * 44, 220) -- TALENTS tab
+    tap(menu, tabCenter(5)) -- TALENTS tab
     assert(menu.currentTab == "talents" and menu.inventory.modalItem == nil)
 end
 
