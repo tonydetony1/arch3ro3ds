@@ -28,6 +28,8 @@ end
 
 -- Zones dangereuses du chapitre : sables mouvants, plaques de glace, mares de lave
 local HAZARD_KIND = { sand = "sand", ice = "ice", lava = "lava", wind = "wind", void = "void" }
+local LAVA_MONSTER_TICK = 0.6   -- seconds between two burns of a monster standing in lava
+local LAVA_MONSTER_DAMAGE = 12
 local SPIKE_INSET = 3
 local STUMP_SIZE = 40
 local HAZARD_INSET = 2
@@ -438,13 +440,23 @@ function ObstacleManager:update(dt, player, fctPool, dummyPool)
                 end
             end
         end
-        -- La lave brûle aussi les monstres terrestres
-        if hz.kind == "lava" and dummyPool and dummyPool.activeCount > 0 and self.lavaCooldown >= 0.55 then
-            for i = 1, dummyPool.activeCount do
-                local m = dummyPool.items[dummyPool.activeList[i]]
-                if m and m.alive and not m.isBurrowed and m.type ~= "bat" and m.type ~= "bomber" then
-                    if circleIntersectsRect(m.x, m.y, m.radius, hz.x, hz.y, hz.w, hz.h) then
-                        m:takeDamage(12, 0, -1, { fire = true })
+    end
+
+    -- Lava also burns the ground monsters standing in it. It has its own timer: it used to be
+    -- tied to the hero's lava cooldown, so monsters only burned when the hero did.
+    self.monsterLavaTimer = (self.monsterLavaTimer or 0) - dt
+    if self.monsterLavaTimer <= 0 then
+        self.monsterLavaTimer = LAVA_MONSTER_TICK
+        if dummyPool and dummyPool.activeCount > 0 then
+            for _, hz in ipairs(self.hazards) do
+                if hz.kind == "lava" then
+                    for i = 1, dummyPool.activeCount do
+                        local m = dummyPool.items[dummyPool.activeList[i]]
+                        if m and m.alive and not m.isBurrowed and m.type ~= "bat" and m.type ~= "bomber" then
+                            if circleIntersectsRect(m.x, m.y, m.radius, hz.x, hz.y, hz.w, hz.h) then
+                                m:takeDamage(LAVA_MONSTER_DAMAGE, 0, -1, { fire = true })
+                            end
+                        end
                     end
                 end
             end
