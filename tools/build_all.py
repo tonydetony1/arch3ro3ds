@@ -179,9 +179,18 @@ if not os.path.exists(banner_png):
 banner_audio = os.path.join(ROOT_DIR, "assets", "audio", "sfx", "gate_open.wav")
 bannertool_bin = os.path.join(TOOLS_DIR, "bannertool")
 
-if os.path.exists(bannertool_bin) and os.path.exists(banner_png):
+# 3D banner (voxel logo swaying over the menu island, tools/make_banner_model.py + pycgfx);
+# --flat-banner falls back to the 2D picture if a console ever has trouble with it
+banner_cgfx = os.path.join(ROOT_DIR, "assets", "banner", "banner.cgfx")
+use_cgfx = os.path.exists(banner_cgfx) and "--flat-banner" not in sys.argv
+
+if os.path.exists(bannertool_bin) and (use_cgfx or os.path.exists(banner_png)):
     print("\n[2.5/5] Génération de la bannière HOME Menu 3DS (Arch3ro.bnr)...")
-    cmd_b = [bannertool_bin, "makebanner", "-i", banner_png]
+    if use_cgfx:
+        print(" -> modèle 3D : assets/banner/banner.cgfx")
+        cmd_b = [bannertool_bin, "makebanner", "-ci", banner_cgfx]
+    else:
+        cmd_b = [bannertool_bin, "makebanner", "-i", banner_png]
     if os.path.exists(banner_audio):
         cmd_b.extend(["-a", banner_audio])
     cmd_b.extend(["-o", banner_path])
