@@ -441,7 +441,8 @@ function PAGES.equipment(menu, save, t)
             PixelFont.printf(cost .. " G", RIGHT_X, CARD_Y + 54, CARD_W, "center", C.yellow, "main")
         end,
         title = item.name,
-        hints = { { "A", "EQUIP", C.mint }, { "X", "UPGRADE" }, { "Y", "FUSE" }, { "B", "CLOSE" } },
+        hints = { { "A", Save.isEquipped(itemId) and "UNEQUIP" or "EQUIP", C.mint }, { "X", "UPGRADE" },
+            { "Y", "FUSE" }, { "B", "CLOSE" } },
     }
 end
 
