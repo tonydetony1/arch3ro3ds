@@ -367,7 +367,7 @@ function GameState:setupRoom(roomNum)
     elseif self.gameMode == "boss_rush" then
         Banner.show("room", "BOSS " .. roomNum)
     elseif self.gameMode ~= "survival" then
-        Banner.show("room", "STAGE " .. roomNum .. " / 50")
+        Banner.show("room", WorldManager.stageText(self.gameMode, roomNum))
     end
 
     -- Décor du chapitre (prairie, désert, cristal, enfer) ou du sanctuaire, puis pré-rendu

@@ -8,6 +8,7 @@ local Audio = require("src.audio.audio")
 local Save = require("src.data.save")
 local Items = require("src.data.items")
 local UI = require("src.ui.ui_components")
+local WorldManager = require("src.core.world_manager")
 
 local GameOverState = {}
 GameOverState.__index = GameOverState
@@ -271,7 +272,10 @@ function GameOverState:drawBottom()
     local roomStr = string.format("%d", self.data.room or 1)
     UI.drawTextAligned(roomStr, startX, rowY + 16, colW, "center", {1.0, 1.0, 1.0, 1.0}, {0.05, 0.1, 0.2, 1.0}, 1, 1)
     love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawTextAligned("/ 50", startX, rowY + 34, colW, "center", {0.5, 0.6, 0.75, 0.9})
+    local total = WorldManager.floorTotal(self.data.mode, self.data.room or 1)
+    if total then
+        UI.drawTextAligned("/ " .. total, startX, rowY + 34, colW, "center", {0.5, 0.6, 0.75, 0.9})
+    end
 
     -- B. Enemies Defeated Capsule
     local startX2 = startX + colW + colGap

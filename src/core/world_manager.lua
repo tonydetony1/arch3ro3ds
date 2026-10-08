@@ -251,6 +251,22 @@ end
 -- ============================================================================
 WorldManager.ROOMS_PER_WORLD = 10
 
+-- Length of the fixed Ascension run. Nothing ends the run there (floor 51 and beyond exist), so
+-- the "/ 50" counter is only shown up to it; the Abyss and the event modes have no total.
+WorldManager.ASCENSION_FLOORS = 50
+
+function WorldManager.floorTotal(mode, roomNumber)
+    if mode == "ascension" and (roomNumber or 1) <= WorldManager.ASCENSION_FLOORS then
+        return WorldManager.ASCENSION_FLOORS
+    end
+    return nil
+end
+
+function WorldManager.stageText(mode, roomNumber)
+    local total = WorldManager.floorTotal(mode, roomNumber)
+    return "STAGE " .. roomNumber .. (total and (" / " .. total) or "")
+end
+
 function WorldManager.worldOfRoom(roomNumber)
     local world = math.floor((math.max(1, roomNumber or 1) - 1) / WorldManager.ROOMS_PER_WORLD) + 1
     return math.min(#WorldManager.CHAPTERS, world)

@@ -20,6 +20,7 @@ local Heroes = require("src.data.heroes")
 local Skills = require("src.data.skills")
 local Bestiary = require("src.data.bestiary")
 local Perf = require("src.core.perf")
+local WorldManager = require("src.core.world_manager")
 local Gpu = require("src.core.gpu")
 local PxColors = require("src.render.px_colors")
 
@@ -107,7 +108,7 @@ end
 -- réaffichée en 1 appel tant que rien ne change. Seules les valeurs vivantes (jauges,
 -- compteurs, points de la mini-carte, anneaux de charge) sont dessinées à chaque fois.
 local STATIC_FIELDS = { "heroId", "room", "chapter", "skills", "boss", "bossType", "dmg", "crit",
-    "arrows", "dodge", "maxHp", "level", "gate", "ultReady", "mapW", "mapH", "theme" }
+    "arrows", "dodge", "maxHp", "level", "gate", "ultReady", "mapW", "mapH", "theme", "total" }
 
 local function playerStats(player)
     local w = player.currentWeapon
@@ -129,6 +130,7 @@ function HUD:staticChanged(game, boss)
     self.staticCur = cur
     cur.heroId = player.heroId
     cur.room = game.roomNumber or 1
+    cur.total = WorldManager.floorTotal(game.gameMode, cur.room) or false -- "/ 50" counter, Ascension only
     cur.chapter = game.currentChapter and game.currentChapter.name or false
     cur.skills = #(game.acquiredSkills or {})
     cur.boss = boss ~= nil
@@ -280,7 +282,9 @@ function HUD:drawHeroStatic(player, cur)
     local room = cur.room
     PixelFont.print("STAGE", x + 6, y + 70, C.silver, "tiny")
     PixelFont.print(tostring(room), x + 6, y + 77, C.white, "main", 2, "shadow")
-    PixelFont.print("/50", x + 8 + PixelFont.getWidth(tostring(room), "main", 2), y + 87, C.fog, "main")
+    if cur.total then
+        PixelFont.print("/" .. cur.total, x + 8 + PixelFont.getWidth(tostring(room), "main", 2), y + 87, C.fog, "main")
+    end
     local toBoss = 10 - (room % 10)
     local bossText = (room % 10 == 0) and "BOSS !" or ("BOSS : " .. toBoss)
     PixelFont.printf(bossText, x + 52, y + 72, SIDE.w - 56, "right", (room % 10 == 0) and C.red or C.silver, "tiny")
