@@ -10,6 +10,11 @@ local Items = require("src.data.items")
 local UI = require("src.ui.ui_components")
 local WorldManager = require("src.core.world_manager")
 
+local Skin = require("src.ui.skin")
+local Palette = require("src.render.palette")
+local PixelFont = require("src.ui.pixel_font")
+local Art = require("src.render.art")
+local Icons = require("src.render.sprites.icons")
 local GameOverState = {}
 GameOverState.__index = GameOverState
 
@@ -180,198 +185,90 @@ function GameOverState:drawTop()
     love.graphics.arc("line", "open", ghostX - 3.5, ghostY - 9, 2.2, 0, math.pi)
     love.graphics.arc("line", "open", ghostX + 3.5, ghostY - 9, 2.2, 0, math.pi)
 
-    -- 5. Titre Imposant et Décoratif "VOUS AVEZ PÉRI"
-    local bannerY = 16
-    love.graphics.setColor(0.08, 0.10, 0.14, 0.85)
-    love.graphics.rectangle("fill", mx - 130, bannerY, 260, 42, 8, 8)
-    love.graphics.setColor(0.75, 0.18, 0.22, 1.0)
-    love.graphics.setLineWidth(1.8)
-    love.graphics.rectangle("line", mx - 130, bannerY, 260, 42, 8, 8)
-    love.graphics.setLineWidth(1)
+    -- 5. Title banner: where the hero fell (world of the room reached)
+    local C = Palette.C
+    local world = WorldManager.getChapter(WorldManager.worldOfRoom(self.data.room or 1))
+    local subText = string.format("%s - ROOM %d", (world and world.name or "?"):upper(), self.data.room or 1)
+    Skin.panel(mx - 150, 10, 300, 48, "dark")
+    Skin.rect(C.wine, mx - 147, 11, 294, 2)
+    PixelFont.printf("YOU HAVE FALLEN", mx - 150, 15, 300, "center", C.white, "main", 2)
+    PixelFont.printf(subText, mx - 150, 40, 300, "center", C.pink, "main", 1, nil, 1)
 
-    -- Ailes dorées ornementales sur le bandeau
-    love.graphics.setColor(1.0, 0.80, 0.20, 0.9)
-    love.graphics.polygon("fill", mx - 136, bannerY + 21, mx - 124, bannerY + 8, mx - 124, bannerY + 34)
-    love.graphics.polygon("fill", mx + 136, bannerY + 21, mx + 124, bannerY + 8, mx + 124, bannerY + 34)
-
-    -- Main title with bloody drop shadow
-    love.graphics.setFont(UI.getFont("title"))
-    UI.drawTextAligned("YOU HAVE FALLEN", mx - 130, bannerY + 6, 260, "center", {1.0, 0.90, 0.88, 1.0}, {0.45, 0.05, 0.08, 1.0}, 2, 2)
-
-    -- Melancholy subtitle
-    love.graphics.setFont(UI.getFont("small"))
-    local subText = (self.data.mode == "infinite")
-        and string.format("Swallowed into the Abyss - Floor %d", self.data.room or 1)
-        or string.format("Fallen in Emerald Plains - Room %d", self.data.room or 1)
-    UI.drawTextAligned(subText, mx - 130, bannerY + 26, 260, "center", {0.80, 0.65, 0.70, 1.0}, {0.05, 0.02, 0.03, 1.0}, 1, 1)
-
-    -- 6. New Record Badge
+    -- 6. New record badge
     if self.data.isNewRecord then
-        local recPulse = 1.0 + math.sin(t * 5.0) * 0.06
-        love.graphics.push()
-        love.graphics.translate(mx, 76)
-        love.graphics.scale(recPulse, recPulse)
-        love.graphics.setColor(0.95, 0.72, 0.12, 1.0)
-        love.graphics.rectangle("fill", -95, -9, 190, 18, 4, 4)
-        love.graphics.setColor(1.0, 0.95, 0.40, 1.0)
-        love.graphics.rectangle("line", -95, -9, 190, 18, 4, 4)
-        love.graphics.setFont(UI.getFont("tiny"))
-        UI.drawTextAligned("NEW PROGRESS RECORD!", -95, -7, 190, "center", {0.12, 0.08, 0.02, 1.0}, {1.0, 0.9, 0.4, 0.6}, 0, 0)
-        love.graphics.pop()
+        Skin.pill(mx - 70, 64, 140, 18, "gold")
+        PixelFont.printf("NEW RECORD!", mx - 70, 67, 140, "center", C.white, "main")
     end
-
-    love.graphics.setFont(UI.getFont("normal"))
 end
 
 -- ============================================================================
--- BOTTOM SCREEN (320x240) : RAPPORT DE BATAILLE TACTILE & BOUTONS GUMMY
+-- BOTTOM SCREEN (320x240): battle report and the two exits
 -- ============================================================================
+local REPORT_STATS = {
+    { key = "room", label = "ROOM", icon = "icon_door", color = "white" },
+    { key = "kills", label = "KILLS", icon = "icon_skull", color = "pink" },
+    { key = "goldEarned", label = "GOLD", icon = "icon_coin", color = "yellow" },
+}
+
+-- Console button glyph and label centred in a button rectangle
+local function buttonLabel(r, glyph, label, pressed)
+    local C = Palette.C
+    local w = 22 + PixelFont.getWidth(label, "main")
+    local x = math.floor(r.x + (r.w - w) / 2)
+    local y = math.floor(r.y + (r.h - 3 - 14) / 2) + (pressed and 2 or 0)
+    Skin.disc(C.ink, x + 8, y + 7, 9)
+    Skin.disc(C.slate, x + 8, y + 7, 8)
+    PixelFont.printf(glyph, x + 1, y + 1, 15, "center", C.white, "main")
+    PixelFont.print(label, x + 22, y + 1, C.white, "main")
+end
+
 function GameOverState:drawBottom()
-    local botW = Config.BOTTOM_WIDTH
-    local botH = Config.BOTTOM_HEIGHT
-    local t = love.timer.getTime()
+    local C = Palette.C
+    local botW, botH = Config.BOTTOM_WIDTH, Config.BOTTOM_HEIGHT
+    Skin.background(botW, botH)
+    Skin.panel(4, 4, botW - 8, 26, "dark")
+    for i = 1, #REPORT_STATS do Skin.panel(4 + (i - 1) * 105, 34, 101, 54, "raised") end
+    Skin.panel(4, 92, botW - 8, 92, "inset")
+    local b1, b2 = self.buttons.retry, self.buttons.hub
+    Skin.button(b1.x, b1.y, b1.w, b1.h, "green", self.pressedBtn == "retry")
+    Skin.button(b2.x, b2.y, b2.w, b2.h, "blue", self.pressedBtn == "hub")
 
-    -- 1. Fond sombre bleu nuit avec cadre subtil
-    love.graphics.setColor(0.06, 0.07, 0.10, 1.0)
-    love.graphics.rectangle("fill", 0, 0, botW, botH)
-
-    -- 2. Grande Carte "Rapport de Fin de Run" Gummy
-    local cx, cy, cw, ch = 10, 8, 300, 174
-    love.graphics.setColor(0.11, 0.13, 0.18, 1.0)
-    love.graphics.rectangle("fill", cx, cy, cw, ch, 10, 10)
-    -- Biseau brillant supérieur
-    love.graphics.setColor(1, 1, 1, 0.08)
-    love.graphics.rectangle("fill", cx + 2, cy + 2, cw - 4, 32, 8, 8)
-    -- Bordure dorée / carmin
-    love.graphics.setColor(0.65, 0.20, 0.25, 0.9)
-    love.graphics.setLineWidth(1.8)
-    love.graphics.rectangle("line", cx, cy, cw, ch, 10, 10)
-    love.graphics.setLineWidth(1)
-
-    -- Card Header
-    love.graphics.setColor(0.18, 0.20, 0.28, 0.9)
-    love.graphics.rectangle("fill", cx + 6, cy + 6, cw - 12, 24, 6, 6)
-    love.graphics.setFont(UI.getFont("small"))
-    UI.drawTextAligned("BATTLE REPORT", cx + 6, cy + 10, cw - 12, "center", {1.0, 0.88, 0.35, 1.0}, {0.05, 0.05, 0.08, 1.0}, 1, 1)
-
-    -- 3. The 3 Stat Capsules (Room, Kills, Gold)
-    local colW = 86
-    local colGap = 8
-    local startX = cx + 13
-    local rowY = cy + 36
-
-    -- A. Room Capsule
-    love.graphics.setColor(0.15, 0.18, 0.24, 0.95)
-    love.graphics.rectangle("fill", startX, rowY, colW, 46, 6, 6)
-    love.graphics.setColor(0.28, 0.45, 0.70, 0.9)
-    love.graphics.rectangle("line", startX, rowY, colW, 46, 6, 6)
-
-    love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawTextAligned("ROOM", startX, rowY + 5, colW, "center", {0.65, 0.75, 0.90, 1.0})
-    love.graphics.setFont(UI.getFont("title"))
-    local roomStr = string.format("%d", self.data.room or 1)
-    UI.drawTextAligned(roomStr, startX, rowY + 16, colW, "center", {1.0, 1.0, 1.0, 1.0}, {0.05, 0.1, 0.2, 1.0}, 1, 1)
-    love.graphics.setFont(UI.getFont("tiny"))
+    love.graphics.setColor(1, 1, 1, 1)
+    PixelFont.print("BATTLE REPORT", 12, 11, C.yellow, "main")
     local total = WorldManager.floorTotal(self.data.mode, self.data.room or 1)
-    if total then
-        UI.drawTextAligned("/ " .. total, startX, rowY + 34, colW, "center", {0.5, 0.6, 0.75, 0.9})
+    if total then PixelFont.printf("BEST " .. (self.data.bestRoom or 1) .. "/" .. total, 4, 11, botW - 16, "right", C.fog, "main") end
+    for i, st in ipairs(REPORT_STATS) do
+        local x = 4 + (i - 1) * 105
+        Art.draw(st.icon, 1, x + 14, 46)
+        PixelFont.print(st.label, x + 24, 40, C.fog, "main")
+        local value = self.data[st.key] or 0
+        PixelFont.printf((st.key == "goldEarned" and "+" or "") .. value, x, 58, 101, "center", C[st.color], "main", 2)
     end
 
-    -- B. Enemies Defeated Capsule
-    local startX2 = startX + colW + colGap
-    love.graphics.setColor(0.15, 0.18, 0.24, 0.95)
-    love.graphics.rectangle("fill", startX2, rowY, colW, 46, 6, 6)
-    love.graphics.setColor(0.70, 0.25, 0.30, 0.9)
-    love.graphics.rectangle("line", startX2, rowY, colW, 46, 6, 6)
-
-    love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawTextAligned("ENEMIES", startX2, rowY + 5, colW, "center", {0.90, 0.65, 0.70, 1.0})
-    love.graphics.setFont(UI.getFont("title"))
-    local killStr = string.format("%d", self.data.kills or 0)
-    UI.drawTextAligned(killStr, startX2, rowY + 16, colW, "center", {1.0, 0.45, 0.45, 1.0}, {0.2, 0.05, 0.05, 1.0}, 1, 1)
-    love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawTextAligned("defeated", startX2, rowY + 34, colW, "center", {0.75, 0.55, 0.60, 0.9})
-
-    -- C. Gold Loot Capsule
-    local startX3 = startX2 + colW + colGap
-    love.graphics.setColor(0.15, 0.18, 0.24, 0.95)
-    love.graphics.rectangle("fill", startX3, rowY, colW, 46, 6, 6)
-    love.graphics.setColor(0.85, 0.65, 0.15, 0.9)
-    love.graphics.rectangle("line", startX3, rowY, colW, 46, 6, 6)
-
-    love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawTextAligned("GOLD LOOT", startX3, rowY + 5, colW, "center", {1.0, 0.88, 0.45, 1.0})
-
-    -- Animated coin
-    local coinPulse = 1.0 + math.sin(t * 4.0) * 0.08
-    love.graphics.push()
-    love.graphics.translate(startX3 + colW / 2, rowY + 22)
-    love.graphics.scale(coinPulse, coinPulse)
-    love.graphics.setColor(1.0, 0.82, 0.15, 1.0)
-    love.graphics.circle("fill", 0, 0, 5)
-    love.graphics.setColor(1, 1, 1, 0.8)
-    love.graphics.circle("fill", -1.5, -1.5, 1.8)
-    love.graphics.pop()
-
-    love.graphics.setFont(UI.getFont("small"))
-    local goldStr = string.format("+%d G", self.data.goldEarned or 0)
-    UI.drawTextAligned(goldStr, startX3, rowY + 31, colW, "center", {1.0, 0.92, 0.35, 1.0}, {0.15, 0.10, 0.02, 1.0}, 1, 1)
-
-    -- 4. Skills summary box
-    local skillBoxY = cy + 88
-    love.graphics.setColor(0.08, 0.10, 0.14, 0.9)
-    love.graphics.rectangle("fill", cx + 8, skillBoxY, cw - 16, 76, 6, 6)
-    love.graphics.setColor(0.18, 0.22, 0.30, 0.8)
-    love.graphics.rectangle("line", cx + 8, skillBoxY, cw - 16, 76, 6, 6)
-
-    love.graphics.setFont(UI.getFont("tiny"))
-    UI.drawText("SKILLS ACQUIRED THIS RUN:", cx + 14, skillBoxY + 5, {0.75, 0.80, 0.90, 1.0})
-
+    -- Skills of the run, grouped, two columns
     local skills = self.data.skills or {}
     if #skills == 0 then
-        love.graphics.setFont(UI.getFont("small"))
-        UI.drawTextAligned("No skills unlocked during this run.", cx + 8, skillBoxY + 32, cw - 16, "center", {0.45, 0.50, 0.60, 1.0})
+        PixelFont.printf("NO SKILLS THIS RUN", 4, 132, botW - 8, "center", C.steel, "main")
     else
-        local pillW = 86
-        local pillH = 18
-        local pGapX = 6
-        local pGapY = 5
-        local pCols = 3
-        local pStartX = cx + 14
-        local pStartY = skillBoxY + 22
-
-        for i, sk in ipairs(skills) do
-            if i <= 6 then
-                local col = (i - 1) % pCols
-                local row = math.floor((i - 1) / pCols)
-                local px = pStartX + col * (pillW + pGapX)
-                local py = pStartY + row * (pillH + pGapY)
-
-                love.graphics.setColor(0.14, 0.20, 0.28, 0.95)
-                love.graphics.rectangle("fill", px, py, pillW, pillH, 4, 4)
-                love.graphics.setColor(0.30, 0.65, 0.95, 0.9)
-                love.graphics.rectangle("line", px, py, pillW, pillH, 4, 4)
-
-                -- Color bullet
-                love.graphics.setColor(0.35, 0.85, 0.45, 1.0)
-                love.graphics.circle("fill", px + 7, py + pillH / 2, 3)
-
-                love.graphics.setFont(UI.getFont("tiny"))
-                local sName = sk.name or "Skill"
-                if #sName > 12 then sName = string.sub(sName, 1, 10) .. ".." end
-                UI.drawText(sName, px + 14, py + 3, {0.92, 0.95, 1.0, 1.0})
+        local order, count = {}, {}
+        for _, sk in ipairs(skills) do
+            if not count[sk.id] then order[#order + 1] = sk end
+            count[sk.id] = (count[sk.id] or 0) + 1
+        end
+        for i, sk in ipairs(order) do
+            if i > 6 then
+                PixelFont.printf("+" .. (#order - 6), 4, 170, botW - 16, "right", C.silver, "main")
+                break
             end
+            local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
+            local sx, sy = 12 + col * 154, 98 + row * 26
+            Art.draw(Icons.skillIcon(sk.icon), 1, sx + 8, sy + 10)
+            PixelFont.printf(sk.name, sx + 20, sy + 4, 112, "left", C.white, "main", 1, nil, 1)
+            if count[sk.id] > 1 then PixelFont.print("x" .. count[sk.id], sx + 134, sy + 4, C.yellow, "main") end
         end
     end
-
-    -- 5. Action Gummy Buttons
-    local b1 = self.buttons.retry
-    local b2 = self.buttons.hub
-
-    UI.drawGummyButton(b1.x, b1.y, b1.w, b1.h, "RETRY  (A)", "green", self.pressedBtn == "retry", "swords")
-    UI.drawGummyButton(b2.x, b2.y, b2.w, b2.h, "MAIN MENU  (B)", "blue", self.pressedBtn == "hub", "shield")
-
-    love.graphics.setFont(UI.getFont("normal"))
+    buttonLabel(b1, "A", "RETRY", self.pressedBtn == "retry")
+    buttonLabel(b2, "B", "MENU", self.pressedBtn == "hub")
 end
 
 -- ============================================================================

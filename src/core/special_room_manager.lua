@@ -13,6 +13,7 @@ local Palette = require("src.render.palette")
 local Skin = require("src.ui.skin")
 local PixelFont = require("src.ui.pixel_font")
 local Art = require("src.render.art")
+local Icons = require("src.render.sprites.icons")
 
 local SpecialRoomManager = {}
 
@@ -537,251 +538,170 @@ function SpecialRoomManager:drawWheelBottom()
     PixelFont.printf(label, b.x, b.y + oy + 9, b.w, "center", C.white, "main", 2)
 end
 
-function SpecialRoomManager:drawBottom()
-    if not self.isActive then return end
+-- ============================================================================
+-- OFFER SCREENS (bottom screen): angel, devil, merchant
+-- ============================================================================
+local ANGEL_CARDS = { { x = 4, y = 38, w = 154, h = 198 }, { x = 162, y = 38, w = 154, h = 198 } }
+local DEVIL_CARD = { x = 4, y = 38, w = 312, h = 140 }
+local DEVIL_ACCEPT = { x = 4, y = 184, w = 204, h = 50 }
+local DEVIL_REFUSE = { x = 212, y = 184, w = 104, h = 50 }
+local MERCHANT_CARD_Y, MERCHANT_CARD_W, MERCHANT_CARD_H, MERCHANT_STEP = 38, 101, 140, 105
+local MERCHANT_EXIT = { x = 60, y = 186, w = 200, h = 48 }
+local OFFER_SPRITES = { heal = "icon_skill_heal", speed = "icon_skill_speed", damage = "icon_skill_damage",
+    heart = "icon_heart", star = "icon_star" }
 
-    if self.activeType == "angel" then
-        -- --------------------------------------------------------------------
-        -- 1. ÉCRAN DU BAS : CHOIX DE BÉNÉDICTION CÉLESTE
-        -- --------------------------------------------------------------------
-        -- Fond céleste apaisant avec dégradé doux
-        love.graphics.setColor(0.08, 0.12, 0.20, 1.0)
-        love.graphics.rectangle("fill", 0, 0, 320, 240)
+local function inBox(r, x, y)
+    return x >= r.x and x <= r.x + r.w and y >= r.y and y <= r.y + r.h
+end
 
-        -- Bannière supérieure dorée
-        love.graphics.setFont(UI.getFont("title"))
-        UI.drawTextAligned("ANGEL SANCTUARY", 0, 12, 320, "center", {1.0, 0.92, 0.40, 1.0}, {0.04, 0.06, 0.10, 0.9})
-        love.graphics.setFont(UI.getFont("small"))
-        UI.drawTextAligned("Choose a sacred blessing for your journey", 0, 32, 320, "center", {0.80, 0.88, 0.98, 1.0}, {0.04, 0.06, 0.10, 0.9})
+-- Header strip shared by the offer screens
+local function drawOfferHeader(title, color, right, rightColor)
+    local C = Palette.C
+    Skin.panel(4, 4, 312, 30, "dark")
+    PixelFont.print(title, 12, 12, color, "main")
+    if right then PixelFont.printf(right, 4, 12, 304, "right", rightColor or C.fog, "main") end
+end
 
-        -- 2 Grandes Cartes Tactiles Gummy
-        local cardW = 136
-        local cardH = 160
-        local cardY = 58
+-- Console button glyph drawn inside a button (round A / B)
+local function buttonGlyph(x, y, letter)
+    local C = Palette.C
+    Skin.disc(C.ink, x + 8, y + 7, 9)
+    Skin.disc(C.slate, x + 8, y + 7, 8)
+    PixelFont.printf(letter, x + 1, y + 1, 15, "center", C.white, "main")
+end
 
-        for i = 1, 2 do
-            local choice = self.angelChoices[i]
-            if choice then
-                local cardX = (i == 1) and 18 or 166
-                local isPressed = (self.pressedBtn == ("angel_" .. i))
+-- Glyph + label centred in a button rectangle (y offset follows the pressed state)
+local function buttonLabel(r, letter, label, pressedOffset)
+    local w = 22 + PixelFont.getWidth(label, "main")
+    local x = math.floor(r.x + (r.w - w) / 2)
+    local y = math.floor(r.y + (r.h - 3 - 14) / 2) + pressedOffset
+    buttonGlyph(x, y, letter)
+    PixelFont.print(label, x + 22, y + 1, Palette.C.white, "main")
+end
 
-                -- Décalage tactile
-                local dy = isPressed and 3 or 0
-
-                -- Ombre portée de la carte
-                love.graphics.setColor(0.04, 0.06, 0.10, 0.65)
-                love.graphics.rectangle("fill", cardX + 2, cardY + 5, cardW, cardH, 10, 10)
-
-                -- Corps bombé de la carte (Gummy UI)
-                local baseCol = choice.color or {0.2, 0.6, 0.9}
-                love.graphics.setColor(baseCol[1] * 0.45, baseCol[2] * 0.45, baseCol[3] * 0.45, 1.0)
-                love.graphics.rectangle("fill", cardX, cardY + dy, cardW, cardH, 10, 10)
-
-                -- Face supérieure
-                love.graphics.setColor(baseCol[1], baseCol[2], baseCol[3], 1.0)
-                love.graphics.rectangle("fill", cardX + 2, cardY + 2 + dy, cardW - 4, cardH - 6, 8, 8)
-
-                -- Reflet lumineux supérieur
-                love.graphics.setColor(1.0, 1.0, 1.0, 0.28)
-                love.graphics.rectangle("fill", cardX + 4, cardY + 4 + dy, cardW - 8, 18, 6, 6)
-
-                -- Icône centrale
-                local iconY = cardY + 38 + dy
-                if choice.icon == "heart" then
-                    -- Cœur de soin
-                    love.graphics.setColor(1.0, 0.25, 0.35, 1.0)
-                    love.graphics.circle("fill", cardX + cardW / 2 - 8, iconY, 11)
-                    love.graphics.circle("fill", cardX + cardW / 2 + 8, iconY, 11)
-                    love.graphics.polygon("fill", cardX + cardW / 2 - 18, iconY + 3,
-                                                 cardX + cardW / 2 + 18, iconY + 3,
-                                                 cardX + cardW / 2, iconY + 22)
-                else
-                    -- Étoile sacrée
-                    love.graphics.setColor(1.0, 0.92, 0.25, 1.0)
-                    love.graphics.circle("fill", cardX + cardW / 2, iconY + 8, 14)
-                    love.graphics.setColor(1.0, 1.0, 1.0, 0.9)
-                    love.graphics.circle("fill", cardX + cardW / 2, iconY + 8, 7)
-                end
-
-                -- Titre du don
-                love.graphics.setFont(UI.getFont("normal"))
-                UI.drawTextAligned(choice.title, cardX + 4, cardY + 76 + dy, cardW - 8, "center", {1, 1, 1, 1}, {0.05, 0.08, 0.12, 0.9})
-
-                -- Badge de stat
-                love.graphics.setColor(0.08, 0.12, 0.16, 0.70)
-                love.graphics.rectangle("fill", cardX + 16, cardY + 98 + dy, cardW - 32, 20, 5, 5)
-                love.graphics.setFont(UI.getFont("small"))
-                UI.drawTextAligned(choice.statText, cardX + 16, cardY + 102 + dy, cardW - 32, "center", {1.0, 0.95, 0.40, 1.0})
-
-                -- Bouton "RECEVOIR" au bas de la carte
-                local btnY = cardY + cardH - 32 + dy
-                local btnCol = isPressed and {0.18, 0.55, 0.25} or {0.24, 0.75, 0.35}
-                love.graphics.setColor(btnCol[1], btnCol[2], btnCol[3], 1.0)
-                love.graphics.rectangle("fill", cardX + 12, btnY, cardW - 24, 24, 6, 6)
-                love.graphics.setFont(UI.getFont("small"))
-                UI.drawTextAligned("CLAIM", cardX + 12, btnY + 5, cardW - 24, "center", {1, 1, 1, 1})
-            end
+function SpecialRoomManager:drawAngelBottom()
+    local C = Palette.C
+    love.graphics.setColor(0.08, 0.12, 0.20, 1)
+    love.graphics.rectangle("fill", 0, 0, 320, 240)
+    for i, r in ipairs(ANGEL_CARDS) do
+        local choice = self.angelChoices[i]
+        if choice then
+            local theme = (choice.icon == "heart") and "green" or "gold"
+            local th = Skin.theme(theme)
+            Skin.panel(r.x, r.y, r.w, r.h, "dark")
+            Skin.roundRect(th.dark, r.x + 1, r.y + 1, r.w - 2, 17, 2)
+            Skin.rect(th.main, r.x + 3, r.y + 1, r.w - 6, 14)
+            Skin.disc(th.main, r.x + r.w / 2, r.y + 44, 22, 0.25)
+            Skin.button(r.x + 6, r.y + r.h - 46, r.w - 12, 42, theme, self.pressedBtn == ("angel_" .. i))
         end
-
-    elseif self.activeType == "devil" then
-        -- --------------------------------------------------------------------
-        -- 2. ÉCRAN DU BAS : PACTE AVEC LE DIABLE
-        -- --------------------------------------------------------------------
-        -- Fond sombre infernal avec lueurs de braises
-        love.graphics.setColor(0.12, 0.05, 0.06, 1.0)
-        love.graphics.rectangle("fill", 0, 0, 320, 240)
-
-        -- Header
-        love.graphics.setFont(UI.getFont("title"))
-        UI.drawTextAligned("DEVIL'S PACT", 0, 10, 320, "center", {1.0, 0.28, 0.28, 1.0}, {0.15, 0.02, 0.02, 0.9})
-        love.graphics.setFont(UI.getFont("small"))
-        UI.drawTextAligned("Power demands a mortal sacrifice...", 0, 28, 320, "center", {0.95, 0.75, 0.75, 1.0}, {0.15, 0.02, 0.02, 0.9})
-
-        local pact = self.devilPact
-        if pact then
-            -- Grande Carte Centrale du Pacte Maudit
-            local cardX = 24
-            local cardY = 48
-            local cardW = 272
-            local cardH = 118
-
-            -- Ombre et fond de carte obsidienne
-            love.graphics.setColor(0.04, 0.02, 0.02, 0.75)
-            love.graphics.rectangle("fill", cardX + 3, cardY + 5, cardW, cardH, 10, 10)
-            love.graphics.setColor(0.26, 0.08, 0.10, 1.0)
-            love.graphics.rectangle("fill", cardX, cardY, cardW, cardH, 10, 10)
-            love.graphics.setColor(0.18, 0.05, 0.07, 1.0)
-            love.graphics.rectangle("fill", cardX + 2, cardY + 2, cardW - 4, cardH - 4, 8, 8)
-
-            -- Bandeau du Sacrifice de PV Max
-            love.graphics.setColor(0.70, 0.10, 0.15, 0.90)
-            love.graphics.rectangle("fill", cardX + 8, cardY + 8, cardW - 16, 26, 6, 6)
-            love.graphics.setFont(UI.getFont("small"))
-            local costStr = string.format("SACRIFICE: -20%% MAX HP (-%d HP)", pact.costHp)
-            UI.drawTextAligned(costStr, cardX + 8, cardY + 14, cardW - 16, "center", {1.0, 0.95, 0.95, 1.0})
-
-            -- Pouvoir Interdit Offert
-            love.graphics.setFont(UI.getFont("normal"))
-            UI.drawTextAligned(pact.title, cardX + 12, cardY + 44, cardW - 24, "center", {1.0, 0.88, 0.35, 1.0})
-
-            love.graphics.setFont(UI.getFont("small"))
-            UI.drawTextAligned(pact.desc, cardX + 14, cardY + 68, cardW - 28, "center", {0.90, 0.85, 0.85, 1.0})
-
-            -- 2 BOUTONS TACTILES GUMMY (ACCEPTER vs REFUSER)
-            -- Bouton 1 : ACCEPTER LE PACTE (Rouge sang)
-            local btn1X = 24
-            local btn1Y = 178
-            local btn1W = 178
-            local btn1H = 46
-            local isP1 = (self.pressedBtn == "devil_accept")
-            local dy1 = isP1 and 3 or 0
-
-            love.graphics.setColor(0.45, 0.05, 0.08, 1.0)
-            love.graphics.rectangle("fill", btn1X, btn1Y + 3, btn1W, btn1H, 8, 8)
-            love.graphics.setColor(isP1 and {0.75, 0.12, 0.18} or {0.92, 0.18, 0.24})
-            love.graphics.rectangle("fill", btn1X, btn1Y + dy1, btn1W, btn1H - 2, 8, 8)
-            love.graphics.setFont(UI.getFont("normal"))
-            UI.drawTextAligned("SEAL PACT", btn1X, btn1Y + 14 + dy1, btn1W, "center", {1, 1, 1, 1})
-
-            -- Bouton 2 : REFUSER (Gris sobre)
-            local btn2X = 212
-            local btn2Y = 178
-            local btn2W = 84
-            local btn2H = 46
-            local isP2 = (self.pressedBtn == "devil_refuse")
-            local dy2 = isP2 and 3 or 0
-
-            love.graphics.setColor(0.14, 0.16, 0.20, 1.0)
-            love.graphics.rectangle("fill", btn2X, btn2Y + 3, btn2W, btn2H, 8, 8)
-            love.graphics.setColor(isP2 and {0.24, 0.28, 0.35} or {0.35, 0.40, 0.50})
-            love.graphics.rectangle("fill", btn2X, btn2Y + dy2, btn2W, btn2H - 2, 8, 8)
-            love.graphics.setFont(UI.getFont("small"))
-            UI.drawTextAligned("DECLINE", btn2X, btn2Y + 16 + dy2, btn2W, "center", {0.85, 0.90, 0.95, 1.0})
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+    drawOfferHeader("ANGEL SANCTUARY", C.yellow, "CHOOSE ONE", C.silver)
+    for i, r in ipairs(ANGEL_CARDS) do
+        local choice = self.angelChoices[i]
+        if choice then
+            local pressed = (self.pressedBtn == ("angel_" .. i)) and 2 or 0
+            PixelFont.printf(choice.title, r.x, r.y + 4, r.w, "center", C.white, "main", 1, nil, 1)
+            Art.drawEx(OFFER_SPRITES[choice.icon] or "icon_star", 1, r.x + r.w / 2, r.y + 44, 0, 3, 3)
+            local statScale = (PixelFont.getWidth(choice.statText, "main", 2) <= r.w - 10) and 2 or 1
+            PixelFont.printf(choice.statText, r.x, r.y + (statScale == 2 and 78 or 82), r.w, "center", C.yellow, "main", statScale)
+            PixelFont.printf(choice.desc or "", r.x + 6, r.y + 104, r.w - 12, "center", C.silver, "main", 1, nil, 3, 12)
+            buttonLabel({ x = r.x + 6, y = r.y + r.h - 46, w = r.w - 12, h = 42 }, i == 1 and "A" or "B", "CLAIM", pressed)
         end
-
-    elseif self.activeType == "wheel" then
-        self:drawWheelBottom()
-
-    elseif self.activeType == "merchant" then
-        -- --------------------------------------------------------------------
-        -- 4. ÉCRAN DU BAS : LE MARCHAND MYSTÉRIEUX
-        -- --------------------------------------------------------------------
-        love.graphics.setColor(0.08, 0.06, 0.12, 1.0)
-        love.graphics.rectangle("fill", 0, 0, 320, 240)
-
-        love.graphics.setFont(UI.getFont("title"))
-        UI.drawTextAligned("MYSTERIOUS MERCHANT", 0, 8, 320, "center", {0.95, 0.85, 0.40, 1.0}, {0.1, 0.05, 0.02, 0.9})
-        love.graphics.setFont(UI.getFont("small"))
-        local sData = require("src.data.save").get()
-        local gStr = string.format("Your Gold: %d", sData.gold)
-        UI.drawTextAligned(gStr, 0, 26, 320, "center", {1.0, 0.90, 0.50, 1.0})
-
-        local cardW = 94
-        local cardH = 120
-        local startX = 14
-        local cardY = 46
-
-        for i, offer in ipairs(self.merchantOffers) do
-            local cx = startX + (i - 1) * 100
-            local isP = (self.pressedBtn == ("merchant_" .. i))
-            local dy = isP and 2 or 0
-
-            love.graphics.setColor(0.04, 0.03, 0.07, 0.7)
-            love.graphics.rectangle("fill", cx + 2, cardY + 3, cardW, cardH, 6, 6)
-            love.graphics.setColor(0.18, 0.14, 0.25, 1.0)
-            love.graphics.rectangle("fill", cx, cardY, cardW, cardH, 6, 6)
-
-            love.graphics.setFont(UI.getFont("small"))
-            UI.drawTextAligned(offer.name, cx + 4, cardY + 8, cardW - 8, "center", {1, 0.9, 0.4, 1})
-            love.graphics.setFont(UI.getFont("tiny"))
-            UI.drawTextAligned(offer.desc, cx + 4, cardY + 38, cardW - 8, "center", {0.85, 0.85, 0.9, 1})
-
-            local btnY = cardY + 76
-            local btnH = 34
-            if offer.bought then
-                love.graphics.setColor(0.15, 0.15, 0.18, 1.0)
-                love.graphics.rectangle("fill", cx + 6, btnY, cardW - 12, btnH, 4, 4)
-                love.graphics.setFont(UI.getFont("small"))
-                UI.drawTextAligned("SOLD", cx + 6, btnY + 10, cardW - 12, "center", {0.5, 0.5, 0.5, 1})
-            else
-                local canAfford = sData.gold >= offer.cost
-                love.graphics.setColor(canAfford and {0.75, 0.55, 0.15} or {0.35, 0.25, 0.25})
-                love.graphics.rectangle("fill", cx + 6, btnY + dy, cardW - 12, btnH - 2, 4, 4)
-                love.graphics.setFont(UI.getFont("small"))
-                UI.drawTextAligned(tostring(offer.cost) .. " GOLD", cx + 6, btnY + 8 + dy, cardW - 12, "center", {1, 1, 1, 1})
-            end
-        end
-
-        local isExitP = (self.pressedBtn == "merchant_exit")
-        local dyE = isExitP and 2 or 0
-        love.graphics.setColor(0.25, 0.28, 0.35, 1.0)
-        love.graphics.rectangle("fill", 80, 186 + dyE, 160, 36, 6, 6)
-        love.graphics.setFont(UI.getFont("small"))
-        UI.drawTextAligned("LEAVE MERCHANT", 80, 196 + dyE, 160, "center", {0.95, 0.95, 1, 1})
     end
 end
 
--- ============================================================================
--- GESTION DES INTERACTIONS TACTILES (BOTTOM SCREEN)
--- ============================================================================
+function SpecialRoomManager:drawDevilBottom()
+    local C = Palette.C
+    love.graphics.setColor(0.12, 0.05, 0.06, 1)
+    love.graphics.rectangle("fill", 0, 0, 320, 240)
+    local pact = self.devilPact
+    if not pact then return end
+    local r = DEVIL_CARD
+    Skin.panel(r.x, r.y, r.w, r.h, "dark")
+    Skin.roundRect(C.wine, r.x + 6, r.y + 6, r.w - 12, 24, 3)
+    Skin.disc(C.red, r.x + 34, r.y + 76, 20, 0.25)
+    Skin.button(DEVIL_ACCEPT.x, DEVIL_ACCEPT.y, DEVIL_ACCEPT.w, DEVIL_ACCEPT.h, "red", self.pressedBtn == "devil_accept")
+    Skin.button(DEVIL_REFUSE.x, DEVIL_REFUSE.y, DEVIL_REFUSE.w, DEVIL_REFUSE.h, "gray", self.pressedBtn == "devil_refuse")
+    love.graphics.setColor(1, 1, 1, 1)
+    drawOfferHeader("DEVIL'S PACT", C.red, "A PRICE IN BLOOD", C.pink)
+    Art.draw("icon_heart", 1, r.x + 20, r.y + 18)
+    PixelFont.print(string.format("SACRIFICE -%d MAX HP", pact.costHp), r.x + 32, r.y + 12, C.white, "main")
+    Art.drawEx(Icons.skillIcon(pact.icon), 1, r.x + 34, r.y + 76, 0, 3, 3)
+    PixelFont.printf(pact.title, r.x + 62, r.y + 44, r.w - 70, "left", C.yellow, "main", 1, nil, 1)
+    PixelFont.printf(pact.desc or "", r.x + 62, r.y + 62, r.w - 70, "left", C.silver, "main", 1, nil, 5, 12)
+    local a, b = DEVIL_ACCEPT, DEVIL_REFUSE
+    local pa = (self.pressedBtn == "devil_accept") and 2 or 0
+    local pb = (self.pressedBtn == "devil_refuse") and 2 or 0
+    buttonLabel(a, "A", "SEAL PACT", pa)
+    buttonLabel(b, "B", "NO", pb)
+end
+
+function SpecialRoomManager:drawMerchantBottom()
+    local C = Palette.C
+    love.graphics.setColor(0.08, 0.06, 0.12, 1)
+    love.graphics.rectangle("fill", 0, 0, 320, 240)
+    local gold = require("src.data.save").get().gold or 0
+    for i, offer in ipairs(self.merchantOffers) do
+        local x = 4 + (i - 1) * MERCHANT_STEP
+        Skin.panel(x, MERCHANT_CARD_Y, MERCHANT_CARD_W, MERCHANT_CARD_H, offer.bought and "dark" or "raised")
+        local by = MERCHANT_CARD_Y + MERCHANT_CARD_H - 34
+        if offer.bought then
+            Skin.panel(x + 5, by, MERCHANT_CARD_W - 10, 30, "dark")
+        else
+            Skin.button(x + 5, by, MERCHANT_CARD_W - 10, 30, gold >= offer.cost and "gold" or "gray",
+                self.pressedBtn == ("merchant_" .. i))
+        end
+    end
+    local e = MERCHANT_EXIT
+    Skin.button(e.x, e.y, e.w, e.h, "gray", self.pressedBtn == "merchant_exit")
+    love.graphics.setColor(1, 1, 1, 1)
+    drawOfferHeader("MERCHANT", C.yellow)
+    Art.draw("icon_coin", 1, 252, 18)
+    PixelFont.print(tostring(gold), 262, 12, C.yellow, "main")
+    for i, offer in ipairs(self.merchantOffers) do
+        local x = 4 + (i - 1) * MERCHANT_STEP
+        Art.drawEx(OFFER_SPRITES[offer.icon] or "icon_star", 1, x + MERCHANT_CARD_W / 2, MERCHANT_CARD_Y + 18, 0, 2, 2)
+        PixelFont.printf(offer.name, x + 4, MERCHANT_CARD_Y + 32, MERCHANT_CARD_W - 8, "center", C.white, "main", 1, nil, 1)
+        PixelFont.printf(offer.desc or "", x + 4, MERCHANT_CARD_Y + 50, MERCHANT_CARD_W - 8, "center", C.silver, "main", 1, nil, 4, 12)
+        local by = MERCHANT_CARD_Y + MERCHANT_CARD_H - 34
+        if offer.bought then
+            PixelFont.printf("SOLD", x, by + 9, MERCHANT_CARD_W, "center", C.fog, "main")
+        else
+            local pressed = (self.pressedBtn == ("merchant_" .. i)) and 2 or 0
+            Art.draw("icon_coin", 1, x + 26, by + 14 + pressed)
+            PixelFont.print(tostring(offer.cost), x + 36, by + 8 + pressed, C.white, "main")
+        end
+    end
+    local pe = (self.pressedBtn == "merchant_exit") and 2 or 0
+    buttonLabel(e, "B", "LEAVE", pe)
+end
+
+function SpecialRoomManager:drawBottom()
+    if not self.isActive then return end
+    if self.activeType == "angel" then
+        self:drawAngelBottom()
+    elseif self.activeType == "devil" then
+        self:drawDevilBottom()
+    elseif self.activeType == "wheel" then
+        self:drawWheelBottom()
+    elseif self.activeType == "merchant" then
+        self:drawMerchantBottom()
+    end
+end
+
 function SpecialRoomManager:touchpressed(id, x, y)
     if not self.isActive or self.isResolved then return end
 
     if self.activeType == "angel" then
-        local cardW = 136
-        local cardH = 160
-        local cardY = 58
-
-        if x >= 18 and x <= 18 + cardW and y >= cardY and y <= cardY + cardH then
-            self.pressedBtn = "angel_1"
-        elseif x >= 166 and x <= 166 + cardW and y >= cardY and y <= cardY + cardH then
-            self.pressedBtn = "angel_2"
+        for i, r in ipairs(ANGEL_CARDS) do
+            if inBox(r, x, y) then self.pressedBtn = "angel_" .. i end
         end
 
     elseif self.activeType == "devil" then
-        if x >= 24 and x <= 24 + 178 and y >= 178 and y <= 178 + 46 then
+        if inBox(DEVIL_ACCEPT, x, y) then
             self.pressedBtn = "devil_accept"
-        elseif x >= 212 and x <= 212 + 84 and y >= 178 and y <= 178 + 46 then
+        elseif inBox(DEVIL_REFUSE, x, y) then
             self.pressedBtn = "devil_refuse"
         end
 
@@ -803,15 +723,12 @@ function SpecialRoomManager:touchpressed(id, x, y)
         end
 
     elseif self.activeType == "merchant" then
-        if y >= 180 and y <= 230 and x >= 80 and x <= 240 then
+        if inBox(MERCHANT_EXIT, x, y) then
             self.pressedBtn = "merchant_exit"
-        elseif y >= 46 and y <= 166 then
-            if x >= 14 and x <= 14 + 94 then
-                self.pressedBtn = "merchant_1"
-            elseif x >= 114 and x <= 114 + 94 then
-                self.pressedBtn = "merchant_2"
-            elseif x >= 214 and x <= 214 + 94 then
-                self.pressedBtn = "merchant_3"
+        elseif y >= MERCHANT_CARD_Y and y <= MERCHANT_CARD_Y + MERCHANT_CARD_H then
+            for i = 1, #self.merchantOffers do
+                local cx = 4 + (i - 1) * MERCHANT_STEP
+                if x >= cx and x <= cx + MERCHANT_CARD_W then self.pressedBtn = "merchant_" .. i end
             end
         end
     end

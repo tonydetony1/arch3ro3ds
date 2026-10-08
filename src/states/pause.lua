@@ -25,18 +25,18 @@ function PauseState.new(stateMachine)
 
     -- Géométrie des boutons de l'écran inférieur (320x240)
     self.buttons = {
-        resume   = { x = 40, y = 40,  w = 240, h = 40 },
-        music    = { x = 40, y = 90,  w = 116, h = 34 },
-        sfx      = { x = 164, y = 90, w = 116, h = 34 },
-        abandon  = { x = 40, y = 132, w = 240, h = 38 },
-        settings = { x = 90, y = 178, w = 140, h = 24 },
+        resume   = { x = 20, y = 14,  w = 280, h = 56 },
+        music    = { x = 20, y = 80,  w = 136, h = 44 },
+        sfx      = { x = 164, y = 80, w = 136, h = 44 },
+        abandon  = { x = 20, y = 134, w = 280, h = 44 },
+        settings = { x = 90, y = 196, w = 140, h = 30 }, -- hitboxes, admin panel only
     }
 
-    -- Boutons de la modale de confirmation
+    -- Confirmation of the abandon
     self.modal = {
-        box     = { x = 20, y = 50,  w = 280, h = 140 },
-        confirm = { x = 35, y = 135, w = 115, h = 38 },
-        cancel  = { x = 170, y = 135, w = 115, h = 38 },
+        box     = { x = 12, y = 34,  w = 296, h = 172 },
+        confirm = { x = 22, y = 146, w = 132, h = 48 },
+        cancel  = { x = 166, y = 146, w = 132, h = 48 },
     }
 
     return self
@@ -51,107 +51,123 @@ function PauseState:update(dt)
     -- dt = 0 lors de la pause, aucune mise à jour du jeu
 end
 
+local MODE_NAMES = { infinite = "THE ABYSS", boss_rush = "BOSS RUSH", survival = "ARENA" }
+local SKILL_ROWS, SKILL_COLS = 5, 2
+
+-- Admin panel unlocked: debug toggles (hitboxes) are shown
+local function adminUnlocked()
+    local settings = Save.get().settings
+    return settings and settings.adminUnlocked == true
+end
+
+-- Console button glyph and label centred in a button rectangle
+local function buttonLabel(r, glyph, label, pressed)
+    local gw = glyph and 22 or 0
+    local w = gw + PixelFont.getWidth(label, "main")
+    local x = math.floor(r.x + (r.w - w) / 2)
+    local y = math.floor(r.y + (r.h - 3 - 14) / 2) + (pressed and 2 or 0)
+    if glyph then
+        Skin.disc(C.ink, x + 8, y + 7, 9)
+        Skin.disc(C.slate, x + 8, y + 7, 8)
+        PixelFont.printf(glyph, x + 1, y + 1, 15, "center", C.white, "main")
+    end
+    PixelFont.print(label, x + gw, y + 1, C.white, "main")
+end
+
 -- ============================================================================
--- TOP SCREEN (400x240) : RÉCAPITULATIF DE LA RUN & COMPÉTENCES DRAFT
+-- TOP SCREEN (400x240): run summary and the skills taken so far
 -- ============================================================================
 function PauseState:drawTop()
-    local w = Config.TOP_WIDTH
-    local h = Config.TOP_HEIGHT
-
-    Skin.rect(C.ink, 0, 0, w, h, 0.93)
-    Skin.panel(10, 8, w - 20, h - 16, "dark")
-
-    -- Title
-    Skin.ribbon(w / 2, 4, 120, 20, "gold")
-    PixelFont.printf("PAUSE", 0, 7, w, "center", C.white, "main", 1, "shadow")
-
-    -- Run summary
-    local modeLabels = {
-        infinite = "THE ABYSS (ENDLESS)", boss_rush = "BOSS RUSH", survival = "SURVIVAL ARENA",
-    }
-    local modeName = modeLabels[self.runData.mode] or "ASCENSION (50 ROOMS)"
-    PixelFont.printf(modeName, 18, 30, w - 36, "center", C.cyan, "main")
-
+    local w, h = Config.TOP_WIDTH, Config.TOP_HEIGHT
+    Skin.rect(C.ink, 0, 0, w, h, 0.9)
+    Skin.panel(6, 6, w - 12, 30, "dark")
     local stats = {
         { icon = "icon_door", label = "ROOM", value = tostring(self.runData.room or 1) },
         { icon = "icon_coin", label = "GOLD", value = "+" .. (self.runData.goldEarned or 0) },
         { icon = "icon_skull", label = "KILLS", value = tostring(self.runData.kills or 0) },
     }
+    for i = 1, #stats do Skin.panel(6 + (i - 1) * 130, 40, 128, 44, "raised") end
+    Skin.panel(6, 88, w - 12, 146, "inset")
+    love.graphics.setColor(1, 1, 1, 1)
+    PixelFont.print("PAUSE", 14, 14, C.yellow, "main")
+    PixelFont.printf(MODE_NAMES[self.runData.mode] or "ASCENSION", 6, 14, w - 20, "right", C.cyan, "main")
     for i, st in ipairs(stats) do
-        local sx = 20 + (i - 1) * 122
-        Skin.panel(sx, 46, 116, 34, "inset")
-        love.graphics.setColor(1, 1, 1, 1)
-        Art.draw(st.icon, 1, sx + 16, 63)
-        PixelFont.print(st.label, sx + 28, 50, C.fog, "tiny")
-        PixelFont.print(st.value, sx + 28, 59, C.white, "main")
+        local sx = 6 + (i - 1) * 130
+        Art.drawEx(st.icon, 1, sx + 18, 62, 0, 2, 2)
+        PixelFont.print(st.label, sx + 36, 46, C.fog, "main")
+        PixelFont.print(st.value, sx + 36, 58, C.white, "main", 2)
     end
 
-    -- Active skills
-    PixelFont.print("ACTIVE SKILLS", 20, 86, C.yellow, "main")
+    -- Skills grouped by id, two columns, name in the main font with a stack count
     local skills = self.runData.skills or {}
     if #skills == 0 then
-        PixelFont.print("No skills acquired yet.", 20, 104, C.steel, "main")
-    else
-        for i, sk in ipairs(skills) do
-            local col = (i - 1) % 2
-            local row = math.floor((i - 1) / 2)
-            local sx = 18 + col * 184
-            local sy = 102 + row * 32
-            if sy + 30 < h - 10 then
-                Skin.panel(sx, sy, 180, 30, "inset")
-                love.graphics.setColor(1, 1, 1, 1)
-                Art.draw(Icons.skillIcon(sk.icon), 1, sx + 14, sy + 15)
-                PixelFont.printf(sk.name, sx + 26, sy + 3, 150, "left", C.white, "main", 1, nil, 1)
-                PixelFont.printf(sk.desc, sx + 26, sy + 15, 150, "left", C.fog, "tiny", 1, nil, 2, 8)
-            end
-        end
-        if #skills > 8 then
-            PixelFont.printf("+" .. (#skills - 8) .. " more", 18, h - 22, w - 36, "right", C.silver, "tiny")
-        end
+        PixelFont.printf("NO SKILLS YET", 6, 150, w - 12, "center", C.steel, "main")
+        return
+    end
+    local order, count = {}, {}
+    for _, sk in ipairs(skills) do
+        if not count[sk.id] then order[#order + 1] = sk end
+        count[sk.id] = (count[sk.id] or 0) + 1
+    end
+    for i, sk in ipairs(order) do
+        if i > SKILL_ROWS * SKILL_COLS then break end
+        local col, row = (i - 1) % SKILL_COLS, math.floor((i - 1) / SKILL_COLS)
+        local sx, sy = 14 + col * 190, 96 + row * 27
+        Art.drawEx(Icons.skillIcon(sk.icon), 1, sx + 10, sy + 11, 0, 2, 2)
+        PixelFont.printf(sk.name, sx + 26, sy + 5, 140, "left", C.white, "main", 1, nil, 1)
+        if count[sk.id] > 1 then PixelFont.print("x" .. count[sk.id], sx + 168, sy + 5, C.yellow, "main") end
+    end
+    if #order > SKILL_ROWS * SKILL_COLS then
+        PixelFont.printf("+" .. (#order - SKILL_ROWS * SKILL_COLS) .. " MORE", 6, 220, w - 20, "right", C.silver, "main")
     end
 end
 
+-- Volume button: label, percentage and a 10-step gauge (tap cycles the volume)
+local function volumeButton(r, label, volume, theme, pressed)
+    local oy = Skin.button(r.x, r.y, r.w, r.h, theme, pressed)
+    local steps = math.floor(volume * 10 + 0.5)
+    for i = 1, 10 do
+        local x = r.x + 13 + (i - 1) * 11
+        Skin.rect(C.ink, x, r.y + oy + 25, 9, 8)
+        Skin.rect(i <= steps and C.white or C.slate, x + 1, r.y + oy + 26, 7, 6)
+    end
+    PixelFont.printf(string.format("%s %d%%", label, math.floor(volume * 100 + 0.5)), r.x, r.y + oy + 7, r.w, "center",
+        C.white, "main")
+end
+
 -- ============================================================================
--- BOTTOM SCREEN (320x240) : BOUTONS TACTILES & CONFIRMATION D'ABANDON
+-- BOTTOM SCREEN (320x240): buttons and the abandon confirmation
 -- ============================================================================
 function PauseState:drawBottom()
-    local botW = Config.BOTTOM_WIDTH
-    local botH = Config.BOTTOM_HEIGHT
-
+    local botW, botH = Config.BOTTOM_WIDTH, Config.BOTTOM_HEIGHT
     Skin.background(botW, botH)
-
     if not self.confirmQuit then
-        local bRes = self.buttons.resume
-        UI.drawGummyButton(bRes.x, bRes.y, bRes.w, bRes.h, "RESUME GAME", "emerald", self.pressed == "resume", "check")
-
-        local bMus = self.buttons.music
-        UI.drawGummyButton(bMus.x, bMus.y, bMus.w, bMus.h,
-            string.format("MUSIC %d%%", math.floor(Audio.musicVolume * 100 + 0.5)), "sapphire", self.pressed == "music", "rune")
-        local bSfx = self.buttons.sfx
-        UI.drawGummyButton(bSfx.x, bSfx.y, bSfx.w, bSfx.h,
-            string.format("SFX %d%%", math.floor(Audio.sfxVolume * 100 + 0.5)), "violet", self.pressed == "sfx", "sparkles")
-
-        local bSet = self.buttons.settings
-        local debugText = Config.DEBUG_MODE and "HITBOXES : ON" or "HITBOXES : OFF"
-        UI.drawGummyButton(bSet.x, bSet.y, bSet.w, bSet.h, debugText, "gray", self.pressed == "settings")
-
-        local bAb = self.buttons.abandon
-        UI.drawGummyButton(bAb.x, bAb.y, bAb.w, bAb.h, "ABANDON RUN", "ruby", self.pressed == "abandon", "skull")
-
-        PixelFont.printf("[START] to resume", 0, 208, botW, "center", C.steel, "tiny")
+        local b = self.buttons
+        Skin.button(b.resume.x, b.resume.y, b.resume.w, b.resume.h, "green", self.pressed == "resume")
+        volumeButton(b.music, "MUSIC", Audio.musicVolume, "blue", self.pressed == "music")
+        volumeButton(b.sfx, "SFX", Audio.sfxVolume, "purple", self.pressed == "sfx")
+        Skin.button(b.abandon.x, b.abandon.y, b.abandon.w, b.abandon.h, "red", self.pressed == "abandon")
+        if adminUnlocked() then
+            Skin.button(b.settings.x, b.settings.y, b.settings.w, b.settings.h, "gray", self.pressed == "settings")
+            buttonLabel(b.settings, nil, Config.DEBUG_MODE and "HITBOXES ON" or "HITBOXES OFF", self.pressed == "settings")
+        end
+        love.graphics.setColor(1, 1, 1, 1)
+        buttonLabel(b.resume, "A", "RESUME", self.pressed == "resume")
+        buttonLabel(b.abandon, nil, "ABANDON RUN", self.pressed == "abandon")
     else
         local m = self.modal.box
         Skin.rect(C.ink, 0, 0, botW, botH, 0.75)
         Skin.panel(m.x, m.y, m.w, m.h, "dark")
-        Skin.ribbon(botW / 2, m.y - 8, 200, 20, "red")
-        PixelFont.printf("ABANDON RUN?", 0, m.y - 5, botW, "center", C.white, "main", 1, "shadow")
-        PixelFont.printf("Gold collected during this run will be safely kept in your chest.",
-            m.x + 14, m.y + 34, m.w - 28, "center", C.silver, "main")
-
-        local bConf = self.modal.confirm
-        UI.drawGummyButton(bConf.x, bConf.y, bConf.w, bConf.h, "CONFIRM", "ruby", self.pressed == "confirm")
-        local bCanc = self.modal.cancel
-        UI.drawGummyButton(bCanc.x, bCanc.y, bCanc.w, bCanc.h, "CANCEL", "emerald", self.pressed == "cancel")
+        Skin.roundRect(C.wine, m.x + 1, m.y + 1, m.w - 2, 24, 2)
+        local bc, bk = self.modal.confirm, self.modal.cancel
+        Skin.button(bc.x, bc.y, bc.w, bc.h, "red", self.pressed == "confirm")
+        Skin.button(bk.x, bk.y, bk.w, bk.h, "green", self.pressed == "cancel")
+        love.graphics.setColor(1, 1, 1, 1)
+        PixelFont.printf("ABANDON RUN?", m.x, m.y + 7, m.w, "center", C.white, "main")
+        PixelFont.printf("The gold of this run goes to your chest.", m.x + 16, m.y + 44, m.w - 32, "center",
+            C.silver, "main", 1, nil, 3, 13)
+        buttonLabel(bc, nil, "ABANDON", self.pressed == "confirm")
+        buttonLabel(bk, "B", "CANCEL", self.pressed == "cancel")
     end
 end
 
@@ -195,7 +211,7 @@ function PauseState:touchpressed(id, tx, ty)
 
         -- 3. Affichage des hitboxes (debug)
         local bSet = self.buttons.settings
-        if tx >= bSet.x and tx <= bSet.x + bSet.w and ty >= bSet.y and ty <= bSet.y + bSet.h then
+        if adminUnlocked() and tx >= bSet.x and tx <= bSet.x + bSet.w and ty >= bSet.y and ty <= bSet.y + bSet.h then
             Config.DEBUG_MODE = not Config.DEBUG_MODE
             return
         end
