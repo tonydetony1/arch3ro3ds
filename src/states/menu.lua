@@ -23,20 +23,25 @@ local Talents = require("src.data.talents")
 local Pet = require("src.entities.pet")
 local SettingsPanel = require("src.ui.settings_panel")
 local WorldManager = require("src.core.world_manager")
+local MenuTop = require("src.ui.menu_top")
 
 local MenuState = {}
 MenuState.__index = MenuState
 
-local MODE_LABELS = { ascension = "Ascension", infinite = "The Abyss", boss_rush = "Boss Rush", survival = "Arena" }
 
 -- Background of each world card in the Play tab (forest, desert, crystal, inferno, sky, void)
 local WORLD_CARD_BG = {
     { 0.10, 0.22, 0.14 }, { 0.28, 0.18, 0.08 }, { 0.08, 0.16, 0.28 },
     { 0.28, 0.10, 0.08 }, { 0.10, 0.18, 0.30 }, { 0.20, 0.10, 0.28 },
 }
-local LOCKED_TEXT = { 0.55, 0.58, 0.66, 1.0 }
 -- Mode card order on the PLAY tab (drawing, touch, d-pad)
 local PLAY_MODE_ORDER = { "ascension", "infinite", "boss_rush", "survival" }
+
+-- Tab bar geometry (drawing and touch) and look
+local TAB_X0, TAB_STEP, TAB_Y, TAB_W, TAB_H = 2, 45, 208, 44, 31
+local TAB_THEMES = { play = "green", quests = "gold", heroes = "blue", equipment = "blue", talents = "purple",
+    chests = "gold", settings = "gray" }
+local TAB_ICONS = { play = "icon_sword", quests = "icon_check", equipment = "item_armor", settings = "icon_gear" }
 
 function MenuState.new(stateMachine)
     local self = setmetatable({}, MenuState)
@@ -51,6 +56,7 @@ function MenuState.new(stateMachine)
     self.questSubPage = "quests"
     self.chestSubPage = "chests"
     self.selectedTalent = "strength"
+    self.selectedChest = "gold" -- chest shown on the top screen (d-pad or touch)
     self.settingsPanel = SettingsPanel.new()
     self.bestiarySelected = "slime"
 
@@ -109,7 +115,7 @@ function MenuState.new(stateMachine)
         { id = "settings",  name = "SETTINGS", icon = "gear",   theme = "gray"    },
     }
     for i, tab in ipairs(self.tabs) do
-        tab.x, tab.y, tab.w, tab.h = 6 + (i - 1) * 44, 207, 41, 26
+        tab.x, tab.y, tab.w, tab.h = TAB_X0 + (i - 1) * TAB_STEP, TAB_Y, TAB_W, TAB_H
     end
 
 
@@ -189,58 +195,6 @@ function MenuState:update(dt)
     end
 end
 
--- ============================================================================
--- ============================================================================
--- TOP SCREEN (400x240) : VITRINE BENTO 2026, PIÉDESTAL 3D & DIORAMA ART-DIRECTED
--- ============================================================================
--- Diorama du hub : ciel, nuages, île flottante et piédestal de pierre
-function MenuState:drawHubBackdrop(t)
-    local w, h = Config.TOP_WIDTH, Config.TOP_HEIGHT
-
-    -- Ciel dégradé
-    local top, bottom = Palette.hex("2c4a86"), Palette.hex("7fc0ea")
-    local bands = 10
-    for i = 0, bands - 1 do
-        local f = i / (bands - 1)
-        love.graphics.setColor(top[1] + (bottom[1] - top[1]) * f, top[2] + (bottom[2] - top[2]) * f, top[3] + (bottom[3] - top[3]) * f, 1)
-        love.graphics.rectangle("fill", 0, i * (h / bands), w, h / bands + 1)
-    end
-
-    -- Nuages en lente dérive (les étoiles d'un pixel coûtaient 24 appels GPU pour un effet
-    -- invisible sur l'écran 3DS : retirées)
-    love.graphics.setColor(1, 1, 1, 1)
-    Art.draw("cloud_c", 1, (40 + t * 5) % (w + 120) - 60, 42)
-    Art.draw("cloud_a", 1, (250 - t * 4) % (w + 120) - 60, 26)
-    Art.draw("cloud_b", 1, (150 + t * 3) % (w + 120) - 60, 66)
-    Art.draw("far_island_b", 1, 60, 96)
-    Art.draw("far_island_a", 1, 348, 120)
-
-    -- Île centrale : falaise + herbe + bordure de buissons
-    local ix, iw = 96, 208
-    local groundY = 150
-    for x = ix, ix + iw - 16, 16 do
-        Art.draw("cliff", 1 + (math.floor(x / 16) % 4), x, groundY + 6)
-    end
-    Palette.set(Palette.C.grass)
-    love.graphics.rectangle("fill", ix, groundY, iw, 10)
-    Palette.set(Palette.C.moss)
-    love.graphics.rectangle("fill", ix, groundY - 2, iw, 2)
-    Palette.set(Palette.C.grassDark)
-    love.graphics.rectangle("fill", ix, groundY + 8, iw, 2)
-    love.graphics.setColor(1, 1, 1, 1)
-    for x = ix + 6, ix + iw - 6, 14 do
-        Art.draw((x % 28 == 0) and "bush_a" or "bush_b", 1, x, groundY + 1)
-    end
-    Art.draw("tall_tree_a", 1, ix + 12, groundY + 4)
-    Art.draw("tall_tree_b", 1, ix + iw - 14, groundY + 2)
-
-    -- Dalles du piédestal
-    for i = -1, 1 do
-        Art.draw("slab", 2 + (i + 1), math.floor(w / 2) + i * 16 - 8, groundY - 12)
-    end
-    return groundY
-end
-
 -- Attaque et PV totaux (héros + équipement + talents). Le calcul parcourt tout l'équipement :
 -- il n'est refait que si la sauvegarde ou le héros change, et au plus tard chaque seconde
 local POWER_REFRESH = 1.0
@@ -269,99 +223,10 @@ function MenuState:powerTotals(heroId, hData, t)
 end
 
 -- ============================================================================
--- TOP SCREEN (400x240) : DIORAMA DU HUB, HÉROS PIXEL & FICHE DE PUISSANCE
+-- TOP SCREEN (400x240): world backdrop, island and page cards (src/ui/menu_top.lua)
 -- ============================================================================
 function MenuState:drawTop()
-    local w = Config.TOP_WIDTH
-    local h = Config.TOP_HEIGHT
-    local t = love.timer.getTime()
-    local curHeroId = self.saveData.selectedHero or "atreus"
-    local hData = Heroes.get(curHeroId)
-
-    local groundY = self:drawHubBackdrop(t)
-
-    -- Rayons de lumière derrière le héros
-    UI.drawGodRays(w / 2, groundY - 30, 150, 12, self.godRaysAngle * 0.4,
-        { hData.color[1], hData.color[2], hData.color[3], 0.10 })
-    if self.openingChest and self.chestTimer >= 0.7 then
-        local rData = self.rewardItem and Items.getRarityData(self.rewardItem.rarity) or Items.RARITIES.rare
-        UI.drawGodRays(w / 2, 130, 220, 16, self.godRaysAngle, { rData.color[1], rData.color[2], rData.color[3], 0.22 })
-    end
-
-    -- ------------------------------------------------------------------
-    -- Héros pixel sur son piédestal (échelle 3) + familiers équipés
-    -- ------------------------------------------------------------------
-    local heroX = math.floor(w / 2)
-    local bob = math.floor(math.sin(t * 2.2) * 2)
-    local heroBottom = groundY - 12 + bob
-    local variant = (curHeroId ~= "atreus") and curHeroId or nil
-
-    Palette.set(Palette.C.ink, 0.35)
-    love.graphics.ellipse("fill", heroX, groundY - 8, 26 - bob, 7)
-    love.graphics.setColor(1, 1, 1, 1)
-    Art.drawEx("hero_legs", 1, heroX, heroBottom, 0, 3, 3)
-    Art.drawEx("hero_body", 1, heroX, heroBottom - 9, 0, 3, 3, false, variant)
-    local acc = HeroSprites.ACCESSORY_BY_HERO[curHeroId]
-    if acc then
-        local o = HeroSprites.ACCESSORY_OFFSETS[acc]
-        Art.drawEx("hero_acc_" .. acc, 1, heroX + o[1] * 3, heroBottom - 9 + o[2] * 3, 0, 3, 3)
-    end
-    Art.drawEx("bow", 1, heroX + 26, heroBottom - 34, 0.35, 2, 2)
-
-    -- Equipped pets (combat sprites, scale 2): Pet 1 on the left, Pet 2 on the right,
-    -- facing the hero
-    local petFloat = math.floor(math.sin(t * 4.6) * 3)
-    local p1, p2 = self.saveData.equipped.pet1, self.saveData.equipped.pet2
-    if p1 then Pet.drawSprite(p1, heroX - 58, heroBottom - 44 + petFloat, t, false, 2) end
-    if p2 then Pet.drawSprite(p2, heroX + 58, heroBottom - 44 - petFloat, t, true, 2) end
-
-    -- ------------------------------------------------------------------
-    -- En-tête : niveau, or, gemmes, énergie
-    -- ------------------------------------------------------------------
-    UI.drawBentoCard(6, 4, w - 12, 24, {})
-    UI.drawPillBadge(10, 7, 50, 18, string.format("LV. %d", self.saveData.accountLevel or 1),
-        { 0.14, 0.18, 0.28, 0.95 }, { 1.0, 0.82, 0.20, 0.9 }, { 1.0, 0.88, 0.30, 1.0 })
-    UI.drawIcon("gold", 76, 16, 11)
-    UI.drawText(string.format("%d", self.saveData.gold), 86, 10, Palette.C.yellow)
-    UI.drawIcon("gem", 156, 16, 11)
-    UI.drawText(string.format("%d", self.saveData.gems), 166, 10, Palette.C.leaf)
-    UI.drawIcon("energy", 232, 16, 11)
-    UI.drawText(string.format("%d/%d", self.saveData.energy, self.saveData.maxEnergy), 242, 10, Palette.C.cyan)
-    -- Réglages : onglet SETTINGS de l'écran tactile (l'écran du haut n'est pas tactile)
-    UI.setFont("tiny")
-    UI.drawTextAligned("Y: SETTINGS", w - 76, 12, 68, "center", Palette.C.fog)
-    UI.setFont("main")
-
-    -- ------------------------------------------------------------------
-    -- Power Card (attack / max health)
-    -- ------------------------------------------------------------------
-    local totalAtk, totalHp = self:powerTotals(curHeroId, hData, t)
-
-    UI.drawBentoCard(6, 36, 92, 40, { accentColor = { 0.95, 0.28, 0.30, 0.9 } })
-    UI.drawIcon("swords", 18, 52, 11)
-    UI.drawText("ATTACK", 28, 46, { 1.0, 0.45, 0.45, 1.0 })
-    UI.drawTextAligned(string.format("%d", totalAtk), 6, 60, 92, "center", Palette.C.white)
-
-    UI.drawBentoCard(w - 98, 36, 92, 40, { accentColor = { 0.30, 0.92, 0.48, 0.9 } })
-    UI.drawIcon("heart", w - 86, 52, 11)
-    UI.drawText("HEALTH", w - 76, 46, { 0.45, 1.0, 0.65, 1.0 })
-    UI.drawTextAligned(string.format("%d", totalHp), w - 98, 60, 92, "center", Palette.C.white)
-
-    -- Badge Titre Officiel "ARCH3RO" au centre supérieur
-    UI.drawPillBadge(w / 2 - 45, 36, 90, 18, "ARCH3RO",
-        { 0.10, 0.14, 0.22, 0.95 }, { 1.0, 0.82, 0.20, 0.95 }, { 1.0, 0.88, 0.30, 1.0 })
-
-    -- ------------------------------------------------------------------
-    -- Banners: hero and passive
-    -- ------------------------------------------------------------------
-    Skin.ribbon(w / 2, 186, 214, 20, "gold")
-    UI.drawTextAligned(string.format("%s - %s", hData.name:upper(), hData.title:upper()), w / 2 - 107, 190, 214, "center", Palette.C.white)
-
-    UI.drawBentoCard(14, 212, w - 28, 24, {})
-    UI.setFont("tiny")
-    UI.drawTextAligned(string.format("PASSIVE: %s", hData.passiveName:upper()), 18, 215, w - 36, "center", Palette.C.yellow)
-    UI.drawTextAligned(hData.passiveDesc, 18, 224, w - 36, "center", { 0.85, 0.92, 1.0, 0.95 })
-    UI.setFont("main")
+    MenuTop.draw(self, love.timer.getTime())
 end
 
 -- ============================================================================
@@ -407,341 +272,414 @@ function MenuState:drawBottom()
         end
     end
 
-    -- 2. Barre de Navigation Flottante Bento Dock (308x32)
-    local dockX, dockY, dockW, dockH = 6, 204, 308, 32
-    UI.drawBentoCard(dockX, dockY, dockW, dockH, {
-        r = 10,
-        bg = {0.07, 0.09, 0.13, 0.98},
-        borderColor = {0.18, 0.22, 0.32, 0.90},
-        borderWidth = 1,
-        isElevated = true,
-    })
+    self:drawTabBar()
+end
 
+-- Tab bar: big icons only (the page name is on the top screen), the active tab is a raised
+-- button in its colour. Primitives first, then the icons (batched sprites).
+function MenuState:drawTabBar()
+    Skin.rect(Palette.C.ink, 0, TAB_Y - 1, Config.BOTTOM_WIDTH, Config.BOTTOM_HEIGHT - TAB_Y + 1)
     for _, tab in ipairs(self.tabs) do
-        local isActive = (self.currentTab == tab.id)
-        local isPressed = (self.pressedBtn == "tab_" .. tab.id)
-        local btnTheme = isActive and tab.theme or "dark"
-        UI.drawPillButton(tab.x, tab.y, tab.w, tab.h, tab.name, btnTheme, isPressed, tab.icon)
+        if self.currentTab == tab.id then
+            Skin.button(tab.x, tab.y - 1, tab.w, tab.h + 1, TAB_THEMES[tab.id] or "blue", self.pressedBtn == "tab_" .. tab.id)
+        else
+            Skin.roundRect(Palette.C.night, tab.x + 1, tab.y + 3, tab.w - 2, tab.h - 3, 3)
+            Skin.rect(Palette.C.slate, tab.x + 3, tab.y + 3, tab.w - 6, 1)
+        end
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+    local heroId = self.saveData.selectedHero or "atreus"
+    for _, tab in ipairs(self.tabs) do
+        local active = (self.currentTab == tab.id)
+        local cx, cy = tab.x + math.floor(tab.w / 2), tab.y + (active and 13 or 17)
+        local icon = TAB_ICONS[tab.id]
+        if tab.id == "heroes" then
+            Art.drawEx("hero_body", 1, cx, cy + 8, 0, 1, 1, false, (heroId ~= "atreus") and heroId or nil)
+        elseif tab.id == "chests" then
+            Art.drawEx("menu_chest_gold", 1, cx - 8, cy - 7, 0, 0.5, 0.5)
+        elseif tab.id == "talents" then
+            Skin.disc(Palette.C.ink, cx, cy, 8)
+            Skin.disc(Palette.C.plum, cx, cy, 7)
+            Skin.disc(Palette.C.magenta, cx, cy - 1, 5)
+            love.graphics.setColor(1, 1, 1, 1)
+            Art.draw("icon_star", 1, cx, cy - 1)
+        elseif icon then
+            Art.drawEx(icon, 1, cx, cy, 0, (tab.id == "equipment") and 1 or 2, (tab.id == "equipment") and 1 or 2)
+        end
+    end
+    -- Inactive tabs are dimmed after their icons are drawn
+    for _, tab in ipairs(self.tabs) do
+        if self.currentTab ~= tab.id then
+            Skin.rect(Palette.C.night, tab.x + 1, tab.y + 3, tab.w - 2, tab.h - 3, 0.45)
+        end
     end
 end
 
 -- ============================================================================
 -- ONGLET 1 : JOUER (BENTO GRID 2026 : MONDE, PATROUILLE, MODES & LAUNCHER)
 -- ============================================================================
+-- Layout of the PLAY tab (drawing and touch)
+local PLAY_PREV = { x = 4, y = 34, w = 22, h = 36 }
+local PLAY_NEXT = { x = 294, y = 34, w = 22, h = 36 }
+local PLAY_WORLD = { x = 30, y = 4, w = 260, h = 96 }
+local PLAY_MODE_Y, PLAY_MODE_W, PLAY_MODE_H, PLAY_MODE_STEP = 104, 76, 40, 79
+local PLAY_PATROL = { x = 4, y = 148, w = 100, h = 52 }
+local PLAY_COLLECT = { x = 10, y = 170, w = 88, h = 26 }
+local PLAY_BATTLE = { x = 108, y = 148, w = 208, h = 52 }
+local PLAY_ABANDON = { x = 112, y = 151, w = 64, h = 16 }
+local MODE_CHIPS = {
+    ascension = { name = "ASCENSION", theme = "blue" },
+    infinite = { name = "ABYSS", theme = "purple" },
+    boss_rush = { name = "BOSS RUSH", theme = "red" },
+    survival = { name = "ARENA", theme = "green" },
+}
+-- Special floors of a world (slot within its 10 floors), as on the in-run floor path
+local FLOOR_NODES = { [5] = { bg = "navy", sprite = "npc_angel", dy = 8 }, [7] = { bg = "plum", sprite = "icon_affix_enraged", dy = 0 },
+    [9] = { bg = "wine", sprite = "npc_devil", dy = 8 }, [10] = { bg = "wine", sprite = "icon_skull", dy = 0 } }
+
+local function inRect(r, x, y)
+    return x >= r.x and x <= r.x + r.w and y >= r.y and y <= r.y + r.h
+end
+
+-- 10-floor path of a world: done floors green, best floor marked, special floors iconed
+local function drawFloorPath(x0, y, w, reached, unlocked)
+    local C = Palette.C
+    local step = w / 9
+    Skin.rect(C.slate, x0, y, w, 2)
+    if reached > 1 then Skin.rect(C.leaf, x0, y, math.floor(step * (reached - 1)), 2) end
+    for i = 1, 10 do
+        local nx = math.floor(x0 + step * (i - 1))
+        local node = FLOOR_NODES[i]
+        local ring = (i == reached) and C.yellow or ((i < reached) and C.leaf or C.ink)
+        if node then
+            Skin.roundRect(ring, nx - 8, y - 7, 17, 17, 3)
+            Skin.roundRect(C[node.bg], nx - 7, y - 6, 15, 15, 3)
+        else
+            Skin.roundRect(C.ink, nx - 5, y - 4, 11, 11, 3)
+            Skin.roundRect(ring == C.ink and C.slate or ring, nx - 4, y - 3, 9, 9, 3)
+        end
+    end
+    love.graphics.setColor(1, 1, 1, unlocked and 1 or 0.45)
+    for i, node in pairs(FLOOR_NODES) do
+        Art.draw(node.sprite, 1, math.floor(x0 + step * (i - 1)), y + 1 + node.dy)
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+    if unlocked and reached >= 1 then
+        local bx = math.max(x0 - 6, math.min(x0 + w - 34, math.floor(x0 + step * (reached - 1)) - 20))
+        Skin.pill(bx, y - 26, 40, 15, "gold")
+        PixelFont.printf("BEST", bx, y - 24, 40, "center", C.white, "main")
+    end
+end
+
+function MenuState:modeBest(mode)
+    local records = self.saveData.records or {}
+    local events = Save.getEvents()
+    if mode == "ascension" then return records.ascensionMax or 1 end
+    if mode == "infinite" then return records.infiniteMax or 0 end
+    if mode == "boss_rush" then return events.bossRushBest or 0 end
+    return events.survivalBest or 0
+end
+
 function MenuState:drawPlayTab()
-    local t = love.timer.getTime()
+    local C = Palette.C
     local chapIdx = self.saveData.selectedChapter or 1
     local chap = self.chapters[chapIdx] or self.chapters[1]
-
-    -- 1. BENTO 1 (HAUT-GAUCHE, 194x88) : VITRINE DU MONDE & PROGRESSION
-    local cx, cy, cw, ch = 6, 6, 194, 88
-    local chapBg = {chap.bg[1] * 0.7 + 0.04, chap.bg[2] * 0.7 + 0.04, chap.bg[3] * 0.7 + 0.06, 0.96}
-    UI.drawBentoCard(cx, cy, cw, ch, {
-        r = 8,
-        bg = chapBg,
-        borderColor = {0.26, 0.34, 0.48, 0.90},
-        accentColor = {1.0, 0.82, 0.20, 0.85},
-        isElevated = true,
-    })
-
-    -- Header: Chapter Badge + Integrated Nav Chevrons
-    UI.drawPillBadge(cx + 8, cy + 8, 70, 18, string.format("CHAPTER %d", chap.id), {0.14, 0.18, 0.26, 0.9}, {1.0, 0.80, 0.20, 0.9}, {1.0, 0.88, 0.30, 1.0})
-    UI.drawPillButton(cx + cw - 48, cy + 8, 20, 18, "", "blue", self.pressedBtn == "chap_prev", "arrow_left")
-    UI.drawPillButton(cx + cw - 24, cy + 8, 20, 18, "", "blue", self.pressedBtn == "chap_next", "arrow_right")
-
-    -- World name and boss (dimmed while the world is locked)
     local records = self.saveData.records or {}
     local best = math.max(records.ascensionMax or 1, records.infiniteMax or 0)
     local prog = WorldManager.worldProgress(chap.id, best)
-    UI.drawText(chap.name:upper(), cx + 10, cy + 30, prog.unlocked and {0.98, 0.98, 1.0, 1.0} or LOCKED_TEXT, {0.05, 0.06, 0.09, 1.0})
-    UI.drawText("Boss: " .. chap.boss, cx + 10, cy + 46, {0.72, 0.80, 0.92, 1.0})
 
-    -- Floor progress of this world, from the best floor ever reached
-    local barW = cw - 20
-    local barX = cx + 10
-    local barY = cy + 62
-    local progress, label
+    -- 1. World carousel: tall arrows on both sides, world card in the middle
+    Skin.button(PLAY_PREV.x, PLAY_PREV.y, PLAY_PREV.w, PLAY_PREV.h, "blue", self.pressedBtn == "chap_prev")
+    Skin.button(PLAY_NEXT.x, PLAY_NEXT.y, PLAY_NEXT.w, PLAY_NEXT.h, "blue", self.pressedBtn == "chap_next")
+    local wc = PLAY_WORLD
+    Skin.panel(wc.x, wc.y, wc.w, wc.h, "dark")
+    Skin.pill(wc.x + 6, wc.y + 5, 64, 16, prog.unlocked and "green" or "gray")
+    if prog.total then
+        drawFloorPath(wc.x + 16, wc.y + 76, wc.w - 32, prog.reached, prog.unlocked)
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+    Art.draw("icon_arrow_l", 1, PLAY_PREV.x + 11, PLAY_PREV.y + 16)
+    Art.draw("icon_arrow_r", 1, PLAY_NEXT.x + 11, PLAY_NEXT.y + 16)
+    Art.draw("icon_skull", 1, wc.x + 12, wc.y + 31)
+    PixelFont.printf("WORLD " .. chap.id, wc.x + 6, wc.y + 7, 64, "center", C.white, "main")
+    PixelFont.printf(chap.name, wc.x + 76, wc.y + 7, wc.w - 80, "left", prog.unlocked and C.yellow or C.fog, "main", 1, nil, 1)
+    PixelFont.printf(chap.boss:upper(), wc.x + 20, wc.y + 27, wc.w - 26, "left", C.silver, "main", 1, nil, 1)
     if not prog.unlocked then
-        progress, label = 0, string.format("LOCKED: floor %d+", prog.first)
+        PixelFont.printf(string.format("LOCKED: FLOOR %d+", prog.first), wc.x, wc.y + 48, wc.w, "center", C.fog, "main")
     elseif not prog.total then
-        progress, label = 1, string.format("Floor %d+  Best %d", prog.first, best)
-    elseif prog.cleared then
-        progress, label = 1, string.format("Floors %d-%d CLEARED", prog.first, prog.last)
-    else
-        progress = prog.reached / prog.total
-        label = string.format("Floors %d-%d  %d/%d", prog.first, prog.last, prog.reached, prog.total)
+        PixelFont.printf(string.format("ENDLESS - BEST %d", best), wc.x, wc.y + 56, wc.w, "center", C.pink, "main")
     end
-    UI.drawText(label, barX, barY - 2, prog.unlocked and {0.85, 0.92, 1.0, 0.95} or LOCKED_TEXT)
 
-    -- Bar track, then the fill (nothing for a locked world)
-    love.graphics.setColor(0.06, 0.08, 0.12, 0.95)
-    love.graphics.rectangle("fill", barX, barY + 12, barW, 6, 3, 3)
-    love.graphics.setColor(0.20, 0.85, 0.45, 1.0)
-    if progress > 0 then love.graphics.rectangle("fill", barX, barY + 12, math.max(4, barW * progress), 6, 3, 3) end
+    -- 2. Game modes
+    for i, mode in ipairs(PLAY_MODE_ORDER) do
+        local x = 4 + (i - 1) * PLAY_MODE_STEP
+        local chip = MODE_CHIPS[mode]
+        if self.selectedMode == mode then
+            Skin.button(x, PLAY_MODE_Y, PLAY_MODE_W, PLAY_MODE_H, chip.theme, false)
+        else
+            Skin.panel(x, PLAY_MODE_Y + 2, PLAY_MODE_W, PLAY_MODE_H - 2, "raised")
+        end
+    end
+    for i, mode in ipairs(PLAY_MODE_ORDER) do
+        local x = 4 + (i - 1) * PLAY_MODE_STEP
+        local sel = (self.selectedMode == mode)
+        local y = PLAY_MODE_Y + (sel and 6 or 8)
+        PixelFont.printf(MODE_CHIPS[mode].name, x, y, PLAY_MODE_W, "center", sel and C.white or C.silver, "main")
+        PixelFont.printf("BEST " .. self:modeBest(mode), x, y + 14, PLAY_MODE_W, "center", sel and C.white or C.fog, "main")
+    end
 
-    -- 2. BENTO 2: AFK PATROL (IDLE CHEST)
-    local px, py, pw, ph = 206, 6, 108, 88
+    -- 3. Patrol (idle gold) and the battle button
     local patrolAmt = math.floor(self.saveData.patrolGold or 0)
-    local canClaim = (patrolAmt > 0)
-    UI.drawBentoCard(px, py, pw, ph, {
-        r = 8,
-        bg = {0.10, 0.12, 0.18, 0.96},
-        borderColor = {0.45, 0.35, 0.15, 0.85},
-        accentColor = {1.0, 0.80, 0.20, 0.85},
-        isElevated = true,
-    })
-
-    -- Bouncing chest & Amount
-    local bounce = math.sin(t * 3.5) * 2.0
-    UI.drawIcon("chest", px + 22, py + 26 + bounce, 14, {1.0, 0.85, 0.20, 1.0})
-    UI.drawText("PATROL", px + 38, py + 12, {1.0, 0.88, 0.35, 1.0})
-    UI.drawText(string.format("+%d G", patrolAmt), px + 38, py + 26, {0.35, 0.95, 0.55, 1.0})
-
-    -- Claim button
-    UI.drawPillButton(px + 10, py + 58, pw - 20, 20, "COLLECT", canClaim and "gold" or "gray", self.pressedBtn == "claim_patrol", "gold")
-
-    -- Feedback
-    if self.patrolRewardTimer and self.patrolRewardTimer > 0 then
-        UI.drawTextAligned(self.patrolRewardText or "+GOLD", px, py + 38, pw, "center", {1.0, 0.95, 0.20, 1.0}, {0.05, 0.05, 0.05, 1.0})
-    end
-
-    -- 3. MODE SELECTOR (4 cards: Ascension, Abyss, Boss Rush, Survival)
-    local events = Save.getEvents()
-    local mx, my, mw = 6, 100, 118
-    UI.drawBentoCard(mx, my, mw, 96, {})
-
-    local modes = {
-        { id = "ascension", name = "ASCENSION", sub = "50 floors | Best " .. (self.saveData.records.ascensionMax or 1), theme = { 0.40, 0.85, 1.0, 1.0 } },
-        { id = "infinite",  name = "THE ABYSS", sub = "Endless | Best " .. (self.saveData.records.infiniteMax or 0), theme = { 0.90, 0.45, 1.0, 1.0 } },
-        { id = "boss_rush", name = "BOSS RUSH",  sub = "Consecutive bosses | Best " .. (events.bossRushBest or 0), theme = { 1.0, 0.45, 0.35, 1.0 } },
-        { id = "survival",  name = "ARENA",      sub = "Waves | Best " .. (events.survivalBest or 0), theme = { 0.45, 1.0, 0.60, 1.0 } },
-    }
-
-    for i, mode in ipairs(modes) do
-        local my2 = my + (i - 1) * 24
-        local active = (self.selectedMode == mode.id)
-        UI.drawBentoCard(mx + 2, my2 + 1, mw - 4, 22, { accentColor = active and mode.theme or nil })
-        UI.drawText(mode.name, mx + 8, my2 + 2, active and mode.theme or { 0.75, 0.80, 0.90, 1.0 })
-        UI.setFont("tiny")
-        UI.drawText(mode.sub, mx + 8, my2 + 14, { 0.62, 0.70, 0.84, 0.95 })
-        UI.setFont("main")
-    end
-
-    -- 4. BENTO 4: MASTER LAUNCHER TILE
-    local lx, ly, lw, lh = 130, 100, 184, 96
-    local hasEnergy = (self.saveData.energy or 0) >= Balance.energyCost(self.selectedMode)
-    local pulse = 0.5 + 0.5 * math.sin(t * 3.2)
-    local launchGlow = {0.20 + pulse * 0.15, 0.85 + pulse * 0.15, 0.45, 1.0}
-    UI.drawBentoCard(lx, ly, lw, lh, {
-        r = 8,
-        bg = {0.05, 0.24, 0.14, 0.98},
-        borderColor = hasEnergy and launchGlow or {0.25, 0.30, 0.40, 0.8},
-        borderWidth = hasEnergy and 1.6 or 1,
-        accentColor = hasEnergy and {0.35, 0.95, 0.55, 0.9} or nil,
-        isElevated = true,
-    })
-
-    -- Energy bonus badge
-    local bonusLabel = hasEnergy and "BONUS +50% GOLD" or "NO BONUS"
-    UI.drawPillBadge(lx + 8, ly + 8, 92, 18, bonusLabel,
-        hasEnergy and {0.08, 0.32, 0.20, 0.9} or {0.16, 0.18, 0.24, 0.9},
-        hasEnergy and {0.30, 0.85, 0.50, 0.9} or {0.35, 0.40, 0.50, 0.9},
-        hasEnergy and {0.80, 1.0, 0.90, 1.0} or {0.65, 0.70, 0.80, 1.0}, "energy")
-
-    -- Main battle / resume button
+    local pc = PLAY_PATROL
+    Skin.panel(pc.x, pc.y, pc.w, pc.h, "dark")
+    local cb = PLAY_COLLECT
+    Skin.button(cb.x, cb.y, cb.w, cb.h, patrolAmt > 0 and "gold" or "gray", self.pressedBtn == "claim_patrol")
     local run = Save.getRun()
-    local bx, by, bw, bh = lx + 8, ly + 30, lw - 16, 40
-    if hasEnergy then
-        Skin.roundRect(Palette.C.leaf, bx - 2, by - 2, bw + 4, bh + 4, 3, 0.25 + pulse * 0.35)
-    end
-    local oy = Skin.button(bx, by, bw, bh, "green", self.pressedBtn == "play")
-    local label = run and "RESUME" or "BATTLE"
-    local labelW = PixelFont.getWidth(label, "main", 2)
-    local tx = math.floor(bx + (bw - 18 - (labelW + 20)) / 2)
-    local midY = by + oy + math.floor((bh - 3) / 2)
-    UI.drawIcon("swords", tx + 7, midY, 20)
-    PixelFont.print(label, tx + 20, midY - 11, Palette.C.white, "main", 2, "shadow")
-    Skin.pill(bx + bw - 20, midY - 6, 14, 12, "dark", "A")
-
-    -- Subtitle: selected mode (a run always starts on floor 1, whatever world card is shown)
-    local subLabel = run and string.format("Room %d - in progress", run.room or 1)
-        or (MODE_LABELS[self.selectedMode] or "Ascension")
-    PixelFont.printf(subLabel, lx, ly + 78, lw, "center", {0.60, 0.95, 0.75, 1.0}, "main")
+    local bt = PLAY_BATTLE
+    local oy = Skin.button(bt.x, bt.y, bt.w, bt.h, "green", self.pressedBtn == "play")
+    local cost = Balance.energyCost(self.selectedMode)
+    local hasEnergy = (self.saveData.energy or 0) >= cost
     if run then
-        UI.drawPillButton(lx + lw - 66, ly + 8, 58, 18, "ABANDON", "red", self.pressedBtn == "abandon_run")
+        Skin.pill(PLAY_ABANDON.x, PLAY_ABANDON.y, PLAY_ABANDON.w, PLAY_ABANDON.h, "red")
+    else
+        Skin.pill(bt.x + bt.w - 50, bt.y + 4, 44, 16, "dark")
+    end
+
+    love.graphics.setColor(1, 1, 1, 1)
+    Art.draw("icon_coin", 1, pc.x + 22, pc.y + 11)
+    PixelFont.print("+" .. patrolAmt, pc.x + 32, pc.y + 6, C.yellow, "main")
+    PixelFont.printf("COLLECT", cb.x, cb.y + 7, cb.w, "center", C.white, "main")
+    if self.patrolRewardTimer and self.patrolRewardTimer > 0 then
+        PixelFont.printf(self.patrolRewardText or "+GOLD", 0, bt.y - 14, Config.BOTTOM_WIDTH, "center", C.yellow, "main")
+    end
+    local label = run and "RESUME" or "BATTLE"
+    local labelW = PixelFont.getWidth(label, "main", 2) + 22
+    local lx = math.floor(bt.x + (bt.w - labelW) / 2)
+    Art.drawEx("icon_sword", 1, lx + 7, bt.y + oy + 21, 0, 2, 2)
+    PixelFont.print(label, lx + 22, bt.y + oy + 11, C.white, "main", 2)
+    local sub = run and string.format("ROOM %d IN PROGRESS", run.room or 1)
+        or (hasEnergy and "+50% GOLD BONUS" or (MODE_CHIPS[self.selectedMode] or MODE_CHIPS.ascension).name)
+    PixelFont.printf(sub, bt.x, bt.y + oy + 34, bt.w, "center", C.mint, "main")
+    if run then
+        PixelFont.printf("ABANDON", PLAY_ABANDON.x, PLAY_ABANDON.y + 2, PLAY_ABANDON.w, "center", C.white, "main")
+    else
+        Art.draw("icon_bolt", 1, bt.x + bt.w - 39, bt.y + 12)
+        PixelFont.print(tostring(cost), bt.x + bt.w - 30, bt.y + 6, hasEnergy and C.cyan or C.fog, "main")
     end
 end
 
 -- ============================================================================
 -- TAB: QUESTS (DAILY + BATTLE PASS, WEEKLY, ACHIEVEMENTS)
 -- ============================================================================
-local QUEST_ICONS = { kills = "skull", rooms = "door", chests = "chest", upgrades = "upgrade", bosses = "swords", gold = "gold" }
+-- Icon sprite of a quest kind / achievement icon name (atlas sprites, batched)
+local QUEST_SPRITES = { kills = "icon_skull", rooms = "icon_door", chests = "icon_coin", upgrades = "icon_star",
+    bosses = "icon_sword", gold = "icon_coin", skull = "icon_skull", swords = "icon_sword", door = "icon_door",
+    star = "icon_star", gem = "icon_gem", heart = "icon_heart", chest = "icon_coin", hero = "icon_star" }
 
--- Subtabs at the top right of the page (same geometry for drawing and touch)
+-- Sub-tab row: same place on every page that has one (quests, chests)
 local QUEST_SUBTABS = {
     { id = "quests",       label = "DAILY" },
     { id = "weekly",       label = "WEEKLY" },
-    { id = "achievements", label = "ACHIEV." },
+    { id = "achievements", label = "FEATS" },
 }
 local CHEST_SUBTABS = {
     { id = "chests", label = "CHESTS" },
     { id = "shop",   label = "SHOP" },
 }
-local SUBTAB_W, SUBTAB_H, SUBTAB_Y, SUBTAB_GAP = 54, 16, 5, 4
+local SUBTAB_X, SUBTAB_Y, SUBTAB_H, SUBTAB_GAP = 4, 4, 26, 4
+local SUBTAB_SPAN = { quests = 312, chests = 200 }
+local CONTENT_Y = 34
 
-local function subtabX(index, count)
-    return Config.BOTTOM_WIDTH - 8 - (count - index + 1) * SUBTAB_W - (count - index) * SUBTAB_GAP
+local function subtabRect(index, count, span)
+    local w = math.floor((span - (count - 1) * SUBTAB_GAP) / count)
+    return SUBTAB_X + (index - 1) * (w + SUBTAB_GAP), SUBTAB_Y, w, SUBTAB_H
 end
 
-function MenuState:drawSubtabs(tabs, current)
+function MenuState:drawSubtabs(tabs, current, span)
+    local C = Palette.C
     for i, tab in ipairs(tabs) do
-        local isActive = (tab.id == current)
-        UI.drawPillButton(subtabX(i, #tabs), SUBTAB_Y, SUBTAB_W, SUBTAB_H, tab.label,
-            isActive and "gold" or "dark", self.pressedBtn == ("subtab_" .. tab.id))
+        local x, y, w, h = subtabRect(i, #tabs, span)
+        if tab.id == current then
+            Skin.button(x, y - 1, w, h + 1, "gold", self.pressedBtn == ("subtab_" .. tab.id))
+        else
+            Skin.panel(x, y + 1, w, h - 1, "raised")
+        end
+    end
+    for i, tab in ipairs(tabs) do
+        local x, y, w = subtabRect(i, #tabs, span)
+        local active = (tab.id == current)
+        PixelFont.printf(tab.label, x, y + (active and 7 or 9), w, "center", active and C.white or C.fog, "main")
     end
 end
 
 -- Id of the subtab under the touch point (nil if none)
-local function subtabAt(tabs, tx, ty)
-    if ty < SUBTAB_Y - 2 or ty > SUBTAB_Y + SUBTAB_H + 2 then return nil end
+local function subtabAt(tabs, span, tx, ty)
     for i, tab in ipairs(tabs) do
-        local x = subtabX(i, #tabs)
-        if tx >= x and tx <= x + SUBTAB_W then return tab.id end
+        local x, y, w, h = subtabRect(i, #tabs, span)
+        if tx >= x and tx <= x + w and ty >= y - 2 and ty <= y + h + 2 then return tab.id end
     end
     return nil
 end
 
-local function rewardLabel(reward)
-    local parts = {}
-    if reward.gold then parts[#parts + 1] = reward.gold .. " GOLD" end
-    if reward.gems then parts[#parts + 1] = reward.gems .. " GEMS" end
-    return "+" .. table.concat(parts, " + ")
+-- Quest rows: same template for daily and weekly missions and for achievements
+local QUEST_ROW_H, QUEST_ROW_STEP = 31, 33
+local QUEST_BTN = { x = 246, w = 66, h = 27 }
+local DAILY_FIRST_Y, WEEKLY_FIRST_Y = 68, CONTENT_Y
+local POINTS_BAR = { x = 62, y = CONTENT_Y + 9, w = 238, h = 12 }
+local FEATS_PER_PAGE = 4
+local FEAT_PREV = { x = 4, y = 170, w = 48, h = 30 }
+local FEAT_NEXT = { x = 268, y = 170, w = 48, h = 30 }
+
+-- Reward of a quest: first currency (gold, else gems) as icon + amount
+local function rewardParts(reward)
+    if reward.gold then return "icon_coin", "+" .. reward.gold, Palette.C.yellow end
+    if reward.gems then return "icon_gem", "+" .. reward.gems, Palette.C.mint end
+    return nil, "", Palette.C.white
 end
 
--- Mission rows: same template for daily and weekly
-local QUEST_ROW_H, QUEST_ROW_STEP = 27, 29
-local QUEST_BTN_X, QUEST_BTN_W = 252, 58
-
-function MenuState:drawQuestRow(quest, saveQuests, y, btnPrefix)
-    local W = Config.BOTTOM_WIDTH
-    local progress, done, claimed = Quests.state(quest, saveQuests)
-    UI.drawBentoCard(6, y, W - 12, QUEST_ROW_H, { accentColor = done and (claimed and { 0.35, 0.40, 0.50, 0.8 } or { 0.25, 0.85, 0.45, 0.9 }) or nil })
-    UI.drawIcon(QUEST_ICONS[quest.kind] or "star", 20, y + 13, 11)
-    UI.drawText(quest.name, 32, y + 3, claimed and Palette.C.fog or Palette.C.white)
-
-    UI.drawBar(32, y + 16, 216, 8, progress / quest.goal, done and "green" or "blue")
-    UI.setFont("tiny")
-    UI.drawTextAligned(string.format("%d/%d", progress, quest.goal), 32, y + 17, 216, "center", Palette.C.white)
-    UI.drawTextAligned(rewardLabel(quest.reward), 140, y + 5, 108, "right", Palette.C.yellow)
-    UI.setFont("main")
-
-    if claimed then
-        UI.drawPillBadge(QUEST_BTN_X, y + 5, QUEST_BTN_W, 18, "CLAIMED", { 0.14, 0.17, 0.24, 0.95 }, { 0.30, 0.35, 0.45, 0.8 }, Palette.C.fog, "check")
-    elseif done then
-        UI.drawPillButton(QUEST_BTN_X, y + 4, QUEST_BTN_W, 20, "CLAIM", "gold", self.pressedBtn == (btnPrefix .. quest.id))
-    else
-        UI.drawPillBadge(QUEST_BTN_X, y + 5, QUEST_BTN_W, 18, "ACTIVE", { 0.10, 0.12, 0.18, 0.9 }, { 0.22, 0.26, 0.36, 0.8 }, Palette.C.steel)
+-- One row: icon disc, name, progress bar and count, reward, CLAIM button or check mark
+function MenuState:drawQuestRow(y, iconName, name, progress, goal, reward, done, claimed, btnId)
+    local C = Palette.C
+    Skin.panel(4, y, 312, QUEST_ROW_H, (done and not claimed) and "raised" or "dark")
+    Skin.disc(C.ink, 19, y + 15, 12)
+    Skin.disc(claimed and C.slate or C.night, 19, y + 15, 11)
+    local ratio = math.max(0, math.min(1, progress / math.max(1, goal)))
+    Skin.roundRect(C.ink, 36, y + 17, 96, 11, 2)
+    Skin.rect(C.night, 37, y + 18, 94, 9)
+    if ratio > 0 then Skin.rect(done and C.leaf or C.blue, 37, y + 18, math.floor(94 * ratio), 9) end
+    if done and not claimed then
+        Skin.button(QUEST_BTN.x, y + 2, QUEST_BTN.w, QUEST_BTN.h, "gold", self.pressedBtn == btnId)
     end
+    love.graphics.setColor(1, 1, 1, 1)
+    Art.draw(QUEST_SPRITES[iconName] or "icon_star", 1, 19, y + 15)
+    PixelFont.printf(name, 36, y + 3, 200, "left", claimed and C.fog or C.white, "main", 1, nil, 1)
+    PixelFont.print(string.format("%d/%d", math.min(progress, goal), goal), 136, y + 17, C.silver, "main")
+    local icon, amount, color = rewardParts(reward)
+    if icon then
+        Art.draw(icon, 1, 198, y + 22)
+        PixelFont.print(amount, 206, y + 17, color, "main")
+    end
+    if claimed then
+        Art.drawEx("icon_check", 1, QUEST_BTN.x + 33, y + 15, 0, 2, 2)
+    elseif done then
+        PixelFont.printf("CLAIM", QUEST_BTN.x, y + 9, QUEST_BTN.w, "center", C.white, "main")
+    end
+end
+
+function MenuState:drawMissionRow(quest, saveQuests, y, btnPrefix)
+    local progress, done, claimed = Quests.state(quest, saveQuests)
+    self:drawQuestRow(y, quest.kind, quest.name, progress, quest.goal, quest.reward, done, claimed, btnPrefix .. quest.id)
 end
 
 -- Mission whose CLAIM button is under the touch point
 local function questRowAt(list, firstY, tx, ty)
+    if tx < QUEST_BTN.x or tx > QUEST_BTN.x + QUEST_BTN.w then return nil end
     for i, quest in ipairs(list) do
         local qy = firstY + (i - 1) * QUEST_ROW_STEP
-        if tx >= QUEST_BTN_X and tx <= QUEST_BTN_X + QUEST_BTN_W and ty >= qy + 2 and ty <= qy + QUEST_ROW_H - 1 then
-            return quest
-        end
+        if ty >= qy and ty <= qy + QUEST_ROW_H then return quest end
     end
     return nil
 end
 
-local DAILY_FIRST_Y, WEEKLY_FIRST_Y = 52, 32
+-- x of a battle pass tier chest on the points bar
+local function tierX(tier)
+    local b = POINTS_BAR
+    return math.min(b.x + b.w - 6, b.x + math.floor(b.w * (tier.points / Quests.MAX_POINTS)) - 6)
+end
 
 function MenuState:drawQuestsTab()
+    local C = Palette.C
     local q = Save.getDailyQuests()
-    local W = Config.BOTTOM_WIDTH
+    self:drawSubtabs(QUEST_SUBTABS, "quests", SUBTAB_SPAN.quests)
 
-    UI.drawBentoCard(6, 4, W - 12, 42, {})
-    UI.drawText("DAILY QUESTS", 14, 7, Palette.C.yellow)
-    self:drawSubtabs(QUEST_SUBTABS, "quests")
-
-    -- Battle pass gauge and tiers
-    local barX, barY, barW = 14, 24, W - 28
-    UI.drawBar(barX, barY, barW, 12, (q.points or 0) / Quests.MAX_POINTS, "gold")
-    UI.setFont("tiny")
-    UI.drawTextAligned(string.format("%d / %d PTS", q.points or 0, Quests.MAX_POINTS), barX, barY + 3, barW, "center", Palette.C.white)
-    UI.setFont("main")
-
+    -- Battle pass: points bar with its tier chests
+    local b = POINTS_BAR
+    Skin.panel(4, CONTENT_Y, 312, 30, "dark")
+    Skin.roundRect(C.ink, b.x, b.y, b.w, b.h, 2)
+    Skin.rect(C.night, b.x + 1, b.y + 1, b.w - 2, b.h - 2)
+    local fw = math.floor((b.w - 2) * math.min(1, (q.points or 0) / Quests.MAX_POINTS))
+    if fw > 0 then
+        Skin.rect(C.amber, b.x + 1, b.y + 1, fw, b.h - 2)
+        Skin.rect(C.yellow, b.x + 1, b.y + 1, fw, 1)
+    end
     for i, tier in ipairs(Quests.TIERS) do
-        local tx = barX + math.floor(barW * (tier.points / Quests.MAX_POINTS)) - 9
-        local reached = (q.points or 0) >= tier.points
-        local claimed = q.claimedTiers[i]
-        local theme = claimed and "gray" or (reached and "gold" or "dark")
-        Skin.button(tx, barY + 13, 18, 14, theme, self.pressedBtn == ("tier_" .. i))
-        UI.drawIcon(claimed and "check" or "chest", tx + 9, barY + 19, 9)
+        if (q.points or 0) >= tier.points and not q.claimedTiers[i] then
+            Skin.disc(C.yellow, tierX(tier), b.y + 6, 11, 0.45)
+        end
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+    PixelFont.print(string.format("%d/%d", q.points or 0, Quests.MAX_POINTS), 9, b.y + 2, C.white, "main")
+    for i, tier in ipairs(Quests.TIERS) do
+        local x = tierX(tier)
+        Art.drawEx("menu_chest_gold", 1, x - 8, b.y - 1, 0, 0.5, 0.5)
+        if q.claimedTiers[i] then Art.draw("icon_check", 1, x + 6, b.y + 10) end
     end
 
-    -- Mission list
     for i, quest in ipairs(Save.getDailyQuestList()) do
-        self:drawQuestRow(quest, q, DAILY_FIRST_Y + (i - 1) * QUEST_ROW_STEP, "quest_")
+        self:drawMissionRow(quest, q, DAILY_FIRST_Y + (i - 1) * QUEST_ROW_STEP, "quest_")
     end
-
-    UI.setFont("tiny")
-    UI.drawTextAligned("NEW MISSIONS EVERY DAY", 6, 172, W - 12, "center", Palette.C.steel)
-    UI.setFont("main")
 end
 
 -- ============================================================================
 -- PAGE: WEEKLY MISSIONS
 -- ============================================================================
 function MenuState:drawWeeklyPage()
-    local W = Config.BOTTOM_WIDTH
     local weeklyList, w = Save.getWeeklyQuestList()
-
-    UI.drawBentoCard(6, 4, W - 12, 22, {})
-    UI.drawText("WEEKLY MISSIONS", 14, 7, Palette.C.cyan)
-    self:drawSubtabs(QUEST_SUBTABS, "weekly")
-
+    self:drawSubtabs(QUEST_SUBTABS, "weekly", SUBTAB_SPAN.quests)
     for i, quest in ipairs(weeklyList) do
-        self:drawQuestRow(quest, w, WEEKLY_FIRST_Y + (i - 1) * QUEST_ROW_STEP, "weekly_")
+        self:drawMissionRow(quest, w, WEEKLY_FIRST_Y + (i - 1) * QUEST_ROW_STEP, "weekly_")
     end
-
-    UI.setFont("tiny")
-    UI.drawTextAligned("NEW MISSIONS EVERY MONDAY", 6, 172, W - 12, "center", Palette.C.steel)
-    UI.setFont("main")
+    PixelFont.printf("NEW MISSIONS EVERY MONDAY", 0, WEEKLY_FIRST_Y + 3 * QUEST_ROW_STEP + 12, Config.BOTTOM_WIDTH,
+        "center", Palette.C.fog, "main")
 end
 
 -- ============================================================================
--- PAGE: PERMANENT ACHIEVEMENTS
+-- PAGE: PERMANENT ACHIEVEMENTS (pages of 4, d-pad up/down or the arrows)
 -- ============================================================================
+function MenuState:featPageCount()
+    return math.max(1, math.ceil(#Achievements.LIST / FEATS_PER_PAGE))
+end
+
 function MenuState:drawAchievementsPage()
-    local W = Config.BOTTOM_WIDTH
+    local C = Palette.C
     local d = Save.get()
-
-    UI.drawBentoCard(6, 4, W - 12, 22, {})
-    UI.drawText("ACHIEVEMENTS", 14, 7, Palette.C.yellow)
-    self:drawSubtabs(QUEST_SUBTABS, "achievements")
-
-    for i, a in ipairs(Achievements.LIST) do
-        local value, done, claimed = Achievements.state(a, d)
-        local y = 28 + (i - 1) * 14
-        local accent = claimed and { 0.35, 0.40, 0.50, 0.7 } or (done and { 0.25, 0.85, 0.45, 0.9 } or nil)
-        UI.drawBentoCard(6, y, W - 12, 13, { accentColor = accent })
-        UI.drawIcon(a.icon, 16, y + 7, 9)
-        UI.setFont("tiny")
-        PixelFont.printf(a.name:upper(), 26, y + 3, 80, "left", claimed and Palette.C.fog or Palette.C.white, "tiny", 1, nil, 1)
-        PixelFont.printf(a.desc, 106, y + 3, 104, "left", Palette.C.steel, "tiny", 1, nil, 1)
-        UI.drawBar(214, y + 3, 44, 7, value / a.goal, done and "green" or "blue")
-        UI.drawTextAligned(string.format("%d/%d", value, a.goal), 214, y + 4, 44, "center", Palette.C.white)
-        if claimed then
-            UI.drawTextAligned("OK", 262, y + 3, 48, "center", Palette.C.leaf)
-        elseif done then
-            UI.drawPillButton(262, y + 1, 48, 11, "CLAIM", "gold", self.pressedBtn == ("ach_" .. a.id))
-        else
-            UI.drawTextAligned(rewardLabel(a.reward):sub(2), 262, y + 3, 48, "center", Palette.C.fog)
+    self:drawSubtabs(QUEST_SUBTABS, "achievements", SUBTAB_SPAN.quests)
+    local page = self.featPage or 1
+    local first = (page - 1) * FEATS_PER_PAGE
+    for i = 1, FEATS_PER_PAGE do
+        local a = Achievements.LIST[first + i]
+        if a then
+            local value, done, claimed = Achievements.state(a, d)
+            self:drawQuestRow(CONTENT_Y + (i - 1) * QUEST_ROW_STEP, a.icon, a.name, value, a.goal, a.reward, done, claimed, "ach_" .. a.id)
         end
-        UI.setFont("main")
     end
+    local pages = self:featPageCount()
+    Skin.button(FEAT_PREV.x, FEAT_PREV.y, FEAT_PREV.w, FEAT_PREV.h, page > 1 and "blue" or "gray", self.pressedBtn == "feat_prev")
+    Skin.button(FEAT_NEXT.x, FEAT_NEXT.y, FEAT_NEXT.w, FEAT_NEXT.h, page < pages and "blue" or "gray", self.pressedBtn == "feat_next")
+    love.graphics.setColor(1, 1, 1, 1)
+    Art.drawEx("icon_arrow_l", 1, FEAT_PREV.x + 24, FEAT_PREV.y + 13, 0, 2, 2)
+    Art.drawEx("icon_arrow_r", 1, FEAT_NEXT.x + 24, FEAT_NEXT.y + 13, 0, 2, 2)
+    PixelFont.printf(string.format("PAGE %d/%d", page, pages), 0, FEAT_PREV.y + 9, Config.BOTTOM_WIDTH, "center", C.silver, "main")
+end
+
+-- Achievement whose CLAIM button is under the touch point (current page only)
+function MenuState:featAt(tx, ty)
+    if tx < QUEST_BTN.x or tx > QUEST_BTN.x + QUEST_BTN.w then return nil end
+    local first = ((self.featPage or 1) - 1) * FEATS_PER_PAGE
+    for i = 1, FEATS_PER_PAGE do
+        local a = Achievements.LIST[first + i]
+        local qy = CONTENT_Y + (i - 1) * QUEST_ROW_STEP
+        if a and ty >= qy and ty <= qy + QUEST_ROW_H then return a end
+    end
+    return nil
+end
+
+function MenuState:turnFeatPage(step)
+    local pages = self:featPageCount()
+    local nextPage = math.max(1, math.min(pages, (self.featPage or 1) + step))
+    if nextPage == (self.featPage or 1) then return false end
+    self.featPage = nextPage
+    return true
 end
 
 -- ============================================================================
@@ -773,7 +711,7 @@ function MenuState:drawShopPage()
 
     UI.drawBentoCard(6, 4, W - 12, 22, {})
     UI.drawText("DAILY SHOP", 14, 7, Palette.C.yellow)
-    self:drawSubtabs(CHEST_SUBTABS, "shop")
+    self:drawSubtabs(CHEST_SUBTABS, "shop", SUBTAB_SPAN.chests)
 
     for i, offer in ipairs(offers) do
         local x = 6 + (i - 1) * 103
@@ -1154,7 +1092,7 @@ function MenuState:drawChestsTab()
 
     UI.drawBentoCard(6, 4, W - 12, 22, {})
     UI.drawText("CHESTS", 14, 7, Palette.C.yellow)
-    self:drawSubtabs(CHEST_SUBTABS, "chests")
+    self:drawSubtabs(CHEST_SUBTABS, "chests", SUBTAB_SPAN.chests)
 
     local prevF = love.graphics.getFont()
     local y, w, h = CHEST_CARD_Y, CHEST_CARD_W, CHEST_CARD_H
@@ -1295,47 +1233,39 @@ end
 local PRESS, RELEASE = {}, {}
 
 function PRESS.play(self, tx, ty)
-    -- Chapter carousel chevrons
-    if (tx >= 140 and tx <= 168 and ty >= 6 and ty <= 32) or (tx >= 6 and tx <= 44 and ty >= 6 and ty <= 40) then
-        return "chap_prev"
-    elseif (tx >= 168 and tx <= 202 and ty >= 6 and ty <= 32) or (tx >= 160 and tx <= 204 and ty >= 6 and ty <= 40) then
-        return "chap_next"
-    end
-    -- Game modes (4 stacked cards, see drawPlayTab)
-    if tx >= 6 and tx <= 126 then
+    if tx <= PLAY_PREV.x + PLAY_PREV.w + 2 and ty <= PLAY_WORLD.y + PLAY_WORLD.h then return "chap_prev" end
+    if tx >= PLAY_NEXT.x - 2 and ty <= PLAY_WORLD.y + PLAY_WORLD.h then return "chap_next" end
+    if ty >= PLAY_MODE_Y and ty <= PLAY_MODE_Y + PLAY_MODE_H then
         for i, mode in ipairs(PLAY_MODE_ORDER) do
-            local my = 100 + (i - 1) * 24
-            if ty >= my and ty <= my + 22 then return "mode_" .. mode end
+            local x = 4 + (i - 1) * PLAY_MODE_STEP
+            if tx >= x and tx <= x + PLAY_MODE_W then return "mode_" .. mode end
         end
     end
-    -- AFK patrol collection
-    if tx >= 206 and tx <= 316 and ty >= 6 and ty <= 96 then return "claim_patrol" end
-    -- Abandon the saved run (pill at the top right of the Play button)
-    if Save.getRun() and tx >= 248 and tx <= 308 and ty >= 106 and ty <= 128 then return "abandon_run" end
-    -- Main Play button
-    if tx >= 130 and tx <= 316 and ty >= 100 and ty <= 198 then return "play" end
+    if inRect(PLAY_PATROL, tx, ty) then return "claim_patrol" end
+    if Save.getRun() and inRect(PLAY_ABANDON, tx, ty) then return "abandon_run" end
+    if inRect(PLAY_BATTLE, tx, ty) then return "play" end
     return nil
 end
 
 function PRESS.quests(self, tx, ty)
-    local sub = subtabAt(QUEST_SUBTABS, tx, ty)
+    local sub = subtabAt(QUEST_SUBTABS, SUBTAB_SPAN.quests, tx, ty)
     if sub then return "subtab_" .. sub end
 
     if self.questSubPage == "achievements" then
-        for i, a in ipairs(Achievements.LIST) do
-            local ay = 28 + (i - 1) * 14
-            if tx >= 262 and tx <= 310 and ty >= ay and ty <= ay + 13 then return "ach_" .. a.id end
-        end
-        return nil
+        if inRect(FEAT_PREV, tx, ty) then return "feat_prev" end
+        if inRect(FEAT_NEXT, tx, ty) then return "feat_next" end
+        local a = self:featAt(tx, ty)
+        return a and ("ach_" .. a.id) or nil
     elseif self.questSubPage == "weekly" then
         local quest = questRowAt(Save.getWeeklyQuestList(), WEEKLY_FIRST_Y, tx, ty)
         return quest and ("weekly_" .. quest.id) or nil
     end
 
-    local barX, barW = 14, Config.BOTTOM_WIDTH - 28
-    for i, tier in ipairs(Quests.TIERS) do
-        local px = barX + math.floor(barW * (tier.points / Quests.MAX_POINTS)) - 9
-        if tx >= px and tx <= px + 18 and ty >= 37 and ty <= 51 then return "tier_" .. i end
+    if ty >= CONTENT_Y and ty <= CONTENT_Y + 30 then
+        for i, tier in ipairs(Quests.TIERS) do
+            local x = tierX(tier)
+            if tx >= x - 12 and tx <= x + 12 then return "tier_" .. i end
+        end
     end
     local quest = questRowAt(Save.getDailyQuestList(), DAILY_FIRST_Y, tx, ty)
     return quest and ("quest_" .. quest.id) or nil
@@ -1377,7 +1307,7 @@ function PRESS.talents(self, tx, ty)
 end
 
 function PRESS.chests(self, tx, ty)
-    local sub = subtabAt(CHEST_SUBTABS, tx, ty)
+    local sub = subtabAt(CHEST_SUBTABS, SUBTAB_SPAN.chests, tx, ty)
     if sub then return "subtab_" .. sub end
 
     if self.chestSubPage == "shop" then
@@ -1400,7 +1330,7 @@ function MenuState:touchpressed(id, tx, ty)
     self.pressedBtn = nil
 
     -- Settings tab: the panel gets the whole screen except the tab bar
-    if self.currentTab == "settings" and ty < 202 and not self.openingChest then
+    if self.currentTab == "settings" and ty < TAB_Y - 2 and not self.openingChest then
         self.settingsPanel:touchpressed(tx, ty)
         self.pressedBtn = "settings_panel"
         return
@@ -1419,7 +1349,7 @@ function MenuState:touchpressed(id, tx, ty)
     -- 1. Tab bar (drawn over the content, takes priority)
     if ty >= 200 then
         for _, tab in ipairs(self.tabs) do
-            if tx >= tab.x - 3 and tx <= tab.x + tab.w + 3 and ty >= 202 and ty <= 238 then
+            if tx >= tab.x and tx < tab.x + TAB_STEP and ty >= TAB_Y - 2 then
                 self.pressedBtn = "tab_" .. tab.id
                 return
             end
@@ -1471,6 +1401,9 @@ function RELEASE.quests(self, pressed)
     local ok = false
     if pressed:sub(1, 7) == "subtab_" then
         self.questSubPage = pressed:sub(8)
+        self.featPage = 1
+    elseif pressed == "feat_prev" or pressed == "feat_next" then
+        if self:turnFeatPage(pressed == "feat_prev" and -1 or 1) then Audio.play("ui_click", 0.05, 0.6) end
     elseif pressed:sub(1, 4) == "ach_" then
         ok = Save.claimAchievement(pressed:sub(5))
     elseif pressed:sub(1, 7) == "weekly_" then
