@@ -47,17 +47,19 @@ function love.load()
     local t0 = os.clock()
 
     -- 1. Construction complète de l'atlas en mémoire
-    local atlas = SpriteAtlas.new(1024, 512)
+    local atlas = SpriteAtlas.new(1024, 640) -- sprites; ground tiles are baked below them
     local SPRITE_MODULES = {
         "src.render.sprites.heroes",
         "src.render.sprites.monsters",
         "src.render.sprites.monsters_extra",
         "src.render.sprites.props",
         "src.render.sprites.sanctuary",
+        "src.render.sprites.biomes",
         "src.render.sprites.icons",
         "src.render.sprites.items",
         "src.render.sprites.fx",
         "src.render.sprites.overlays",
+        "src.render.sprites.menu_art",
     }
     for _, modName in ipairs(SPRITE_MODULES) do
         require(modName).define(atlas)

@@ -317,7 +317,7 @@ end
 function SplashState:drawPrompt(t)
     if t < PROMPT_IN then return end
     PROMPT_COLOR[4] = min(1, (t - PROMPT_IN) / 0.5) * (0.6 + 0.4 * sin(t * 3.4))
-    local label = "APPUIE SUR"
+    local label = "PRESS"
     local tw = PixelFont.getWidth(label, "main")
     local x = floor((TOP_W - (tw + 18)) / 2) + Depth.offset(Depth.TEXT - 1)
     local y = 221
@@ -453,7 +453,7 @@ function SplashState:drawBottom()
     end
     UI.drawPillButton(BTN_X, BTN_Y, BTN_W, BTN_H, "TOUCH TO PLAY", "emerald", self.pressed, "swords")
 
-    PixelFont.printf("Developed by TonyDeTony  -  v1.0.8", 0, 226, BOT_W, "center", FOOTER_COLOR, "tiny")
+    PixelFont.printf("Developed by TonyDeTony  -  v" .. Config.VERSION, 0, 226, BOT_W, "center", FOOTER_COLOR, "tiny")
     if t < FADE_IN then
         love.graphics.setColor(0, 0, 0, 1 - t / FADE_IN)
         love.graphics.rectangle("fill", 0, 0, BOT_W, Config.BOTTOM_HEIGHT)

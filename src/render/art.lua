@@ -17,10 +17,12 @@ local SPRITE_MODULES = {
     "src.render.sprites.monsters_extra",
     "src.render.sprites.props",
     "src.render.sprites.sanctuary",
+    "src.render.sprites.biomes",
     "src.render.sprites.icons",
     "src.render.sprites.items",
     "src.render.sprites.fx",
     "src.render.sprites.overlays",
+    "src.render.sprites.menu_art",
 }
 
 function Art.init()
@@ -54,7 +56,7 @@ function Art.init()
     end
 
     -- 2. Secours : Génération procédurale si les fichiers précompilés sont absents
-    local atlas = SpriteAtlas.new(1024, 512)
+    local atlas = SpriteAtlas.new(1024, 640) -- sprites; ground tiles are baked below them
     for _, modName in ipairs(SPRITE_MODULES) do
         require(modName).define(atlas)
     end

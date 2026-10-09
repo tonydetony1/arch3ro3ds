@@ -37,7 +37,8 @@ function SelfTest.update(gameStateMachine, testFrames)
             menu.currentTab = "equipment"
             menu.inventory:refresh()
             assert(#menu.inventory.slots == 6, "Must have exactly 6 equipment slots (weapon, armor, ring1, ring2, pet1, pet2)")
-            assert(menu.inventory.slots[1].w == 46 and menu.inventory.slots[1].h == 37, "Equipment slots must have extended 46x37 dimensions for padded text breathing")
+            -- Square 40 px slots in one row: big enough to tap with a finger on Old 3DS
+            assert(menu.inventory.slots[1].w == 40 and menu.inventory.slots[1].h == 40, "Equipment slots must be 40x40 touch targets")
             -- L'équipement se débloque désormais en jouant : seul le kit de départ est garanti
             assert(#menu.saveData.inventory >= #Save.STARTER_ITEMS, "Backpack must contain at least the starter kit")
             for _, starterId in ipairs(Save.STARTER_ITEMS) do
@@ -47,7 +48,7 @@ function SelfTest.update(gameStateMachine, testFrames)
                 end
                 assert(ownsStarter, "Starter item missing from backpack: " .. starterId)
             end
-            print(string.format("[TEST] Forge Tab active: 6 padded slots (46x37) in pyramid layout, %d items in backpack.", #menu.saveData.inventory))
+            print(string.format("[TEST] Forge Tab active: 6 slots (40x40) in one row, %d items in backpack.", #menu.saveData.inventory))
 
             -- Test de la Pop-up Modale d'objet et du système de rareté
             local bow = menu.saveData.inventory[1]
@@ -193,11 +194,29 @@ function SelfTest.update(gameStateMachine, testFrames)
             -- B. Validation GLISSADE VECTORIELLE CONTRE LES MURS (WALL SLIDING)
             local testDummy = { x = 25, y = 100, radius = 10 }
             -- Mouvement diagonal contre le mur gauche (x < minX)
-            local bX, bY = Physics.moveAndSlide(testDummy, -100, 100, 0.05, 10, g.obstacleManager, false, g.mapW, g.mapH)
+            -- Map wall only: the current room's own obstacles (water, rocks) must not interfere
+            local bX, bY = Physics.moveAndSlide(testDummy, -100, 100, 0.05, 10, nil, false, g.mapW, g.mapH)
             assert(bX == true, "X axis must be blocked by left wall")
             assert(bY == false, "Y axis must NOT be blocked, allowing smooth vertical wall sliding")
             assert(testDummy.y > 100, "Entity must slide downwards along the wall")
             print("[TEST] Wall Sliding (Glissade Vectorielle) VALIDATED: Diagonal movement slides along wall without getting stuck.")
+
+            -- B2. Wind gusts push the hero through collisions, never into a rock
+            local ObstacleManager = require("src.core.obstacle_manager")
+            local windOm = ObstacleManager.new()
+            windOm:setTheme("sky", "wind")
+            windOm:generate(400, 300, 41, "arena")
+            windOm.rocks = { { x = 200, y = 200, w = 40, h = 40 } }
+            windOm.hazards = { { x = 120, y = 150, w = 200, h = 120, kind = "wind", windX = 1, windY = 0 } }
+            local hero = g.player
+            local heroX, heroY = hero.x, hero.y
+            hero.x, hero.y = 190, 220
+            for _ = 1, 5 do
+                windOm:update(0.05, hero, g.fctPool, g.dummyPool)
+                assert(not windOm:isBlocked(hero.x, hero.y, hero.radius), "Wind must not push the hero into a rock")
+            end
+            hero.x, hero.y = heroX, heroY
+            print("[TEST] Wind gusts VALIDATED: the hero is pushed through collisions.")
 
             -- C. Validation des 6 ARCHÉTYPES D'ARCHERO
             g.dummyPool:clear()
@@ -425,6 +444,10 @@ function SelfTest.update(gameStateMachine, testFrames)
             local critFct = VFX.fctItems[VFX.fctActive[VFX.fctActiveCount]]
             assert(critFct.isCrit == true and critFct.scale > normalFct.scale, "Crit FCT must have pop-scale > normal")
             assert(critFct.vy < normalFct.vy, "Crit FCT must have stronger upward burst")
+            -- A quick second hit on the same spot merges into the first number
+            VFX.addFCT(100, 100, 10, false)
+            assert(VFX.fctActiveCount == preFctCount + 2 and normalFct.text == "55" and normalFct.hits == 2,
+                "A quick hit on the same target must merge into one growing number")
             print("[TEST] Floating Combat Text (FCT) VALIDATED: Normal yellow, Critical red with pop-scale and physics.")
 
             -- E. Validation des SpriteBatches et Texture Atlas 3DS
@@ -1007,12 +1030,12 @@ function SelfTest.update(gameStateMachine, testFrames)
             local Rooms = require("src.data.rooms")
             local roomErrors = Rooms.validateAll()
             assert(#roomErrors == 0, "Invalid room layout: " .. tostring(roomErrors[1]))
-            -- Aucune grille répétée dans un chapitre de 8 salles de combat
+            -- No grid repeated within a chapter (world rooms + common rooms)
             for block = 0, 4 do
                 local seen = {}
                 for room = block * 10 + 1, block * 10 + 10 do
                     if WorldManager.getRoomType(room) == "combat" then
-                        local layout = Rooms.pick("combat", room)
+                        local layout = Rooms.pick("combat", room, block + 1)
                         assert(not seen[layout.id], "Layout '" .. layout.id .. "' repeated in rooms " .. (block * 10 + 1) .. "-" .. (block * 10 + 10))
                         seen[layout.id] = true
                     end
@@ -1024,6 +1047,16 @@ function SelfTest.update(gameStateMachine, testFrames)
             for _, kind in ipairs({ "combat", "arena" }) do
                 for _, layout in ipairs(Rooms.pool(kind)) do
                     om:generate(620, 540, 12, kind, layout)
+                    local placed = om:placeSpawns(WorldManager.generateWave(3, 12, 620, 540))
+                    for _, sp in ipairs(placed) do
+                        assert(not om:isBlocked(sp.x, sp.y, 12), "Spawn blocked in layout '" .. layout.id .. "'")
+                    end
+                    layoutCount = layoutCount + 1
+                end
+            end
+            for world, pool in ipairs(Rooms.WORLDS) do
+                for _, layout in ipairs(pool) do
+                    om:generate(620, 540, 12, "combat", layout, world)
                     local placed = om:placeSpawns(WorldManager.generateWave(3, 12, 620, 540))
                     for _, sp in ipairs(placed) do
                         assert(not om:isBlocked(sp.x, sp.y, 12), "Spawn blocked in layout '" .. layout.id .. "'")

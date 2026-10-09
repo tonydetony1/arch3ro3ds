@@ -11,6 +11,7 @@ local Config = require("src.data.config")
 local Palette = require("src.render.palette")
 local PixelFont = require("src.ui.pixel_font")
 local Skin = require("src.ui.skin")
+local Art = require("src.render.art")
 local Depth = require("src.render.depth")
 
 local C = Palette.C
@@ -109,15 +110,21 @@ function Banner.drawBossBar(boss, name)
     if not boss then return end
     local ratio = math.max(0, math.min(1, boss.hp / math.max(1, boss.maxHp)))
     Depth.push(Depth.TEXT)
-    local x, y, w = 70, 6, TW - 140
-    Skin.bar(x, y, w, 10, ratio, "red", 10)
-    -- Repères des changements de phase (boss à 3 phases, src/data/bosses.lua)
-    if boss.brain then
-        Skin.rect(C.white, x + floor(w * 0.66), y, 1, 10, 0.8)
-        Skin.rect(C.white, x + floor(w * 0.33), y, 1, 10, 0.8)
+    -- Dark plate, skull, name and percentage in the main font, then a thick bar
+    local x, y, w = 60, 4, TW - 120
+    Skin.roundRect(C.ink, x - 6, y - 2, w + 12, 32, 3, 0.75)
+    Skin.bar(x + 14, y + 16, w - 14, 12, ratio, "red", 10)
+    if boss.brain then -- phase marks of 3-phase bosses (src/data/bosses.lua)
+        local bw = w - 14
+        Skin.rect(C.white, x + 14 + floor(bw * 0.66), y + 16, 1, 12, 0.8)
+        Skin.rect(C.white, x + 14 + floor(bw * 0.33), y + 16, 1, 12, 0.8)
     end
-    PixelFont.printf(name or "BOSS", x, y + 11, w, "center", C.white, "tiny")
+    love.graphics.setColor(1, 1, 1, 1)
+    Art.draw("icon_skull", 1, x + 5, y + 21)
+    PixelFont.printf(name or "BOSS", x, y + 2, w - 40, "left", C.yellow, "main", 1, nil, 1)
+    PixelFont.printf(floor(ratio * 100 + 0.5) .. "%", x, y + 2, w, "right", C.white, "main")
     Depth.pop()
 end
+
 
 return Banner

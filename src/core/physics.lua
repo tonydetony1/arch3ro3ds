@@ -132,6 +132,21 @@ function Physics.moveAndSlide(entity, vx, vy, dt, radius, obstacleManager, allow
     return blockedX, blockedY
 end
 
+-- Squared distance from a point to a segment, and where along the segment (0..1) the closest
+-- point lies. Used by the hitscan beam to find the monsters on its line.
+function Physics.distToSegmentSq(px, py, x0, y0, x1, y1)
+    local dx, dy = x1 - x0, y1 - y0
+    local lenSq = dx * dx + dy * dy
+    local t = 0
+    if lenSq > 0 then
+        t = ((px - x0) * dx + (py - y0) * dy) / lenSq
+        if t < 0 then t = 0 elseif t > 1 then t = 1 end
+    end
+    local cx, cy = x0 + t * dx, y0 + t * dy
+    local ex, ey = px - cx, py - cy
+    return ex * ex + ey * ey, t
+end
+
 -- Steering d'évitement tangentiel doux pour les monstres qui butent sur un obstacle
 function Physics.steerAroundObstacle(entity, targetX, targetY, speed, dt, radius, obstacleManager, allowFlight, mapW, mapH)
     local dx = targetX - entity.x

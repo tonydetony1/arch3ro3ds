@@ -32,12 +32,19 @@ function AIController.scaleDamage(base)
 end
 
 local CONTACT_SPARK = { 1, 0.2, 0.2, 1 }
+local DODGE_SPARK = { 0.35, 0.85, 1.0, 1.0 }
 
 -- Contact hit on the hero: scaled damage, ignored during the dash and invulnerability
--- frames (Player:takeDamage). Returns true when the hit landed.
+-- frames (Player:takeDamage). Returns true when the attack is resolved: it landed, or the
+-- hero dodged it (a dodge must not be rolled again every frame).
 local function hurtPlayer(player, base)
-    local dealt, blocked = player:takeDamage(AIController.scaleDamage(base))
-    if blocked then return false end
+    local dealt, blocked, reason = player:takeDamage(AIController.scaleDamage(base), true)
+    if blocked then
+        if reason ~= "dodge" then return false end
+        VFX.addFCT(player.x, player.y - 12, "DODGE", false)
+        VFX.addSparks(player.x, player.y, 5, DODGE_SPARK)
+        return true
+    end
     VFX.triggerHitFlash(player, 3)
     VFX.shakeMedium()
     VFX.addFCT(player.x, player.y - 12, dealt, false)
@@ -148,12 +155,16 @@ function bossCtx.contact(d, damage)
     local dx, dy = player.x - d.x, player.y - d.y
     local r = (d.radius or 16) + (player.radius or 9)
     if dx * dx + dy * dy > r * r then return false end
-    if player.isDashing or player.isInvulnerable then return false end
-    local dmg = math.floor(damage + 0.5)
-    player.hp = math.max(0, player.hp - dmg)
+    local dealt, blocked, reason = player:takeDamage(math.floor(damage + 0.5), true)
+    if blocked then
+        if reason ~= "dodge" then return false end
+        VFX.addFCT(player.x, player.y - 12, "DODGE", false)
+        VFX.addSparks(player.x, player.y, 5, DODGE_SPARK)
+        return true
+    end
     VFX.triggerHitFlash(player, 3)
     VFX.shakeMedium()
-    VFX.addFCT(player.x, player.y - 12, dmg, false)
+    VFX.addFCT(player.x, player.y - 12, dealt, false)
     Audio.play("player_hurt", 0.08, 0.8)
     return true
 end
@@ -169,7 +180,7 @@ function bossCtx.fx(event, d, a, b)
         local player = bossCtx.player
         local dx, dy = player.x - d.x, player.y - d.y
         local len = math.max(1, math.sqrt(dx * dx + dy * dy))
-        player.vx, player.vy = dx / len * PHASE_PUSH, dy / len * PHASE_PUSH
+        player:push(dx / len * PHASE_PUSH, dy / len * PHASE_PUSH)
     elseif event == "summon" then
         VFX.addSparks(d.x, d.y, 10, VFX_PHASE)
         VFX.shakeMedium()

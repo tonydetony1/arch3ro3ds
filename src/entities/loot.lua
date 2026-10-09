@@ -4,6 +4,13 @@ local VFX = require("src.render.vfx_manager")
 local Loot = {}
 Loot.__index = Loot
 
+-- Room in which loot bounces (set by GameState:setupRoom for every room)
+Loot.bounds = { w = Config.TOP_WIDTH, h = Config.TOP_HEIGHT }
+
+function Loot.setBounds(w, h)
+    Loot.bounds.w, Loot.bounds.h = w, h
+end
+
 function Loot.create(index)
     local self = setmetatable({}, Loot)
     self.id = index
@@ -60,9 +67,9 @@ function Loot:update(dt, playerX, playerY)
         self.x = self.x + self.vx * dt
         self.y = self.y + self.vy * dt
 
-        -- Clamping doux dans l'arène
-        self.x = math.max(24, math.min(Config.TOP_WIDTH - 24, self.x))
-        self.y = math.max(36, math.min(Config.TOP_HEIGHT - 24, self.y))
+        -- Stay inside the room
+        self.x = math.max(24, math.min(Loot.bounds.w - 24, self.x))
+        self.y = math.max(36, math.min(Loot.bounds.h - 24, self.y))
 
         if self.z <= 0 then
             self.z = 0

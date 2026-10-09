@@ -21,7 +21,6 @@
 
 [Screenshots](#-screenshots) •
 [Installation Guide](#-installation-guide-3ds--pc) •
-[3DS Technical Feats](#-3ds-technical-feats--optimizations) •
 [Controls](#-controls--gameplay) •
 [Building from Source](#-building-from-source) •
 [Modding & Contributing](CONTRIBUTING.md)
@@ -45,7 +44,15 @@
   <img src="docs/screenshots/menu_chests.png" alt="Chests" width="30%" />
   <img src="docs/screenshots/lucky_wheel.png" alt="Lucky wheel" width="30%" />
   <br/>
-  <sub><i>Captured in Azahar at Old 3DS clock — top screen above, touch screen below.</i></sub>
+  <img src="docs/screenshots/angel_sanctuary.png" alt="Angel sanctuary" width="30%" />
+  <img src="docs/screenshots/devil_pact.png" alt="Devil's pact" width="30%" />
+  <img src="docs/screenshots/merchant.png" alt="Merchant" width="30%" />
+  <br/>
+  <img src="docs/screenshots/pause.png" alt="Pause" width="30%" />
+  <img src="docs/screenshots/game_over.png" alt="Game over" width="30%" />
+  <img src="docs/screenshots/menu_settings.png" alt="Settings" width="30%" />
+  <br/>
+  <sub><i>Captured from the PC build at the native 3DS resolution, shown at 2x — top screen above, touch screen below.</i></sub>
 </div>
 
 ---
@@ -61,7 +68,7 @@
 4. Scan the release QR code below (or from our [Latest Releases](https://github.com/tonydetony1/arch3ro3ds/releases)):
 
 <div align="center">
-  <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://github.com/tonydetony1/arch3ro3ds/releases/download/v1.0.8/Arch3ro.cia" alt="FBI QR Code" width="180"/>
+  <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://github.com/tonydetony1/arch3ro3ds/releases/download/v1.1/Arch3ro.cia" alt="FBI QR Code" width="180"/>
   <br/>
   <sub><i>Scan with FBI to install directly to HOME Menu</i></sub>
 </div>

@@ -6,6 +6,9 @@
 local Audio = require("src.audio.audio")
 local Balance = require("src.data.balance")
 local Rooms = require("src.data.rooms")
+local Physics = require("src.core.physics")
+
+local WIND_PUSH = 120 -- px/s, gusts of the sky world
 
 local ObstacleManager = {}
 ObstacleManager.__index = ObstacleManager
@@ -25,13 +28,15 @@ end
 
 -- Zones dangereuses du chapitre : sables mouvants, plaques de glace, mares de lave
 local HAZARD_KIND = { sand = "sand", ice = "ice", lava = "lava", wind = "wind", void = "void" }
+local LAVA_MONSTER_TICK = 0.6   -- seconds between two burns of a monster standing in lava
+local LAVA_MONSTER_DAMAGE = 12
 local SPIKE_INSET = 3
 local STUMP_SIZE = 40
 local HAZARD_INSET = 2
 
 -- Construction de la salle à partir d'une grille dessinée (src/data/rooms.lua).
 -- `kind` : "combat" (défaut), "arena" ou "sanctuary" ; `layout` force une grille précise.
-function ObstacleManager:generate(mapW, mapH, roomNumber, kind, layout)
+function ObstacleManager:generate(mapW, mapH, roomNumber, kind, layout, world)
     self.roomNumber = roomNumber or 1
     self.mapW, self.mapH = mapW, mapH
     self.rocks = {}
@@ -45,7 +50,7 @@ function ObstacleManager:generate(mapW, mapH, roomNumber, kind, layout)
 
     local mirrored = false
     if not layout then
-        layout, mirrored = Rooms.pick(kind or "combat", self.roomNumber)
+        layout, mirrored = Rooms.pick(kind or "combat", self.roomNumber, world)
     end
     self.layoutId = layout.id
     self.layoutMirrored = mirrored
@@ -219,6 +224,72 @@ function ObstacleManager:blocksProjectile(x, y, radius)
     return false
 end
 
+-- Segment against an axis-aligned box (slab method): no allocation, called per rock and per
+-- candidate target while the hero aims
+local function segmentHitsBox(x0, y0, dx, dy, bx0, by0, bx1, by1)
+    local tmin, tmax = 0, 1
+    if dx == 0 then
+        if x0 < bx0 or x0 > bx1 then return false end
+    else
+        local inv = 1 / dx
+        local t1, t2 = (bx0 - x0) * inv, (bx1 - x0) * inv
+        if t1 > t2 then t1, t2 = t2, t1 end
+        if t1 > tmin then tmin = t1 end
+        if t2 < tmax then tmax = t2 end
+        if tmin > tmax then return false end
+    end
+    if dy == 0 then
+        if y0 < by0 or y0 > by1 then return false end
+    else
+        local inv = 1 / dy
+        local t1, t2 = (by0 - y0) * inv, (by1 - y0) * inv
+        if t1 > t2 then t1, t2 = t2, t1 end
+        if t1 > tmin then tmin = t1 end
+        if t2 < tmax then tmax = t2 end
+        if tmin > tmax then return false end
+    end
+    return tmin -- where along the segment (0..1) it first enters the box; a number is truthy
+end
+
+-- Test if a shot flying from (x0, y0) to (x1, y1) is stopped by a rock on the way (only rocks
+-- stop projectiles). Used by the hero's auto-aim to skip monsters hiding behind cover.
+function ObstacleManager:isShotBlocked(x0, y0, x1, y1, radius)
+    radius = radius or 3
+    local dx, dy = x1 - x0, y1 - y0
+    local minX, maxX = x0, x1
+    if minX > maxX then minX, maxX = maxX, minX end
+    local minY, maxY = y0, y1
+    if minY > maxY then minY, maxY = maxY, minY end
+
+    local rocks = self.rocks
+    for i = 1, #rocks do
+        local r = rocks[i]
+        local bx0, by0 = r.x - radius, r.y - radius
+        local bx1, by1 = r.x + r.w + radius, r.y + r.h + radius
+        -- cheap reject on the bounding boxes first: most rocks are nowhere near the line
+        if maxX >= bx0 and minX <= bx1 and maxY >= by0 and minY <= by1
+            and segmentHitsBox(x0, y0, dx, dy, bx0, by0, bx1, by1) then
+            return true
+        end
+    end
+    return false
+end
+
+-- How far a shot from (x0, y0) to (x1, y1) gets before the first rock, as a fraction of the
+-- segment (1 = it is never stopped). Used to cut the hitscan beam short.
+function ObstacleManager:shotReach(x0, y0, x1, y1, radius)
+    radius = radius or 3
+    local dx, dy = x1 - x0, y1 - y0
+    local reach = 1
+    local rocks = self.rocks
+    for i = 1, #rocks do
+        local r = rocks[i]
+        local t = segmentHitsBox(x0, y0, dx, dy, r.x - radius, r.y - radius, r.x + r.w + radius, r.y + r.h + radius)
+        if t and t < reach then reach = t end
+    end
+    return reach
+end
+
 -- Destruction d'une urne : cœur de soin ou pièces d'or
 function ObstacleManager:breakPot(pot, lootPool)
     -- Compte pour les missions "briser des urnes"
@@ -335,10 +406,9 @@ function ObstacleManager:update(dt, player, fctPool, dummyPool)
             elseif hz.kind == "ice" then
                 player.terrainSlip = 1.0
             elseif hz.kind == "wind" then
-                -- Bourrasque : pousse le héros vers le nord-est, sans dégâts
-                local push = 120 * dt
-                player.x = player.x + push * (hz.windX or 1)
-                player.y = player.y + push * (hz.windY or -0.35)
+                -- Gust: pushes the hero, through collisions (it used to shove him into rocks)
+                Physics.moveAndSlide(player, WIND_PUSH * (hz.windX or 1), WIND_PUSH * (hz.windY or -0.35), dt,
+                    player.radius, self, false, (player.maxX or 600) + 22, (player.maxY or 440) + 22)
             elseif hz.kind == "void" and self.lavaCooldown <= 0 then
                 -- Faille du Vide : ralentit et grignote les PV
                 player.terrainSpeedMult = 0.7
@@ -370,13 +440,23 @@ function ObstacleManager:update(dt, player, fctPool, dummyPool)
                 end
             end
         end
-        -- La lave brûle aussi les monstres terrestres
-        if hz.kind == "lava" and dummyPool and dummyPool.activeCount > 0 and self.lavaCooldown >= 0.55 then
-            for i = 1, dummyPool.activeCount do
-                local m = dummyPool.items[dummyPool.activeList[i]]
-                if m and m.alive and not m.isBurrowed and m.type ~= "bat" and m.type ~= "bomber" then
-                    if circleIntersectsRect(m.x, m.y, m.radius, hz.x, hz.y, hz.w, hz.h) then
-                        m:takeDamage(12, 0, -1, { fire = true })
+    end
+
+    -- Lava also burns the ground monsters standing in it. It has its own timer: it used to be
+    -- tied to the hero's lava cooldown, so monsters only burned when the hero did.
+    self.monsterLavaTimer = (self.monsterLavaTimer or 0) - dt
+    if self.monsterLavaTimer <= 0 then
+        self.monsterLavaTimer = LAVA_MONSTER_TICK
+        if dummyPool and dummyPool.activeCount > 0 then
+            for _, hz in ipairs(self.hazards) do
+                if hz.kind == "lava" then
+                    for i = 1, dummyPool.activeCount do
+                        local m = dummyPool.items[dummyPool.activeList[i]]
+                        if m and m.alive and not m.isBurrowed and m.type ~= "bat" and m.type ~= "bomber" then
+                            if circleIntersectsRect(m.x, m.y, m.radius, hz.x, hz.y, hz.w, hz.h) then
+                                m:takeDamage(LAVA_MONSTER_DAMAGE, 0, -1, { fire = true })
+                            end
+                        end
                     end
                 end
             end
@@ -441,6 +521,11 @@ local C = Palette.C
 
 local BLOCK_HEIGHT = 14
 local STUMP_LIFT = 5
+-- Single-cell obstacle drawn per world (same collision box as the forest stump)
+local STUMP_SPRITES = {
+    sand = "obstacle_cactus", crystal = "obstacle_ice", lava = "obstacle_obsidian",
+    sky = "obstacle_floatstone", void = "obstacle_monolith",
+}
 
 local WATER_DEEP = Palette.hex("1d4f91")
 local WATER_MID = Palette.hex("2a78c2")
@@ -918,7 +1003,7 @@ function ObstacleManager:buildProps()
     for i, r in ipairs(self.rocks) do
         local prop = { baseY = r.y + r.h, rect = r }
         if isStump(i, r) then
-            prop.sprite = "stump_l"
+            prop.sprite = STUMP_SPRITES[self.themeVariant or ""] or "stump_l"
             prop.x = r.x + r.w / 2
             prop.y = r.y + r.h / 2 - STUMP_LIFT
         elseif love.graphics.newCanvas then
@@ -1061,7 +1146,7 @@ function ObstacleManager.prefetch(spec)
         key = spec.key,
         paint = nil,
         co = coroutine.create(function()
-            om:generate(spec.mapW, spec.mapH, spec.room, spec.kind)
+            om:generate(spec.mapW, spec.mapH, spec.room, spec.kind, nil, spec.chapterIndex)
             om:bakeStatic()
             om:buildProps()
         end),

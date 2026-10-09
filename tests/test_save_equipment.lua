@@ -69,13 +69,14 @@ local function newInventory()
     return inv
 end
 
--- Center of an item card in the backpack grid (no scrolling)
+-- Center of an item tile in the backpack grid (no scrolling, ALL filter): 8 columns of
+-- 35 px tiles every 38 px from (9, 86), see src/states/inventory.lua
 local function cardCenter(inv, itemId)
-    for i, id in ipairs(inv.saveData.inventory) do
+    for i, id in ipairs(inv.visible) do
         if id == itemId then
-            local col, row = (i - 1) % 4, math.floor((i - 1) / 4)
-            local x, y = 11 + col * 76 + 35, 108 + row * 54 + 24
-            assert(y <= 194, "card not visible without scrolling: " .. itemId)
+            local col, row = (i - 1) % 8, math.floor((i - 1) / 8)
+            local x, y = 9 + col * 38 + 17, 86 + row * 38 + 17
+            assert(y <= 196, "card not visible without scrolling: " .. itemId)
             return x, y
         end
     end
@@ -365,12 +366,12 @@ T["forge: modal buttons fit inside the sheet without overlapping"] = function()
     local inv = newInventory()
     for _, id in ipairs({ "wolf_ring", "serpent_ring", "starter_bow", "rapid_daggers" }) do
         inv:openModal(id, nil)
-        local prevRight = 22
+        local prevRight = 4
         for _, b in ipairs(inv.modalButtons) do
             assert(b.x >= prevRight, "buttons overlap for " .. id)
             prevRight = b.x + b.w
         end
-        assert(prevRight <= 22 + 276, "buttons overflow the sheet for " .. id)
+        assert(prevRight <= 4 + 312, "buttons overflow the sheet for " .. id)
     end
     inv:openModal("serpent_ring", nil)
     assert(buttonIds(inv) == "equip_ring1,equip_ring2,upgrade,fuse", "got " .. buttonIds(inv))
@@ -425,8 +426,8 @@ local function newMenu()
     return menu
 end
 
-local TALENT_CENTERS = { strength = { 81, 80 }, vitality = { 239, 80 }, agility = { 81, 120 }, recovery = { 239, 120 }, glory = { 244, 41 } }
-local UPGRADE_BTN = { 160, 167 }
+local TALENT_CENTERS = { strength = { 81, 64 }, vitality = { 239, 64 }, agility = { 81, 128 }, recovery = { 239, 128 }, glory = { 262, 17 } }
+local UPGRADE_BTN = { 160, 182 }
 
 T["hub talents: tap a card, then upgrade exactly that talent"] = function()
     local d = resetSave()
@@ -464,12 +465,15 @@ T["hub talents: glory badge, d-pad and failure feedback"] = function()
     assert(d.talents.recovery == 1 and menu.talentFailTimer > 0, "no gold: nothing bought, message shown")
 end
 
-local QUEST_SUBTAB_CENTERS = { quests = { 169, 13 }, weekly = { 227, 13 }, achievements = { 285, 13 } }
+-- Touch geometry of the hub (src/states/menu.lua): 7 tabs of 45 px from x = 2 at y = 208..239,
+-- full-width sub-tab row at y = 4..30
+local function tabCenter(index) return 24 + (index - 1) * 45, 222 end
+local QUEST_SUBTAB_CENTERS = { quests = { 54, 17 }, weekly = { 159, 17 }, achievements = { 264, 17 } }
 
 T["hub quests: every subtab is reachable from every page"] = function()
     resetSave()
     local menu = newMenu()
-    tap(menu, 26 + 44, 220) -- QUESTS tab
+    tap(menu, tabCenter(2)) -- QUESTS tab
     assert(menu.currentTab == "quests" and menu.questSubPage == "quests")
     for _, from in ipairs({ "quests", "weekly", "achievements" }) do
         for _, to in ipairs({ "quests", "weekly", "achievements" }) do
@@ -494,7 +498,7 @@ T["hub quests: a finished weekly mission can be claimed"] = function()
     local quest = list[1]
     w.progress[quest.kind] = quest.goal
     local gold, gems = d.gold, d.gems
-    tap(menu, 281, 32 + 14)
+    tap(menu, 279, 34 + 15) -- CLAIM button of the first weekly row
     assert(w.claimed[quest.id], "weekly mission claimed")
     assert(d.gold > gold or d.gems > gems, "reward granted")
 end
@@ -502,11 +506,11 @@ end
 T["hub chests: SHOP subtab, chest quest progress"] = function()
     local d = resetSave()
     local menu = newMenu()
-    tap(menu, 26 + 5 * 44, 220) -- CHESTS tab
+    tap(menu, tabCenter(6)) -- CHESTS tab
     assert(menu.currentTab == "chests" and menu.chestSubPage == "chests")
-    tap(menu, 285, 13)
+    tap(menu, 155, 17) -- SHOP subtab
     assert(menu.chestSubPage == "shop")
-    tap(menu, 227, 13)
+    tap(menu, 53, 17) -- CHESTS subtab
     assert(menu.chestSubPage == "chests")
     local before = Save.getDailyQuests().progress.chests or 0
     tap(menu, 81, 150) -- golden chest
@@ -519,7 +523,7 @@ T["hub play: every mode card is selectable, including Arena"] = function()
     local menu = newMenu()
     local modes = { "ascension", "infinite", "boss_rush", "survival" }
     for i, mode in ipairs(modes) do
-        tap(menu, 60, 100 + (i - 1) * 24 + 11)
+        tap(menu, 4 + (i - 1) * 79 + 38, 124) -- mode chips row
         assert(menu.selectedMode == mode, "mode card " .. i .. " selects " .. mode)
     end
     menu:gamepadpressed(nil, "dpdown")
@@ -529,10 +533,10 @@ end
 T["hub: leaving the forge closes the item sheet"] = function()
     resetSave()
     local menu = newMenu()
-    tap(menu, 26 + 3 * 44, 220) -- FORGE tab
+    tap(menu, tabCenter(4)) -- FORGE tab
     assert(menu.currentTab == "equipment")
     menu.inventory:openModal("bear_ring", nil)
-    tap(menu, 26 + 4 * 44, 220) -- TALENTS tab
+    tap(menu, tabCenter(5)) -- TALENTS tab
     assert(menu.currentTab == "talents" and menu.inventory.modalItem == nil)
 end
 

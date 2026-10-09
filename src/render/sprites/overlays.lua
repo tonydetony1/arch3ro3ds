@@ -34,6 +34,27 @@ local function flat(atlas, name, color, alpha)
     atlas:define(name, { frames = { { "W" } }, palette = { W = rgba(color, alpha) }, anchor = "topleft" })
 end
 
+-- Soft light halo (15 x 15): three translucent rings, drawn under glowing shots and hazards
+local GLOW_SIZE, GLOW_RINGS = 15, { { 0.45, "A" }, { 0.72, "B" }, { 1.0, "D" } }
+local function glowGrid()
+    local c, r = (GLOW_SIZE - 1) / 2, GLOW_SIZE / 2
+    local rows = {}
+    for y = 0, GLOW_SIZE - 1 do
+        local row = {}
+        for x = 0, GLOW_SIZE - 1 do
+            local d = math.sqrt((x - c) ^ 2 + (y - c) ^ 2) / r
+            local ch = "."
+            for _, ring in ipairs(GLOW_RINGS) do
+                if d <= ring[1] then ch = ring[2]; break end
+            end
+            row[#row + 1] = ch
+        end
+        rows[#rows + 1] = table.concat(row)
+    end
+    return rows
+end
+local GLOW = glowGrid()
+
 local SHADOW = {
     "...WWWW...",
     ".WWWWWWWW.",
@@ -91,6 +112,9 @@ function Overlays.define(atlas)
         })
         atlas:define("fx_spark_" .. name, { frames = { SPARK }, palette = { W = mul("ffffff", t) }, anchor = "center" })
         atlas:define("fx_ring_" .. name, { frames = { RING }, palette = { W = mul("ffffff", t) }, anchor = "center" })
+        atlas:define("fx_glow_" .. name, {
+            frames = { GLOW }, palette = { A = rgba(t, 0.42), B = rgba(t, 0.24), D = rgba(t, 0.11) }, anchor = "center",
+        })
     end
     for _, t in ipairs({ { "red", C.red }, { "amber", C.amber } }) do
         atlas:define("fx_tg_ring_" .. t[1], { frames = { TELEGRAPH_RING }, palette = { W = rgba(t[2], 0.85) }, anchor = "center" })

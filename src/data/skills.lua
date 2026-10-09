@@ -2,10 +2,20 @@
 -- Architecture extensible pour 200+ compétences in-game avec système de Hooks
 -- Hooks : onApply, onShoot, onHit, onMonsterDeath, onUpdate
 
+local PlayerStats = require("src.data.player_stats")
+
 local Skills = {
     registry = {},
     list = {},
 }
+
+-- The hero fans at most PlayerStats.max_front_arrows front arrows (Player:shoot): a later copy
+-- would be wasted, so it cannot stack past the cap and the draft stops offering it
+Skills.FRONT_ARROW_SKILLS = { front_arrow = true, arrow_rain = true }
+
+local function addFrontArrow(p)
+    p.frontArrows = math.min(PlayerStats.max_front_arrows, (p.frontArrows or 1) + 1)
+end
 
 function Skills.register(def)
     Skills.registry[def.id] = def
@@ -25,7 +35,7 @@ Skills.register({
     icon = "multishot",
     hooks = {
         onApply = function(p)
-            p.frontArrows = (p.frontArrows or 1) + 1
+            addFrontArrow(p)
         end,
     }
 })
@@ -372,7 +382,7 @@ Skills.register({
     desc = "+50% Gold coins collected",
     rarity = "rare",
     category = "stats",
-    icon = "multishot",
+    icon = "gold",
     hooks = {
         onApply = function(p) p.goldMultiplier = (p.goldMultiplier or 1.0) * 1.5 end,
     }
@@ -518,7 +528,7 @@ Skills.register({
     icon = "multishot",
     hooks = {
         onApply = function(p)
-            p.frontArrows = (p.frontArrows or 1) + 1
+            addFrontArrow(p)
         end,
     }
 })
@@ -540,13 +550,14 @@ Skills.register({
 Skills.register({
     id = "devil_haste",
     name = "Infernal Haste",
-    desc = "+30% Movement and attack speed",
+    desc = "+25% Movement and attack speed",
     rarity = "forbidden",
     category = "devil",
     icon = "speed",
     hooks = {
         onApply = function(p)
-            p.speed = (p.speed or 130) * 1.20
+            p.speed = (p.speed or 130) * 1.25
+            p.attackSpeedMult = (p.attackSpeedMult or 1.0) * 1.25
         end,
     }
 })
@@ -824,7 +835,7 @@ Skills.register({
 
 Skills.register({
     id = "coin_charm", name = "Lucky Charm", desc = "+10% Gold collected",
-    rarity = "common", category = "utility", icon = "star", maxStacks = 6,
+    rarity = "common", category = "utility", icon = "gold", maxStacks = 6,
     hooks = { onApply = function(p) p.goldMultiplier = (p.goldMultiplier or 1) + 0.10 end }
 })
 
@@ -879,7 +890,7 @@ Skills.register({
 
 Skills.register({
     id = "gold_rush", name = "Gold Rush", desc = "+22% Gold collected",
-    rarity = "rare", category = "utility", icon = "star", maxStacks = 4,
+    rarity = "rare", category = "utility", icon = "gold", maxStacks = 4,
     hooks = { onApply = function(p) p.goldMultiplier = (p.goldMultiplier or 1) + 0.22 end }
 })
 
@@ -959,7 +970,7 @@ Skills.register({
 Skills.register({
     id = "arrow_rain", name = "Arrow Rain", desc = "+1 Additional front arrow",
     rarity = "epic", category = "shots", icon = "multishot", maxStacks = 3,
-    hooks = { onApply = function(p) p.frontArrows = (p.frontArrows or 1) + 1 end }
+    hooks = { onApply = function(p) addFrontArrow(p) end }
 })
 
 Skills.register({
@@ -1000,7 +1011,7 @@ Skills.register({
 
 Skills.register({
     id = "midas_touch", name = "Midas Touch", desc = "+50% Gold and +25% Experience",
-    rarity = "legendary", category = "utility", icon = "star", maxStacks = 1,
+    rarity = "legendary", category = "utility", icon = "gold", maxStacks = 1,
     hooks = { onApply = function(p)
         p.goldMultiplier = (p.goldMultiplier or 1) + 0.50
         p.xpMultiplier = (p.xpMultiplier or 1) + 0.25
@@ -1041,14 +1052,16 @@ end
 
 -- Propose `count` compétences distinctes, en excluant celles déjà au maximum.
 -- `acquired` est la liste des compétences déjà prises pendant la partie.
-function Skills.getRandomDraft(count, acquired)
+function Skills.getRandomDraft(count, acquired, player)
     count = count or 3
+    local frontCapped = player and (player.frontArrows or 1) >= PlayerStats.max_front_arrows
 
     local pool, total = {}, 0
     for _, id in ipairs(Skills.list) do
         local def = Skills.registry[id]
         local weight = Skills.DRAFT_WEIGHTS[def.rarity or "common"] or 0
-        if weight > 0 and Skills.stackCount(acquired, id) < Skills.maxStacks(def) then
+        if weight > 0 and not (frontCapped and Skills.FRONT_ARROW_SKILLS[id])
+            and Skills.stackCount(acquired, id) < Skills.maxStacks(def) then
             total = total + weight
             pool[#pool + 1] = { def = def, weight = weight }
         end

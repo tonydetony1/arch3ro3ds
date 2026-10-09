@@ -183,7 +183,7 @@ local Items = {
             desc = "Piercing spinning blade that returns to player dealing double damage.",
             passives = {
                 uncommon  = { name = "Aerodynamic", desc = "Base Attack increased by +25%." },
-                rare      = { name = "Double Impact", desc = "Deals 65% of total damage on return flight." },
+                rare      = { name = "Double Impact", desc = "Deals 50% of total damage on return flight." },
                 epic      = { name = "Total Pierce", desc = "Pierces through all lined-up monsters without slowing down." },
                 legendary = { name = "Swirling Typhoon", desc = "Lightly pulls enemies toward its center." },
             },
@@ -396,7 +396,9 @@ local RARITY_ORDER = { "common", "uncommon", "rare", "epic", "legendary" }
 -- `slotFilter` (optionnel) limite le tirage à un emplacement ("weapon", "armor", ...).
 -- `maxRarity` (optionnel) plafonne le tirage : une rareté non débloquée par la
 -- progression ne peut pas sortir, même avec de la chance.
-function Items.rollDrop(tableName, slotFilter, maxRarity)
+-- `rng` (optional): function returning a number in [0, 1), math.random by default
+function Items.rollDrop(tableName, slotFilter, maxRarity, rng)
+    rng = rng or math.random
     local weights = Items.DROP_TABLES[tableName] or Items.DROP_TABLES.gold
     local ceiling = Balance.rarityRank(maxRarity or "legendary")
 
@@ -416,13 +418,13 @@ function Items.rollDrop(tableName, slotFilter, maxRarity)
     end
     if total <= 0 then return "starter_bow" end
 
-    local roll, acc = math.random() * total, 0
+    local roll, acc = rng() * total, 0
     for _, rarity in ipairs(RARITY_ORDER) do
         local pool = byRarity[rarity]
         if pool then
             acc = acc + weights[rarity]
             if roll <= acc then
-                return pool[math.random(1, #pool)]
+                return pool[math.floor(rng() * #pool) + 1]
             end
         end
     end
@@ -561,16 +563,19 @@ function Items.getStats(id, level, rarityOverride, stars)
     -- Facteur de niveau et de rareté
     local totalScale = statScale(level, rData, stars)
 
-    local isRareDodge = rData.tier >= 3 and item.passives and item.passives.rare and (string.find(item.passives.rare.desc, "Esquive") or string.find(item.passives.rare.desc, "Dodge"))
-    local isRareCrit = rData.tier >= 3 and item.passives and item.passives.rare and (string.find(item.passives.rare.desc, "Critique") or string.find(item.passives.rare.desc, "Crit"))
+    -- Rare passive "+N% Dodge" / "+N% Critical": the description sets the bonus
+    local rareDesc = rData.tier >= 3 and item.passives and item.passives.rare and item.passives.rare.desc or ""
+    local rarePct = tonumber(rareDesc:match("%+(%d+)%%")) or 0
+    local rareDodge = rareDesc:find("Dodge") and rarePct or 0
+    local rareCrit = rareDesc:find("Crit") and rarePct or 0
 
     local stats = {
         level = level,
         rarity = curRarity,
         atk = item.baseAtk and math.floor(item.baseAtk * totalScale) or 0,
         hp = item.baseHp and math.floor(item.baseHp * totalScale) or 0,
-        dodge = (item.bonusDodge or 0) + (isRareDodge and 7 or 0),
-        crit = (item.bonusCrit or 0) + (isRareCrit and 8 or 0),
+        dodge = (item.bonusDodge or 0) + rareDodge,
+        crit = (item.bonusCrit or 0) + rareCrit,
         bossDmg = item.bonusBoss or 0,
         goldBonus = item.bonusGold or 0,
         fireRate = item.fireRate or 0.3,
@@ -580,7 +585,18 @@ function Items.getStats(id, level, rarityOverride, stars)
     return stats
 end
 
--- Coût d'amélioration dynamique selon le niveau et la rareté
+-- Item bonuses that only matter in combat: boss damage (Bear Ring) and gold collected
+-- (Golden Chestplate), in percent in the item stats
+function Items.applyCombatBonuses(player, stats)
+    if (stats.bossDmg or 0) > 0 then
+        player.bossDamageMult = (player.bossDamageMult or 1) + stats.bossDmg / 100
+    end
+    if (stats.goldBonus or 0) > 0 then
+        player.goldMultiplier = (player.goldMultiplier or 1) + stats.goldBonus / 100
+    end
+end
+
+-- Upgrade cost from the level and the rarity
 function Items.getUpgradeCost(level, rarity)
     local rData = Items.getRarityData(rarity)
     return Balance.upgradeCost(level, rData.tier)

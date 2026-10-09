@@ -18,22 +18,31 @@ local PixelFont = require("src.ui.pixel_font")
 local HeroSprites = require("src.render.sprites.heroes")
 local Audio = require("src.audio.audio")
 local Screen = require("src.core.screen")
+local Skin = require("src.ui.skin")
+local Palette = require("src.render.palette")
 
 local Inventory = {}
 Inventory.__index = Inventory
 
--- Item sheet (modal)
-local MODAL_X, MODAL_Y, MODAL_W, MODAL_H = 22, 10, 276, 186
-local CLOSE_SIZE = 24
-local BTN_Y, BTN_H = MODAL_Y + 142, 36
+-- Item sheet (modal): the top screen shows the item's stats, the sheet keeps the passives
+-- and the action buttons
+local MODAL_X, MODAL_Y, MODAL_W, MODAL_H = 4, 4, 312, 196
+local CLOSE_SIZE = 28
+local BTN_Y, BTN_H = MODAL_Y + 152, 40
 local BTN_LEFT, BTN_SPAN, BTN_GAP = MODAL_X + 6, MODAL_W - 12, 4
 
--- Backpack (scrolling grid)
-local GRID_X, GRID_Y, GRID_W, GRID_H = 4, 88, 312, 108
-local GRID_VIEW_TOP, GRID_VIEW_BOTTOM = GRID_Y + 18, GRID_Y + GRID_H - 2
-local GRID_COLS, CARD_W, CARD_H, GAP_X, GAP_Y = 4, 70, 48, 6, 6
-local GRID_ORIGIN_X = GRID_X + 7
-local GRID_ORIGIN_Y = GRID_Y + 20
+-- Equipped slots row, filter chips and the backpack (scrolling grid of square tiles)
+local SLOT_SIZE, SLOT_STEP, SLOT_X0, SLOT_Y = 40, 51, 10, 8
+local FILTER_Y, FILTER_W, FILTER_H, FILTER_STEP = 55, 42, 24, 45
+local FILTERS = {
+    { id = "all", label = "ALL" }, { id = "weapon", label = "WPN" }, { id = "armor", label = "ARM" },
+    { id = "ring", label = "RING" }, { id = "pet", label = "PET" },
+}
+local GRID_X, GRID_Y, GRID_W, GRID_H = 4, 82, 312, 118
+local GRID_VIEW_TOP, GRID_VIEW_BOTTOM = GRID_Y + 2, GRID_Y + GRID_H - 2
+local GRID_COLS, CARD_W, CARD_H, GAP_X, GAP_Y = 8, 35, 35, 3, 3
+local GRID_ORIGIN_X = GRID_X + 5
+local GRID_ORIGIN_Y = GRID_Y + 4
 
 local TAP_SLOP_SQ = 196 -- beyond 14 px of movement, a tap becomes a scroll
 local RELEASE_SLOP = 8  -- release tolerance around a button
@@ -67,8 +76,9 @@ function Inventory.new()
     local self = setmetatable({}, Inventory)
     self.saveData = nil
 
-    -- Kinetic touch scrolling (view height = 108px)
-    self.scroller = UI.newScroller(108, 120)
+    -- Kinetic touch scrolling of the backpack grid
+    self.scroller = UI.newScroller(GRID_H - 6, 120)
+    self.filter = "all"
 
     -- Item sheet of the selected item
     self.modalItem = nil
@@ -92,27 +102,47 @@ function Inventory.new()
     -- Element under the stylus ("slot_<id>", a button id, "close", "outside")
     self.pressedBtn = nil
 
-    -- 6 Equipped slots surrounding the hero
+    -- 6 equipped slots in one row (the hero and the totals are on the top screen)
     self.slots = {
-        { id = "weapon", name = "Weapon",  type = "weapon", x = 32,  y = 7,  w = 46, h = 37 },
-        { id = "ring1",  name = "Ring 1",  type = "ring",   x = 8,   y = 46, w = 46, h = 37 },
-        { id = "pet1",   name = "Pet 1",   type = "pet",    x = 56,  y = 46, w = 46, h = 37 },
-        { id = "armor",  name = "Armor",   type = "armor",  x = 242, y = 7,  w = 46, h = 37 },
-        { id = "pet2",   name = "Pet 2",   type = "pet",    x = 218, y = 46, w = 46, h = 37 },
-        { id = "ring2",  name = "Ring 2",  type = "ring",   x = 266, y = 46, w = 46, h = 37 },
+        { id = "weapon", name = "WPN",  type = "weapon" },
+        { id = "armor",  name = "ARM",  type = "armor" },
+        { id = "ring1",  name = "RING", type = "ring" },
+        { id = "ring2",  name = "RING", type = "ring" },
+        { id = "pet1",   name = "PET",  type = "pet" },
+        { id = "pet2",   name = "PET",  type = "pet" },
     }
+    for i, s in ipairs(self.slots) do
+        s.x, s.y, s.w, s.h = SLOT_X0 + (i - 1) * SLOT_STEP, SLOT_Y, SLOT_SIZE, SLOT_SIZE
+    end
 
     return self
 end
 
 function Inventory:refresh()
     self.saveData = Save.get()
-    -- Total content height for the scroller
-    local itemCount = #(self.saveData.inventory or {})
-    local rows = math.ceil(math.max(1, itemCount) / GRID_COLS)
-    local contentH = rows * 56 + 12
-    self.scroller:setContentHeight(contentH)
+    self:rebuildVisible()
     if self.modalItemId then self:rebuildModalButtons() end
+end
+
+-- Backpack items shown by the current filter, and the scroller's content height
+function Inventory:rebuildVisible()
+    local list = self.visible or {}
+    for i = #list, 1, -1 do list[i] = nil end
+    for _, invId in ipairs(self.saveData.inventory or {}) do
+        local it = Items.get(invId)
+        if self.filter == "all" or (it and it.slot == self.filter) then list[#list + 1] = invId end
+    end
+    self.visible = list
+    local rows = math.ceil(math.max(1, #list) / GRID_COLS)
+    self.scroller:setContentHeight(rows * (CARD_H + GAP_Y) + 6)
+end
+
+function Inventory:setFilter(id)
+    if self.filter == id then return end
+    self.filter = id
+    self.scroller.offsetY = 0
+    self.scroller.velocity = 0
+    self:rebuildVisible()
 end
 
 function Inventory:update(dt)
@@ -162,9 +192,9 @@ end
 function Inventory:itemAt(tx, ty)
     if ty < GRID_VIEW_TOP or ty > GRID_VIEW_BOTTOM then return nil end
     local offsetY = self.scroller:getOffset()
-    for i, itemId in ipairs(self.saveData.inventory or {}) do
+    for i, itemId in ipairs(self.visible or {}) do
         local cx, cy = cardPosition(i, offsetY)
-        if tx >= cx and tx <= cx + CARD_W and ty >= cy and ty <= cy + CARD_H then
+        if tx >= cx - 1 and tx <= cx + CARD_W + 1 and ty >= cy - 1 and ty <= cy + CARD_H + 1 then
             return itemId
         end
     end
@@ -301,186 +331,103 @@ function Inventory:draw()
     end
 end
 
--- Upper section: 6 slots and hero portrait
+-- Upper section: the 6 equipped slots in one row, then the filter chips
 function Inventory:drawEquippedSection(t)
-    -- Subtle background of the equipped section (bento card)
-    UI.drawBentoCard(4, 4, 312, 82, {
-        r = 8,
-        bg = {0.08, 0.10, 0.15, 0.96},
-        borderColor = {0.18, 0.23, 0.33, 0.85},
-    })
-
-    -- 1. The 6 equipment slots (padded, no overlap)
-    local fontTiny = UI.getFont("tiny")
+    local C = Palette.C
+    Skin.panel(4, 4, 312, 48, "dark")
     for _, s in ipairs(self.slots) do
         local itemId = self.saveData.equipped[s.id]
-        local item = itemId and Items.get(itemId)
-        local lvl = itemId and (self.saveData.itemLevels[itemId] or 1) or 0
-
-        if item then
-            local effRarity = Save.getItemRarity(itemId)
-            UI.drawItemCard(s.x, s.y, s.w, s.h, item, lvl, false, false, effRarity)
-
-            -- Slot label on a small dark pill at the bottom
-            local prevFont = love.graphics.getFont()
-            love.graphics.setFont(fontTiny)
-
-            love.graphics.setColor(0.06, 0.08, 0.12, 0.75)
-            love.graphics.rectangle("fill", s.x + 3, s.y + s.h - 11, s.w - 6, 9, 2, 2)
-            UI.drawTextAligned(s.name, s.x, s.y + s.h - 11, s.w, "center", {0.85, 0.90, 0.98, 0.90}, {0.02, 0.03, 0.05, 0.9}, 1, 1)
-
-            love.graphics.setFont(prevFont)
+        if itemId then
+            UI.drawItemTile(s.x, s.y, s.w, Items.get(itemId), self.saveData.itemLevels[itemId] or 1, false, false,
+                Save.getItemRarity(itemId))
         else
-            -- Empty slot (pulsing gold border while waiting for a backpack item)
             local isTarget = (self.targetSlot == s.id)
-            local pulse = 0.65 + 0.35 * math.sin(t * 6)
-            UI.drawBentoCard(s.x, s.y, s.w, s.h, {
-                r = 6,
-                bg = isTarget and {0.16, 0.14, 0.08, 0.95} or {0.09, 0.11, 0.16, 0.85},
-                borderColor = isTarget and {1.0, 0.85, 0.25, pulse} or {0.18, 0.22, 0.32, 0.70},
-                borderWidth = isTarget and 2 or 1,
-            })
-
-            -- Faint silhouette icon
-            UI.drawItemIcon(s.type, s.x + s.w / 2, s.y + 14, 10, isTarget and {1.0, 0.85, 0.30, 0.9} or {0.35, 0.40, 0.50, 0.6})
-
-            -- Empty slot label under the silhouette icon
-            local prevFont = love.graphics.getFont()
-            love.graphics.setFont(fontTiny)
-            UI.drawTextAligned(s.name, s.x, s.y + s.h - 11, s.w, "center", {0.60, 0.65, 0.75, 0.85}, {0.04, 0.05, 0.08, 0.8}, 1, 1)
-            love.graphics.setFont(prevFont)
+            if isTarget and math.floor(t * 4) % 2 == 0 then Skin.roundRect(C.yellow, s.x - 2, s.y - 2, s.w + 4, s.h + 4, 3) end
+            Skin.roundRect(C.slate, s.x, s.y, s.w, s.h, 3)
+            Skin.rect(C.night, s.x + 1, s.y + 1, s.w - 2, s.h - 2)
         end
     end
-
-    -- 2. Center card: hero showcase and total stats (bento card)
-    local hx, hy, hw, hh = 108, 7, 104, 76
-    UI.drawBentoCard(hx, hy, hw, hh, {
-        r = 7,
-        bg = {0.11, 0.14, 0.20, 0.98},
-        borderColor = {0.22, 0.28, 0.40, 0.85},
-        isElevated = true,
-    })
-
-    -- Pixel portrait of the equipped hero (breathing)
-    local bob = math.floor(math.sin(t * 3.0) * 1.5 + 0.5)
-    local heroCx = hx + hw / 2
-    local heroBottom = hy + 36 + bob
-
-    love.graphics.setColor(0.04, 0.05, 0.08, 0.4)
-    love.graphics.ellipse("fill", heroCx, hy + 37, 14, 5)
-
-    local heroId = self.saveData.selectedHero or "atreus"
-    local variant = (heroId ~= "atreus") and heroId or nil
-    love.graphics.setColor(1, 1, 1, 1)
-    Art.drawEx("hero_legs", 1, heroCx, heroBottom, 0, 1, 1)
-    Art.drawEx("hero_body", 1, heroCx, heroBottom - 4, 0, 1, 1, false, variant)
-    local acc = HeroSprites.ACCESSORY_BY_HERO[heroId]
-    if acc then
-        local offs = { feather = { 3, -14 }, mask = { -2, -8 }, crest = { 0, -15 }, horns = { 0, -13 }, tiara = { 0, -15 } }
-        local o = offs[acc]
-        Art.drawEx("hero_acc_" .. acc, 1, heroCx + o[1], heroBottom - 4 + o[2], 0, 1, 1)
-    end
-
-    -- Hero title
-    local fontSmall = UI.getFont("small")
-    local prevFont = love.graphics.getFont()
-    love.graphics.setFont(fontSmall)
-    UI.drawTextAligned("ARCHER LV." .. (self.saveData.accountLevel or 1), hx, hy + 38, hw, "center", {1.0, 0.88, 0.25, 1.0}, {0.08, 0.10, 0.14, 1.0})
-
-    -- Total stats
-    local totalAtk = 0
-    local totalHp = 100
-    for _, slot in ipairs(self.slots) do
-        local id = self.saveData.equipped[slot.id]
-        if id then
-            local st = Save.getItemStats(id)
-            totalAtk = totalAtk + st.atk
-            totalHp = totalHp + st.hp
+    for _, f in ipairs(FILTERS) do
+        local x = 4 + (_ - 1) * FILTER_STEP
+        if self.filter == f.id then
+            Skin.button(x, FILTER_Y, FILTER_W, FILTER_H, "blue", self.pressedBtn == "filter_" .. f.id)
+        else
+            Skin.panel(x, FILTER_Y + 1, FILTER_W, FILTER_H - 1, "raised")
         end
     end
-
-    -- ATK and HP badges
-    love.graphics.setColor(0.85, 0.22, 0.22, 0.9)
-    love.graphics.rectangle("fill", hx + 4, hy + 54, 46, 15, 3, 3)
-    UI.drawTextAligned("ATK " .. totalAtk, hx + 4, hy + 55, 46, "center", {1, 1, 1, 1}, {0.1, 0.05, 0.05, 1.0})
-
-    love.graphics.setColor(0.18, 0.75, 0.35, 0.9)
-    love.graphics.rectangle("fill", hx + 54, hy + 54, 46, 15, 3, 3)
-    UI.drawTextAligned("HP " .. totalHp, hx + 54, hy + 55, 46, "center", {1, 1, 1, 1}, {0.05, 0.1, 0.05, 1.0})
-    love.graphics.setFont(prevFont)
+    for i, f in ipairs(FILTERS) do
+        local x = 4 + (i - 1) * FILTER_STEP
+        PixelFont.printf(f.label, x, FILTER_Y + (self.filter == f.id and 6 or 7), FILTER_W, "center",
+            self.filter == f.id and C.white or C.fog, "main")
+    end
+    for _, s in ipairs(self.slots) do
+        if not self.saveData.equipped[s.id] then
+            PixelFont.printf(s.name, s.x, s.y + 14, s.w, "center", self.targetSlot == s.id and C.yellow or C.steel, "main")
+        end
+    end
+    -- Right of the chips: what the backpack shows (or which slot is waiting for an item)
+    local title, color = self:backpackTitle()
+    PixelFont.printf(title, 4 + 5 * FILTER_STEP, FILTER_Y + 6, 312 - 5 * FILTER_STEP, "center", color, "main", 1, nil, 1)
 end
 
--- Backpack title: short message, targeted slot hint, or item count
+-- Backpack title: targeted slot hint, or item count
 function Inventory:backpackTitle()
-    if self.toastTimer > 0 and self.toastText then
-        return self.toastText, {1.0, 0.88, 0.30, 1.0}
-    end
     local target = self.targetSlot and self:getSlot(self.targetSlot)
     if target then
-        return string.format("CHOOSE A %s FOR %s", TYPE_LABELS[target.type], Inventory.SLOT_LABELS[target.id]), {0.45, 0.90, 1.0, 1.0}
+        return "PICK " .. TYPE_LABELS[target.type], Palette.C.yellow
     end
-    local count = #(self.saveData.inventory or {})
-    return string.format("BACKPACK (%d ITEM%s)", count, count > 1 and "S" or ""), {0.80, 0.85, 0.95, 1.0}
+    local count = #(self.visible or {})
+    return string.format("%d ITEM%s", count, count > 1 and "S" or ""), Palette.C.silver
 end
 
 -- Lower section: backpack grid with scissor
 function Inventory:drawBackpackSection()
+    local C = Palette.C
     local sx, sy, sw, sh = GRID_X, GRID_Y, GRID_W, GRID_H
+    Skin.panel(sx, sy, sw, sh, "inset")
 
-    -- Backpack bento banner
-    UI.drawBentoCard(sx, sy, sw, sh, {
-        r = 8,
-        bg = {0.08, 0.10, 0.15, 0.96},
-        borderColor = {0.18, 0.23, 0.33, 0.85},
-    })
-
-    local fontSmall = UI.getFont("small")
-    local prevFont = love.graphics.getFont()
-    love.graphics.setFont(fontSmall)
-    local title, titleColor = self:backpackTitle()
-    UI.drawText(title, sx + 8, sy + 4, titleColor, {0.08, 0.10, 0.14, 1.0})
-    love.graphics.setFont(prevFont)
-
-    -- SCISSOR AREA FOR THE KINETIC SCROLLER
     local px, py, pw, ph
     if love.graphics.getScissor then px, py, pw, ph = love.graphics.getScissor() end
-    setLocalScissor(sx + 2, sy + 18, sw - 4, sh - 20)
+    setLocalScissor(sx + 2, sy + 2, sw - 4, sh - 4)
 
     local offsetY = self.scroller:getOffset()
     local target = self.targetSlot and self:getSlot(self.targetSlot)
-
-    for i, itemId in ipairs(self.saveData.inventory) do
+    local list = self.visible or {}
+    local slotsShown = math.max(#list, GRID_COLS * 3)
+    for i = 1, slotsShown do
         local cx, cy = cardPosition(i, offsetY)
-
-        -- Only draw visible cards
-        if cy + CARD_H >= sy + 18 and cy <= sy + sh then
-            local item = Items.get(itemId)
-            local lvl = self.saveData.itemLevels[itemId] or 1
-            local isEq = Save.isEquipped(itemId)
-            local isSel = (self.modalItemId == itemId)
-            local effRarity = Save.getItemRarity(itemId)
-
-            UI.drawItemCard(cx, cy, CARD_W, CARD_H, item, lvl, isEq, isSel, effRarity)
-
-            -- Targeted slot: items that do not fit it are dimmed
-            if target and (not item or item.slot ~= target.type or isEq) then
-                love.graphics.setColor(0.04, 0.05, 0.08, 0.62)
-                love.graphics.rectangle("fill", cx, cy, CARD_W, CARD_H, 5, 5)
+        if cy + CARD_H >= sy and cy <= sy + sh then
+            local itemId = list[i]
+            if itemId then
+                local item = Items.get(itemId)
+                local isEq = Save.isEquipped(itemId)
+                UI.drawItemTile(cx, cy, CARD_W, item, self.saveData.itemLevels[itemId] or 1, isEq,
+                    self.modalItemId == itemId, Save.getItemRarity(itemId))
+                if target and (not item or item.slot ~= target.type or isEq) then
+                    Skin.rect(C.ink, cx, cy, CARD_W, CARD_H, 0.6)
+                end
+            else
+                Skin.roundRect(C.slate, cx, cy, CARD_W, CARD_H, 3)
+                Skin.rect(C.night, cx + 1, cy + 1, CARD_W - 2, CARD_H - 2)
             end
         end
     end
 
     restoreScissor(px, py, pw, ph)
 
-    -- Subtle scrollbar
+    -- Scrollbar
+    local viewH = sh - 6
     local totalContentH = self.scroller.contentH
-    if totalContentH > (sh - 20) then
-        local barH = math.max(12, math.floor(((sh - 20) / totalContentH) * (sh - 20)))
-        local progress = (-self.scroller.offsetY) / math.max(1, totalContentH - (sh - 20))
-        progress = math.max(0, math.min(1, progress))
-        local barY = sy + 20 + progress * ((sh - 20) - barH)
-        love.graphics.setColor(0.35, 0.40, 0.55, 0.6)
-        love.graphics.rectangle("fill", sx + sw - 6, barY, 3, barH, 2, 2)
+    if totalContentH > viewH then
+        local barH = math.max(12, math.floor((viewH / totalContentH) * viewH))
+        local progress = math.max(0, math.min(1, (-self.scroller.offsetY) / math.max(1, totalContentH - viewH)))
+        Skin.rect(C.steel, sx + sw - 4, sy + 3 + math.floor(progress * (viewH - barH)), 2, barH)
+    end
+
+    -- Result of the last action (equipped, upgraded, missing gold...)
+    if self.toastTimer > 0 and self.toastText then
+        Skin.pill(sx + 10, sy + sh - 22, sw - 20, 18, "dark")
+        PixelFont.printf(self.toastText, sx + 10, sy + sh - 19, sw - 20, "center", C.yellow, "main", 1, nil, 1)
     end
 end
 
@@ -488,14 +435,9 @@ end
 -- ITEM SHEET (EQUIP / UPGRADE)
 -- ============================================================================
 function Inventory:drawItemModal(t)
-    local botW = Config.BOTTOM_WIDTH
-    local botH = Config.BOTTOM_HEIGHT
+    local C = Palette.C
+    Skin.rect(C.ink, 0, 0, Config.BOTTOM_WIDTH, Config.BOTTOM_HEIGHT, 0.75)
 
-    -- 1. Dark overlay
-    love.graphics.setColor(0.04, 0.05, 0.08, 0.82)
-    love.graphics.rectangle("fill", 0, 0, botW, botH)
-
-    -- 2. Sheet card
     local mx, my, mw, mh = MODAL_X, MODAL_Y, MODAL_W, MODAL_H
     local item = self.modalItem
     local itemId = self.modalItemId
@@ -504,113 +446,47 @@ function Inventory:drawItemModal(t)
     local rData = Items.getRarityData(effRarity)
     local copies = Save.getItemCopies(itemId)
     local stars = Save.getItemStars(itemId)
-
-    -- Main frame with a subtle rarity-tinted border
-    UI.drawBentoCard(mx, my, mw, mh, {
-        r = 10,
-        bg = {0.08, 0.10, 0.15, 0.98},
-        borderColor = {rData.border[1], rData.border[2], rData.border[3], 0.85},
-        borderWidth = 1,
-        accentColor = rData.color,
-    })
-
-    -- Top rarity sheen
-    love.graphics.setColor(rData.bg[1], rData.bg[2], rData.bg[3], 0.35)
-    love.graphics.rectangle("fill", mx + 1, my + 1, mw - 2, 38, 9, 9)
-    love.graphics.setColor(1, 1, 1, 0.08)
-    love.graphics.rectangle("fill", mx + 8, my + 2, mw - 16, 1, 1, 1)
-
-    -- Close button
-    love.graphics.setColor(0.18, 0.22, 0.30, 0.90)
-    love.graphics.circle("fill", mx + mw - 16, my + 18, 9)
-    love.graphics.setColor(0.85, 0.30, 0.30, 1.0)
-    love.graphics.setLineWidth(1.6)
-    love.graphics.line(mx + mw - 20, my + 14, mx + mw - 12, my + 22)
-    love.graphics.line(mx + mw - 12, my + 14, mx + mw - 20, my + 22)
-    love.graphics.setLineWidth(1)
-
-    -- Item icon and name with drop shadow
-    UI.drawItemIcon(item.icon, mx + 22, my + 20, 15, rData.color)
-    UI.drawText(item.name, mx + 44, my + 8, {1, 1, 1, 1}, {0.08, 0.10, 0.14, 1.0})
-
-    -- Rarity / level badge and owned copies
-    UI.drawPillBadge(mx + 44, my + 23, 76, 15, string.format("%s LV.%d", rData.name, lvl), {0.12, 0.15, 0.22, 0.9}, rData.color, rData.color)
-    local copiesText = string.format("Copies: %d/3", copies)
-    if stars > 0 then copiesText = copiesText .. string.format("  Stars: %d", stars) end
-    UI.drawText(copiesText, mx + 126, my + 24, {0.60, 0.70, 0.85, 0.9}, {0.05, 0.08, 0.12, 1.0})
-
-    -- Current and next-level stats in a sub-card
-    local curStats = Save.getItemStats(itemId)
-    local nextStats = Items.getStats(itemId, lvl + 1, effRarity, stars)
-
-    UI.drawBentoCard(mx + 8, my + 44, mw - 16, 32, {
-        r = 6,
-        bg = {0.05, 0.07, 0.11, 0.90},
-        borderColor = {0.16, 0.22, 0.32, 0.60},
-    })
-
-    local statStr = ""
-    if curStats.atk > 0 then
-        statStr = statStr .. string.format("ATK: %d (+%d)  ", curStats.atk, nextStats.atk - curStats.atk)
-    end
-    if curStats.hp > 0 then
-        statStr = statStr .. string.format("HP: %d (+%d)  ", curStats.hp, nextStats.hp - curStats.hp)
-    end
-    if curStats.crit > 0 then
-        statStr = statStr .. string.format("Crit: +%d%%  ", curStats.crit)
-    end
-    if curStats.dodge > 0 then
-        statStr = statStr .. string.format("Dodge: +%d%%  ", curStats.dodge)
-    end
-
-    local fontSmall = UI.getFont("small")
-    local prevFont = love.graphics.getFont()
-    love.graphics.setFont(fontSmall)
-    UI.drawTextAligned(statStr, mx + 8, my + 48, mw - 16, "center", {0.35, 0.95, 0.55, 1.0}, {0.04, 0.08, 0.04, 1.0})
-    -- The description (2 lines max, inside the card) gives way to the result of an
-    -- action (upgrade, fusion, missing gold)
-    if self.toastTimer > 0 and self.toastText then
-        PixelFont.printf(self.toastText, mx + 10, my + 63, mw - 20, "center", {1.0, 0.88, 0.30, 1.0}, "tiny", 1, nil, 1)
-    else
-        PixelFont.printf(item.desc, mx + 10, my + 60, mw - 20, "center", {0.80, 0.85, 0.95, 1.0}, "tiny", 1, nil, 2, 7)
-    end
-    love.graphics.setFont(prevFont)
-
-    -- 3. Passives list
-    local py = my + 80
     local tiers = {
-        { id = "uncommon", name = "Great",     minTier = 2 },
-        { id = "rare",     name = "Rare",      minTier = 3 },
-        { id = "epic",     name = "Epic",      minTier = 4 },
-        { id = "legendary",name = "Legendary", minTier = 5 },
+        { id = "uncommon", minTier = 2 }, { id = "rare", minTier = 3 },
+        { id = "epic", minTier = 4 }, { id = "legendary", minTier = 5 },
     }
 
-    UI.drawBentoCard(mx + 8, py, mw - 16, 56, {
-        r = 6,
-        bg = {0.05, 0.07, 0.11, 0.90},
-        borderColor = {0.16, 0.22, 0.32, 0.60},
-    })
-
-    local currentTier = rData.tier
-    love.graphics.setFont(fontSmall)
-    for i, tInfo in ipairs(tiers) do
-        local pInfo = item.passives and item.passives[tInfo.id]
-        if pInfo then
-            local isUnlocked = (currentTier >= tInfo.minTier)
-            local lineY = py + (i - 1) * 13 + 3
-            local pColor = isUnlocked and Items.getRarityData(tInfo.id).color or {0.45, 0.48, 0.55, 0.8}
-            local iconLock = isUnlocked and "check" or "lock"
-
-            UI.drawIcon(iconLock, mx + 16, lineY + 6, 8, pColor)
-            -- One line per passive, truncated at the card edge
-            PixelFont.printf(string.format("[%s] %s: %s", tInfo.name, pInfo.name, pInfo.desc), mx + 24, lineY + 3, mw - 36, "left", pColor, "tiny", 1, nil, 1)
-        end
-    end
-    love.graphics.setFont(prevFont)
-
-    -- 4. Action buttons (same list as touch handling)
+    -- 1. Card, rarity header, close button, passives box
+    Skin.panel(mx, my, mw, mh, "dark")
+    love.graphics.setColor(rData.bg[1], rData.bg[2], rData.bg[3], 1)
+    love.graphics.rectangle("fill", mx + 2, my + 2, mw - 4, 38)
+    Skin.disc(C.ink, mx + mw - 18, my + 18, 12)
+    Skin.disc(C.wine, mx + mw - 18, my + 18, 11)
+    Skin.panel(mx + 6, my + 62, mw - 12, 70, "inset")
     for _, b in ipairs(self.modalButtons) do
         UI.drawPillButton(b.x, b.y, b.w, b.h, b.label, b.theme, self.pressedBtn == b.id, b.icon)
+    end
+
+    -- 2. Sprites and texts
+    UI.drawItemIcon(item.icon, mx + 24, my + 21, 16, rData.color)
+    PixelFont.printf(item.name, mx + 46, my + 6, mw - 80, "left", C.white, "main", 1, nil, 1)
+    local starText = stars > 0 and string.format("  %d STAR%s", stars, stars > 1 and "S" or "") or ""
+    PixelFont.print(string.format("%s  LV %d%s", rData.name:upper(), lvl, starText), mx + 46, my + 22, rData.color, "main")
+    PixelFont.printf("X", mx + mw - 30, my + 12, 24, "center", C.white, "main")
+    PixelFont.print(string.format("COPIES %d/3", copies), mx + 8, my + 46, C.fog, "main")
+    if self.toastTimer > 0 and self.toastText then
+        PixelFont.printf(self.toastText, mx + 90, my + 46, mw - 96, "right", C.yellow, "main", 1, nil, 1)
+    end
+    local line = 0
+    for _, tInfo in ipairs(tiers) do
+        local pInfo = item.passives and item.passives[tInfo.id]
+        if pInfo then
+            local unlocked = (rData.tier >= tInfo.minTier)
+            local y = my + 67 + line * 15
+            local color = unlocked and Items.getRarityData(tInfo.id).color or C.steel
+            love.graphics.setColor(1, 1, 1, 1)
+            Art.draw(unlocked and "icon_check" or "icon_lock", 1, mx + 16, y + 6)
+            PixelFont.printf(pInfo.name .. ": " .. pInfo.desc, mx + 26, y, mw - 40, "left", color, "main", 1, nil, 1)
+            line = line + 1
+        end
+    end
+    if line == 0 then
+        PixelFont.printf(item.desc or "", mx + 12, my + 70, mw - 24, "center", C.silver, "main", 1, nil, 4, 12)
     end
 end
 
@@ -643,7 +519,16 @@ function Inventory:touchpressed(id, tx, ty)
         return true
     end
 
-    -- 2. One of the 6 equipped slots
+    -- 2. Filter chips, then one of the 6 equipped slots
+    if ty >= FILTER_Y and ty <= FILTER_Y + FILTER_H then
+        for i, f in ipairs(FILTERS) do
+            local x = 4 + (i - 1) * FILTER_STEP
+            if tx >= x and tx <= x + FILTER_W then
+                self.pressedBtn = "filter_" .. f.id
+                return true
+            end
+        end
+    end
     for _, s in ipairs(self.slots) do
         if inside(s, tx, ty) then
             self.pressedBtn = "slot_" .. s.id
@@ -692,7 +577,11 @@ function Inventory:touchreleased(id, tx, ty)
         return
     end
 
-    -- 2. Equipped slot
+    -- 2. Filter chip or equipped slot
+    if pressed and pressed:sub(1, 7) == "filter_" then
+        self:setFilter(pressed:sub(8))
+        return
+    end
     if pressed and pressed:sub(1, 5) == "slot_" then
         local s = self:getSlot(pressed:sub(6))
         if s and inside(s, tx, ty, RELEASE_SLOP) then
