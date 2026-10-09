@@ -179,7 +179,7 @@ if not os.path.exists(banner_png):
 banner_audio = os.path.join(ROOT_DIR, "assets", "audio", "sfx", "gate_open.wav")
 bannertool_bin = os.path.join(TOOLS_DIR, "bannertool")
 
-# 3D banner (voxel logo swaying over the menu island, tools/make_banner_model.py + pycgfx);
+# 3D banner (voxel logo turning over a night sky, tools/make_banner_model.py + pycgfx);
 # --flat-banner falls back to the 2D picture if a console ever has trouble with it
 banner_cgfx = os.path.join(ROOT_DIR, "assets", "banner", "banner.cgfx")
 use_cgfx = os.path.exists(banner_cgfx) and "--flat-banner" not in sys.argv
