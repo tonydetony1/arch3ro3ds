@@ -21,7 +21,6 @@
 
 [Screenshots](#-screenshots) •
 [Installation Guide](#-installation-guide-3ds--pc) •
-[3DS Technical Feats](#-3ds-technical-feats--optimizations) •
 [Controls](#-controls--gameplay) •
 [Building from Source](#-building-from-source) •
 [Modding & Contributing](CONTRIBUTING.md)
