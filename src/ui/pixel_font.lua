@@ -126,23 +126,66 @@ local function compose(base, accent, accentName, isCapital)
     return out
 end
 
+-- Baked letters are two-tone: light top rows, darker bottom rows ({ top, bottom })
+local C = Palette.C
+local TWO_TONE = {
+    white = { C.white, C.silver }, yellow = { C.yellow, C.amber }, silver = { C.silver, C.fog },
+    fog = { C.fog, C.steel }, steel = { C.steel, C.steel }, cyan = { C.cyan, C.blue },
+    red = { C.pink, C.red }, amber = { C.amber, C.orange }, leaf = { Palette.hex("a8e890"), C.leaf },
+    orange = { C.orange, C.rust }, ink = { C.ink, C.ink }, pink = { C.pink, C.magenta },
+    mint = { C.mint, C.leaf }, sky = { C.sky, C.blue },
+}
+
+-- Glyph rows -> styled grid: '#' light tone (cell rows <= splitRow), '=' dark tone, and
+-- an 's' drop-shadow pixel under every column (one extra row at the bottom)
+local function stylize(rows, yoff, splitRow)
+    local h, w = #rows, #rows[1]
+    local grid = {}
+    for y = 1, h + 1 do
+        local row = {}
+        for x = 1, w do row[x] = "." end
+        grid[y] = row
+    end
+    for y = 1, h do
+        local tone = (yoff + y - 1 <= splitRow) and "#" or "="
+        local line = rows[y]
+        for x = 1, w do
+            if line:sub(x, x) == "#" then grid[y][x] = tone end
+        end
+    end
+    for y = 1, h do
+        for x = 1, w do
+            if grid[y][x] ~= "." and grid[y + 1][x] == "." then grid[y + 1][x] = "s" end
+        end
+    end
+    local out = {}
+    for y = 1, h + 1 do out[y] = table.concat(grid[y]) end
+    return out
+end
+PixelFont.stylize = stylize
+
 local function defineFont(atlas, id, def)
     local font = { cellH = def.CELL_H, lineH = def.LINE_H, space = def.SPACE, glyphs = {}, pending = {} }
-    local white = { ["#"] = Palette.C.white }
+    -- White letters are tinted at draw time: the darker bottom keeps the gradient in any colour
+    local white = { ["#"] = C.white, ["="] = C.silver, ["s"] = C.ink }
+    local plain = { ["#"] = C.white, ["="] = C.white }
 
     local function add(key, g)
         local cp = decode(key, 1)
-        local rows = copyRows(g)
+        local width = #g[2]
+        local rows = stylize(copyRows(g), g[1], def.SPLIT_ROW or def.CELL_H)
         local base = id .. ":" .. cp
-        atlas:define(base .. ":o", { frames = { rows }, palette = white, outline = Palette.C.ink, anchor = "topleft" })
-        atlas:define(base .. ":p", { frames = { rows }, palette = white, anchor = "topleft" })
+        atlas:define(base .. ":o", { frames = { rows }, palette = white, outline = C.ink, anchor = "topleft" })
+        atlas:define(base .. ":p", { frames = { rows }, palette = plain, anchor = "topleft" })
         local nameC = {}
         for _, key in ipairs(BAKED_COLORS) do
             local name = base .. ":c:" .. key
-            atlas:define(name, { frames = { rows }, palette = { ["#"] = Palette.C[key] }, outline = Palette.C.ink, anchor = "topleft" })
+            local tones = TWO_TONE[key]
+            atlas:define(name, { frames = { rows }, palette = { ["#"] = tones[1], ["="] = tones[2], ["s"] = C.ink },
+                outline = C.ink, anchor = "topleft" })
             nameC[key] = name
         end
-        font.pending[cp] = { w = #rows[1], yoff = g[1], nameO = base .. ":o", nameP = base .. ":p", nameC = nameC }
+        font.pending[cp] = { w = width, yoff = g[1], nameO = base .. ":o", nameP = base .. ":p", nameC = nameC }
     end
 
     for key, g in pairs(def.glyphs) do add(key, g) end

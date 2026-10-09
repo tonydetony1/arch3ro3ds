@@ -235,12 +235,11 @@ function Panel:draw()
             UI.drawPillButton(ctl.dec[1], ctl.dec[2], ctl.dec[3], ctl.dec[4], "-", "gray", self.pressed == (row.id .. ":dec"))
             local lo, hi = row.min or 0, row.max or 1
             local ratio = math.max(0, math.min(1, (value - lo) / math.max(1e-9, hi - lo)))
+            -- Value in the main font with a thin gauge under it (readable on Old 3DS)
             local bx, bw = W - 78, 44
-            Art.px("slate", bx, y + 7, bw, 5)
-            Art.px(row.tuning and (value == 1 and "leaf" or "amber") or "leaf", bx, y + 7, floor(bw * ratio + 0.5), 5)
-            UI.setFont("tiny")
-            UI.drawTextAligned(sliderText(row, value), bx, y + 15, bw, "center", C.fog)
-            UI.setFont("main")
+            Art.px("slate", bx, y + 19, bw, 3)
+            Art.px(row.tuning and (value == 1 and "leaf" or "amber") or "leaf", bx, y + 19, floor(bw * ratio + 0.5), 3)
+            UI.drawTextAligned(sliderText(row, value), bx, y + 5, bw, "center", C.white)
             UI.drawPillButton(ctl.inc[1], ctl.inc[2], ctl.inc[3], ctl.inc[4], "+", "gray", self.pressed == (row.id .. ":inc"))
         elseif row.kind == "toggle" then
             local t = ctl.toggle

@@ -45,7 +45,15 @@
   <img src="docs/screenshots/menu_chests.png" alt="Chests" width="30%" />
   <img src="docs/screenshots/lucky_wheel.png" alt="Lucky wheel" width="30%" />
   <br/>
-  <sub><i>Captured in Azahar at Old 3DS clock — top screen above, touch screen below.</i></sub>
+  <img src="docs/screenshots/angel_sanctuary.png" alt="Angel sanctuary" width="30%" />
+  <img src="docs/screenshots/devil_pact.png" alt="Devil's pact" width="30%" />
+  <img src="docs/screenshots/merchant.png" alt="Merchant" width="30%" />
+  <br/>
+  <img src="docs/screenshots/pause.png" alt="Pause" width="30%" />
+  <img src="docs/screenshots/game_over.png" alt="Game over" width="30%" />
+  <img src="docs/screenshots/menu_settings.png" alt="Settings" width="30%" />
+  <br/>
+  <sub><i>Captured from the PC build at the native 3DS resolution, shown at 2x — top screen above, touch screen below.</i></sub>
 </div>
 
 ---

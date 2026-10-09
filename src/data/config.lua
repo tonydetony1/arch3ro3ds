@@ -2,6 +2,8 @@
 -- Paramètres globaux, dimensions matérielles et drapeaux de débogage
 
 local Config = {
+    VERSION = "1.0.12", -- shown on the title screen and in the hub settings
+
     -- Dimensions natives Nintendo 3DS
     TOP_WIDTH = 400,
     TOP_HEIGHT = 240,

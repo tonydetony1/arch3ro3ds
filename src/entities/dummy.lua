@@ -8,6 +8,7 @@ local Monsters = require("src.render.monsters")
 local AIController = require("src.core.ai_controller")
 local VFX = require("src.render.vfx_manager")
 local EliteAffixes = require("src.core.elite_affixes")
+local Art = require("src.render.art")
 local Admin = require("src.data.admin")
 local CombatRules = require("src.data.combat_rules")
 
@@ -17,6 +18,7 @@ Dummy.__index = Dummy
 -- Elemental statuses. A freeze never stacks or refreshes (it used to be renewed by every hit,
 -- locking a monster, boss included, for as long as the hero kept shooting) and is followed by
 -- a short immunity. Burn and poison deal a share of max HP, scaled down on bosses.
+local SPAWN_POP_TIME = 0.22 -- must match src/render/monsters.lua
 local FREEZE_TIME = 1.4
 local BOSS_FREEZE_TIME = 0.5
 local FREEZE_IMMUNITY = 2.0
@@ -38,6 +40,7 @@ function Dummy.create(index)
     self.hp = 60
     self.hitFlash = 0
     self.wobble = 0
+    self.spawnPop = 0
     self.type = "slime"
     self.isBoss = false
 
@@ -209,6 +212,7 @@ function Dummy:spawn(x, y, hp, monsterType)
     self.hp = self.maxHp
     self.hitFlash = 0
     self.wobble = 0
+    self.spawnPop = SPAWN_POP_TIME -- pops in tall and thin (src/render/monsters.lua)
 
     self.stateTimer = self.stateTimer or (math.random() * 0.4)
     self.cooldown = 0.6 + math.random() * 0.8
@@ -309,7 +313,10 @@ function Dummy:update(dt, player, projectilePool, obstacleManager, dummyPool, fc
         self.hitFlash = math.max(0, self.hitFlash - dt * 8)
     end
     if self.wobble > 0 then
-        self.wobble = math.max(0, self.wobble - dt * 4)
+        self.wobble = math.max(0, self.wobble - dt * 2.5)
+    end
+    if self.spawnPop > 0 then
+        self.spawnPop = math.max(0, self.spawnPop - dt)
     end
     if self.knockX ~= 0 or self.knockY ~= 0 then
         self.knockX = self.knockX * math.max(0, 1.0 - dt * 14)
@@ -391,26 +398,27 @@ function Dummy:draw(playerX, playerY)
     -- 2. Rendu procédural de la créature
     Monsters.draw(self, playerX, playerY, Config.DEBUG_MODE)
 
-    -- 3. Rendu des effets de statut élémentaires (Auras)
-    if self.status then
-        if self.status.freeze and self.status.freeze > 0 then
-            love.graphics.setColor(0.35, 0.85, 1.0, 0.65)
-            love.graphics.circle("line", self.x, self.y, self.radius + 3)
-            love.graphics.setColor(0.70, 0.95, 1.0, 0.35)
-            love.graphics.circle("fill", self.x, self.y, self.radius + 1)
+    -- 3. Elemental status auras: atlas sprites (pre-tinted ring, glow, pixels) in the
+    -- automatic batch instead of translucent circles costing one GPU call each
+    local status = self.status
+    if status then
+        local floor = math.floor
+        local top = floor(self.y - self.radius)
+        if status.freeze and status.freeze > 0 then
+            local r = (self.radius + 3) / 7
+            Art.drawEx("fx_glow_cyan", 1, floor(self.x + 0.5), floor(self.y + 0.5), 0, r * 1.2, r * 1.2)
+            Art.drawEx("fx_ring_cyan", 1, floor(self.x + 0.5), floor(self.y + 0.5), 0, r, r)
         end
-        if self.status.fire and self.status.fire > 0 then
+        if status.fire and status.fire > 0 then
             local ft = love.timer.getTime() * 8
-            love.graphics.setColor(1.0, 0.3, 0.1, 0.8)
-            love.graphics.circle("fill", self.x + math.sin(ft) * 3, self.y - self.radius - 4, 3)
-            love.graphics.setColor(1.0, 0.8, 0.2, 0.9)
-            love.graphics.circle("fill", self.x, self.y - self.radius - 2, 2)
+            local fx = floor(self.x + math.sin(ft) * 3 + 0.5)
+            Art.px("orange", fx - 1, top - 6, 3, 3)
+            Art.px("yellow", floor(self.x), top - 3, 2, 2)
         end
-        if self.status.poison and self.status.poison > 0 then
+        if status.poison and status.poison > 0 then
             local pt = love.timer.getTime() * 6
-            love.graphics.setColor(0.2, 0.9, 0.2, 0.75)
-            love.graphics.circle("fill", self.x - 4, self.y - self.radius - 3 + math.sin(pt) * 2, 2)
-            love.graphics.circle("fill", self.x + 4, self.y - self.radius - 5 + math.cos(pt) * 2, 1.5)
+            Art.px("leaf", floor(self.x) - 5, floor(top - 4 + math.sin(pt) * 2), 3, 3)
+            Art.px("mint", floor(self.x) + 3, floor(top - 6 + math.cos(pt) * 2), 2, 2)
         end
     end
 end

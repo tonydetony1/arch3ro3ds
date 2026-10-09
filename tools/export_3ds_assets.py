@@ -191,19 +191,37 @@ struct.pack_into("<HH", smdh, 4, 0, 0)
 
 # Titres pour les 16 langues supportées par la 3DS (0x200 = 512 octets par langue)
 # Offset 0x08 à 0x2008
-short_desc = "Arch3ro".encode("utf-16-le")[:64]
-long_desc = "Arch3ro - Roguelike Action 3DS".encode("utf-16-le")[:128]
-publisher = "TonyDeTony".encode("utf-16-le")[:64]
+# Entry layout (3dbrew SMDH): short description 0x80 bytes, long description 0x100 bytes,
+# publisher 0x80 bytes. The HOME Menu shows the long description and publisher on the top
+# screen when the title is selected.
+SMDH_LANGS = 16
+SMDH_SHORT, SMDH_LONG, SMDH_PUBLISHER = (0x00, 0x80), (0x80, 0x100), (0x180, 0x80)
+LANG_FRENCH = 2
 
-for lang in range(16):
+def smdh_text(text, size):
+    raw = text.encode("utf-16-le")
+    if len(raw) > size - 2:
+        raise ValueError(f"SMDH text too long ({len(raw)} > {size - 2} bytes): {text}")
+    return raw
+
+TITLES = {
+    "default": ("Arch3ro", "Arch3ro: roguelike archery action", "TonyDeTony"),
+    LANG_FRENCH: ("Arch3ro", "Arch3ro : roguelike d'action à l'arc", "TonyDeTony"),
+}
+
+for lang in range(SMDH_LANGS):
     base = 0x08 + lang * 0x200
-    smdh[base : base + len(short_desc)] = short_desc
-    smdh[base + 0x40 : base + 0x40 + len(long_desc)] = long_desc
-    smdh[base + 0xC0 : base + 0xC0 + len(publisher)] = publisher
+    texts = TITLES.get(lang, TITLES["default"])
+    for (offset, size), text in zip((SMDH_SHORT, SMDH_LONG, SMDH_PUBLISHER), texts):
+        raw = smdh_text(text, size)
+        smdh[base + offset : base + offset + len(raw)] = raw
 
 # Paramètres SMDH (Ratings, flags, region lock, etc.)
 struct.pack_into("<I", smdh, 0x2018, 0x7FFFFFFF) # Region-free (toutes régions)
-struct.pack_into("<I", smdh, 0x2028, 0x00001005) # Flags: Visible (0x1) | Allow3D (0x4) | New3DS (0x1000)
+# Flags: Visible (0x1) | Allow 3D (0x4) | Uses save data (0x80) | Record usage (0x100).
+# Never set 0x1000: it marks a New 3DS exclusive title and Old 3DS refuses to start it.
+SMDH_FLAGS = 0x0001 | 0x0004 | 0x0080 | 0x0100
+struct.pack_into("<I", smdh, 0x2028, SMDH_FLAGS)
 
 # Icônes à l'offset 0x2040 (8256)
 # 1. Icône 24x24 (1152 octets)

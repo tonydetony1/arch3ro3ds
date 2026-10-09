@@ -37,7 +37,8 @@ function SelfTest.update(gameStateMachine, testFrames)
             menu.currentTab = "equipment"
             menu.inventory:refresh()
             assert(#menu.inventory.slots == 6, "Must have exactly 6 equipment slots (weapon, armor, ring1, ring2, pet1, pet2)")
-            assert(menu.inventory.slots[1].w == 46 and menu.inventory.slots[1].h == 37, "Equipment slots must have extended 46x37 dimensions for padded text breathing")
+            -- Square 40 px slots in one row: big enough to tap with a finger on Old 3DS
+            assert(menu.inventory.slots[1].w == 40 and menu.inventory.slots[1].h == 40, "Equipment slots must be 40x40 touch targets")
             -- L'équipement se débloque désormais en jouant : seul le kit de départ est garanti
             assert(#menu.saveData.inventory >= #Save.STARTER_ITEMS, "Backpack must contain at least the starter kit")
             for _, starterId in ipairs(Save.STARTER_ITEMS) do
@@ -47,7 +48,7 @@ function SelfTest.update(gameStateMachine, testFrames)
                 end
                 assert(ownsStarter, "Starter item missing from backpack: " .. starterId)
             end
-            print(string.format("[TEST] Forge Tab active: 6 padded slots (46x37) in pyramid layout, %d items in backpack.", #menu.saveData.inventory))
+            print(string.format("[TEST] Forge Tab active: 6 slots (40x40) in one row, %d items in backpack.", #menu.saveData.inventory))
 
             -- Test de la Pop-up Modale d'objet et du système de rareté
             local bow = menu.saveData.inventory[1]
@@ -443,6 +444,10 @@ function SelfTest.update(gameStateMachine, testFrames)
             local critFct = VFX.fctItems[VFX.fctActive[VFX.fctActiveCount]]
             assert(critFct.isCrit == true and critFct.scale > normalFct.scale, "Crit FCT must have pop-scale > normal")
             assert(critFct.vy < normalFct.vy, "Crit FCT must have stronger upward burst")
+            -- A quick second hit on the same spot merges into the first number
+            VFX.addFCT(100, 100, 10, false)
+            assert(VFX.fctActiveCount == preFctCount + 2 and normalFct.text == "55" and normalFct.hits == 2,
+                "A quick hit on the same target must merge into one growing number")
             print("[TEST] Floating Combat Text (FCT) VALIDATED: Normal yellow, Critical red with pop-scale and physics.")
 
             -- E. Validation des SpriteBatches et Texture Atlas 3DS

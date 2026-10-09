@@ -30,6 +30,8 @@ local Arena = require("src.render.arena")
 local HUD = require("src.ui.hud")
 local AIController = require("src.core.ai_controller")
 local VFX = require("src.render.vfx_manager")
+local Monsters = require("src.render.monsters")
+local Ambience = require("src.render.ambience")
 local SpecialRoomManager = require("src.core.special_room_manager")
 local Sanctuary = require("src.render.sanctuary")
 local Depth = require("src.render.depth")
@@ -373,6 +375,12 @@ function GameState:setupRoom(roomNum)
     -- Décor du chapitre (prairie, désert, cristal, enfer) ou du sanctuaire, puis pré-rendu
     self.arena:setTheme(spec.themeIndex)
     self.arena:buildCanvas(self.mapW, self.mapH, self.currentChapter and self.currentChapter.palette or nil, self.obstacleManager)
+    -- Air of the world (leaves, sand, embers...); sanctuaries have their own ambient effects
+    if spec.kind == "sanctuary" then
+        Ambience.clear()
+    else
+        Ambience.setLook(spec.themeIndex, VFX.particleScale)
+    end
 
     -- Nettoyage des ennemis de la salle précédente
     self.dummyPool:clear()
@@ -551,13 +559,18 @@ function GameState:handleMonsterDeath(target)
     Save.addQuestProgress("kills", 1)
     if target.isBoss then Save.addQuestProgress("bosses", 1) end
     VFX.onKill(target.isBoss)
+    -- The monster bursts into shards of its own colours, with a shock ring on the ground
+    local shards = Monsters.shardColors(target.type)
     if target.isBoss then
         -- Boss death: hit-stop (in VFX.onKill), white flash, then slow motion
         VFX.addSparks(target.x, target.y, 8, { 1.0, 0.85, 0.3, 1.0 })
+        VFX.addShatter(target.x, target.y - 10, shards, 28)
+        VFX.addRing(target.x, target.y + 6, "amber", 5)
         self.slowmoTimer = 0.9
         self.flashTimer = 0.22
     else
-        VFX.addSparks(target.x, target.y, 5, { 1.0, 1.0, 1.0, 1.0 })
+        VFX.addShatter(target.x, target.y - 6, shards, target.elite and 14 or 9)
+        VFX.addRing(target.x, target.y + 4, target.elite and "amber" or "white", target.elite and 3 or 2)
     end
     AIController.onDeath(target, self.dummyPool, self.fctPool)
     -- Élite "volatile" : explosion télégraphiée à l'endroit de sa mort (bombe ennemie)
@@ -821,6 +834,7 @@ function GameState:update(dt)
     if VFX.update(dt) then
         return -- Fige complètement le jeu pendant 0.05s !
     end
+    Ambience.update(dt)
 
     -- Ralenti (mort d'un boss) : tout le gameplay tourne à 30 %
     if self.slowmoTimer > 0 then
@@ -1404,6 +1418,11 @@ function GameState:drawTop(eye)
     Perf.sec("h:textes")
 
     self.camera:detach()
+
+    -- 7b. Air of the world in front of the floor (screen space with a camera parallax)
+    Depth.push(Depth.FX)
+    Ambience.draw(self.camera.x, self.camera.y)
+    Depth.pop()
 
     -- The shake moves the world only: the vignette, banners, flashes and the room wipe stay
     -- locked to the screen, so full-screen overlays never leave a gap at the edges
