@@ -1,39 +1,56 @@
 #!/usr/bin/env python3
-"""HOME Menu 3D banner model: voxel "ARCH3RO" logo swaying in front of the menu backdrop.
+"""HOME Menu 3D banner model: a double-faced voxel "ARCH3RO" logo turning in front of a starry backdrop.
 
-Writes assets/banner/banner.gltf (self-contained, data URIs). Convert it to CGFX with pycgfx
+Writes assets/banner/backdrop.png and assets/banner/banner.gltf (self-contained, data URIs).
+Convert it to CGFX with pycgfx
 (https://github.com/skyfloogle/pycgfx, needs `gltflib` and `pillow`):
 
     python3 <pycgfx>/main.py assets/banner/banner.gltf assets/banner/banner.cgfx
 
 tools/build_all.py then builds Arch3ro.bnr from banner.cgfx with `bannertool makebanner -ci`.
 
-Real hardware rules (a bad banner can freeze the HOME Menu): one rigid node animation only
-(rotation + translation of the logo node, no skinning, no morph targets), CGFX under 512 KB,
-textures at most 256 px. Camera framing comes from pycgfx's banner-camera.gltf: eye at
-(0, 1, 44.786) looking down -Z, vertical field of view 30 degrees.
+Real hardware rules (a bad banner can freeze the HOME Menu): rigid node rotations only (no
+skinning, no morph targets), CGFX under 512 KB, textures at most 256 px. Camera framing comes
+from pycgfx's banner-camera.gltf: eye at (0, 1, 44.786) looking down -Z, vertical field of view
+30 degrees, so the centre of the screen is the line y = 1. pycgfx stores textures as RGBA4, so
+the backdrop is drawn with 16 levels per channel.
+
+Every position is baked into the vertices and the nodes have no rest transform: the logo is
+centred on the vertical axis x = z = 0 at the screen's centre height and only ever rotates
+around that axis, so it turns on itself whatever order the HOME Menu applies transforms in.
+Both faces carry readable text (the back one is mirrored), glued to a dark core.
+
+pycgfx turns rotation keys into Euler angles with asin(), which flips to another representation
+past 90 degrees and makes a linear key-to-key interpolation spin the wrong way. The full turn is
+therefore split between two nested nodes ("LogoTurn" and its child "Logo"), each turning half
+of the angle and so never reaching 90 degrees.
 """
 import base64
 import json
 import math
 import os
+import random
 import re
 import struct
+
+from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GLYPHS_LUA = os.path.join(ROOT, "src", "ui", "font_glyphs.lua")
 BACKDROP_PNG = os.path.join(ROOT, "assets", "banner", "backdrop.png")
 OUT_GLTF = os.path.join(ROOT, "assets", "banner", "banner.gltf")
 
-VOXEL = 0.62            # logo voxel size (world units)
+VOXEL = 0.56            # logo voxel size (world units)
 LOGO_DEPTH = 2          # logo thickness in voxels
-LOGO_Y = 4.6            # logo centre height
-SUB_VOXEL = 0.42        # "3DS" subtitle voxel size
-SWAY_DEG = 22           # logo sway amplitude around Y
-BOB = 0.45              # vertical float amplitude
-PERIOD = 4.0            # seconds per loop
+SCREEN_CENTER_Y = 1.0   # height of the camera axis: the logo's centre sits on it
+SUB_VOXEL = 0.38        # "3DS" subtitle voxel size
+TURN_PERIOD = 8.0       # seconds per full turn (back face, front face, back face)
+TURN_KEYS = 48          # rotation keys per turn (linear in between)
+TURN_EASE = 0.75        # 0 = constant speed; towards 1 the logo lingers on its readable faces
+TURN_LIMIT = 179.8      # turn range is +-this (each node stays below 90 degrees)
 BACKDROP_Z = -24.0
-BACKDROP_W, BACKDROP_H, BACKDROP_Y = 76.0, 38.0, 1.0
+BACKDROP_W, BACKDROP_H = 76.0, 38.0
+BACKDROP_SIZE = (256, 128)
 
 # Colours (sRGB, the HOME Menu does not convert them)
 LIGHT = (0xfe, 0xe7, 0x61)
@@ -119,7 +136,7 @@ def greedy_rects(cells):
     return rects
 
 
-def add_voxels(mesh, cells, size, origin, colors, skip=("back",)):
+def add_voxels(mesh, cells, size, origin, colors, skip=()):
     """Visible faces of a voxel set, merged into rectangles of one colour per plane.
     `colors(cell, face)` picks the colour; y grows downward in cell space."""
     ox, oy, oz = origin
@@ -148,48 +165,60 @@ def add_voxels(mesh, cells, size, origin, colors, skip=("back",)):
                     c[va] = v0 if q[va] == 0 else v1 + 1
                 if pa == 1:   # horizontal faces: plane row, q = 1 is the cell's top
                     c[1] = plane + (0 if q[1] == 1 else 1)
-                corners.append((ox + c[0] * size, oy - c[1] * size, oz + (c[2] - LOGO_DEPTH) * size))
+                corners.append((ox + c[0] * size, oy - c[1] * size, oz + c[2] * size))
             mesh.quad(corners, normal, color)
+
+
+def text_block(mesh, glyphs, text, size, top, palette):
+    """Double-faced voxel text: letters reading normally from the front, the mirrored letters
+    reading normally from the back, and a dark core one voxel larger than both all around (it
+    draws the outline). Centred on x = 0 and z = 0, `top` is the world height of its first row.
+    Returns the text height in voxels."""
+    pixels, w, h = text_mask(glyphs, text)
+    mirrored = {(w - 1 - x, y) for (x, y) in pixels}
+    kinds = {}
+    for (x, y) in pixels | mirrored:
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                kinds[(x + dx, y + dy, LOGO_DEPTH)] = "core"
+    for (x, y) in mirrored:
+        for z in range(LOGO_DEPTH):
+            kinds[(x, y, z)] = "letter"
+    for (x, y) in pixels:
+        for z in range(LOGO_DEPTH + 1, 2 * LOGO_DEPTH + 1):
+            kinds[(x, y, z)] = "letter"
+    light, main, side, under = palette
+
+    def color(cell, face):
+        if kinds[cell] == "core":
+            return INK if face in ("front", "back") else INK_SIDE
+        if face in ("front", "back"):
+            return light if cell[1] <= 2 else main
+        if face == "top":
+            return light
+        return under if face == "bottom" else side
+
+    depth = (2 * LOGO_DEPTH + 1) * size
+    add_voxels(mesh, set(kinds), size, (-w * size / 2, top, -depth / 2), color)
+    return h
 
 
 def logo_mesh(glyphs):
     mesh = Mesh()
-    pixels, w, h = text_mask(glyphs, "ARCH3RO")
-    cx = -w * VOXEL / 2
-    top = h * VOXEL / 2
-    letters = {(x, y, z) for (x, y) in pixels for z in range(LOGO_DEPTH)}
-
-    def letter_color(cell, face):
-        x, y, z = cell
-        if face == "front":
-            return LIGHT if y <= 2 else MAIN
-        if face == "top":
-            return LIGHT
-        if face == "bottom":
-            return UNDER
-        return SIDE
-
-    add_voxels(mesh, letters, VOXEL, (cx, top, 0.0), letter_color)
-    # ink backing one voxel larger all around and one voxel behind: reads as an outline
-    halo = {(x + dx, y + dy) for (x, y) in pixels for dx in (-1, 0, 1) for dy in (-1, 0, 1)}
-    backing = {(x, y, -1) for (x, y) in halo}
-    add_voxels(mesh, backing, VOXEL, (cx, top, 0.0), lambda c, f: INK if f in ("front", "back") else INK_SIDE)
-
-    sub, sw, sh = text_mask(glyphs, "3DS")
-    sub_cells = {(x, y, z) for (x, y) in sub for z in range(LOGO_DEPTH)}
-    sub_top = top - (h + 3) * VOXEL
-    sub_x = -sw * SUB_VOXEL / 2
-
-    def sub_color(cell, face):
-        if face == "front":
-            return SUB_LIGHT if cell[1] <= 2 else SUB_MAIN
-        return SUB_LIGHT if face == "top" else SUB_SIDE
-
-    add_voxels(mesh, sub_cells, SUB_VOXEL, (sub_x, sub_top, 0.0), sub_color)
-    sub_halo = {(x + dx, y + dy) for (x, y) in sub for dx in (-1, 0, 1) for dy in (-1, 0, 1)}
-    add_voxels(mesh, {(x, y, -1) for (x, y) in sub_halo}, SUB_VOXEL, (sub_x, sub_top, 0.0),
-               lambda c, f: INK if f in ("front", "back") else INK_SIDE)
+    top = 0.0
+    h = text_block(mesh, glyphs, "ARCH3RO", VOXEL, top, (LIGHT, MAIN, SIDE, UNDER))
+    text_block(mesh, glyphs, "3DS", SUB_VOXEL, top - (h + 3) * VOXEL, (SUB_LIGHT, SUB_MAIN, SUB_SIDE, SUB_SIDE))
+    center_mesh(mesh, (0.0, SCREEN_CENTER_Y, 0.0))
     return mesh
+
+
+def center_mesh(mesh, target):
+    """Moves the mesh so the centre of its bounding box lands on `target`."""
+    shift = []
+    for axis in range(3):
+        values = [p[axis] for p in mesh.pos]
+        shift.append(target[axis] - (min(values) + max(values)) / 2)
+    mesh.pos = [(p[0] + shift[0], p[1] + shift[1], p[2] + shift[2]) for p in mesh.pos]
 
 
 class Gltf:
@@ -248,16 +277,63 @@ class Gltf:
             json.dump(self.doc, f)
 
 
-def backdrop(g):
-    """Textured quad behind the logo showing the menu island scene."""
-    png = open(BACKDROP_PNG, "rb").read()
+def rgba4(color):
+    """Rounds a colour to the RGBA4 levels the HOME Menu texture keeps (steps of 17)."""
+    return tuple(min(255, int(round(v / 17)) * 17) for v in color)
+
+
+# Night sky in horizontal bands, a stepped glow behind the logo, stars around it
+SKY_BANDS = [rgba4(c) for c in ((17, 17, 34), (17, 17, 51), (17, 34, 68), (34, 34, 85))]
+GLOW_BANDS = [rgba4(c) for c in ((34, 51, 102), (51, 68, 119), (51, 85, 153))]
+GLOW_RX, GLOW_RY = 120, 58       # glow ellipse radii (texels)
+STAR_KEEP_OUT = (88, 40)         # no star inside this ellipse (behind the logo)
+STAR_COLORS = [rgba4(c) for c in ((255, 255, 255), (119, 238, 255), (255, 238, 102))]
+
+
+def draw_backdrop():
+    """256x128 backdrop texture: banded night sky, stepped glow centred on the logo, stars."""
+    w, h = BACKDROP_SIZE
+    cx, cy = w // 2, h // 2
+    im = Image.new("RGB", (w, h))
+    px = im.load()
+
+    def ellipse(x, y, rx, ry):
+        return math.hypot((x - cx) / rx, (y - cy) / ry)
+
+    for y in range(h):
+        sky = SKY_BANDS[min(len(SKY_BANDS) - 1, y * len(SKY_BANDS) // h)]
+        for x in range(w):
+            d = ellipse(x, y, GLOW_RX, GLOW_RY)
+            if d < 0.87:
+                px[x, y] = GLOW_BANDS[min(len(GLOW_BANDS) - 1, int((1 - d) * 1.15 * len(GLOW_BANDS)))]
+            else:
+                px[x, y] = sky
+    rnd = random.Random(11)          # fixed seed: the same sky on every build
+    for _ in range(80):
+        x, y = rnd.randrange(2, w - 2), rnd.randrange(2, h - 2)
+        if ellipse(x, y, *STAR_KEEP_OUT) < 1:
+            continue
+        r = rnd.random()
+        color = STAR_COLORS[0 if r < 0.4 else (1 if r < 0.7 else 2)]
+        px[x, y] = color
+        if rnd.random() < 0.2:      # a few bigger stars: dimmer cross around the core
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                bg = px[x + dx, y + dy]
+                px[x + dx, y + dy] = rgba4(tuple((a + b) // 2 for a, b in zip(color, bg)))
+    return im
+
+
+def backdrop(g, png_path):
+    """Textured quad behind the logo, centred on the camera axis, its position baked in."""
+    png = open(png_path, "rb").read()
     g.doc["images"] = [{"name": "backdrop", "uri": "data:image/png;base64," + base64.b64encode(png).decode()}]
     g.doc["samplers"] = [{"magFilter": 9728, "minFilter": 9728, "wrapS": 33071, "wrapT": 33071}]
     g.doc["textures"] = [{"sampler": 0, "source": 0}]
     g.doc["materials"].append({"name": "Backdrop", "pbrMetallicRoughness": {
         "baseColorTexture": {"index": 0}, "roughnessFactor": 1.0, "metallicFactor": 0.0}})
     hw, hh = BACKDROP_W / 2, BACKDROP_H / 2
-    pos = [(-hw, -hh, 0.0), (hw, -hh, 0.0), (hw, hh, 0.0), (-hw, hh, 0.0)]
+    cy, z = SCREEN_CENTER_Y, BACKDROP_Z
+    pos = [(-hw, cy - hh, z), (hw, cy - hh, z), (hw, cy + hh, z), (-hw, cy + hh, z)]
     uv = [(0.0, 1.0), (1.0, 1.0), (1.0, 0.0), (0.0, 0.0)]
     prim = {"attributes": {
         "POSITION": g.accessor(pos, "VEC3", 5126, "f", 34962, minmax=True),
@@ -265,40 +341,55 @@ def backdrop(g):
         "TEXCOORD_0": g.accessor(uv, "VEC2", 5126, "f", 34962)},
         "indices": g.accessor([0, 1, 2, 0, 2, 3], "SCALAR", 5123, "H", 34963), "material": 0}
     g.doc["meshes"].append({"name": "Backdrop", "primitives": [prim]})
-    g.add_node({"name": "Backdrop", "mesh": len(g.doc["meshes"]) - 1, "translation": [0.0, BACKDROP_Y, BACKDROP_Z]})
+    g.add_node({"name": "Backdrop", "mesh": len(g.doc["meshes"]) - 1})
 
 
-def sway_animation(g, node):
-    """Rigid TRS animation of the logo node: gentle sway around Y and a slow float."""
-    keys = 16
-    times = [PERIOD * i / keys for i in range(keys + 1)]
-    rots, trans = [], []
+def turn_angle(t):
+    """Logo rotation around its vertical axis at time t, in degrees: from -TURN_LIMIT (back face)
+    through 0 (front face) to +TURN_LIMIT, slowing down on each readable face."""
+    u = 2 * min(max(t, 0.0), TURN_PERIOD) / TURN_PERIOD
+    half = min(1, int(u))
+    f = u - half
+    eased = f - TURN_EASE * math.sin(2 * math.pi * f) / (2 * math.pi)
+    return -TURN_LIMIT + TURN_LIMIT * (half + eased)
+
+
+def turn_animation(g, outer, inner):
+    """Rigid rotations of the two logo nodes, each carrying half of the turn angle."""
+    times = [TURN_PERIOD * i / TURN_KEYS for i in range(TURN_KEYS + 1)]
+    assert all(abs(turn_angle(t)) < 180 for t in times), "a node would pass 90 degrees"
+    rots = []
     for t in times:
-        a = math.radians(SWAY_DEG) * math.sin(2 * math.pi * t / PERIOD)
+        a = math.radians(turn_angle(t) / 2)
         rots.append((0.0, math.sin(a / 2), 0.0, math.cos(a / 2)))
-        trans.append((0.0, LOGO_Y + BOB * math.sin(4 * math.pi * t / PERIOD), 0.0))
     t_acc = g.accessor(times, "SCALAR", 5126, "f", minmax=True)
     r_acc = g.accessor(rots, "VEC4", 5126, "f")
-    p_acc = g.accessor(trans, "VEC3", 5126, "f")
-    g.doc["animations"].append({"name": "LogoSway", "samplers": [
-        {"input": t_acc, "output": r_acc, "interpolation": "LINEAR"},
-        {"input": t_acc, "output": p_acc, "interpolation": "LINEAR"}], "channels": [
-        {"sampler": 0, "target": {"node": node, "path": "rotation"}},
-        {"sampler": 1, "target": {"node": node, "path": "translation"}}]})
+    g.doc["animations"].append({"name": "LogoTurn", "samplers": [
+        {"input": t_acc, "output": r_acc, "interpolation": "LINEAR"}], "channels": [
+        {"sampler": 0, "target": {"node": outer, "path": "rotation"}},
+        {"sampler": 0, "target": {"node": inner, "path": "rotation"}}]})
 
 
-def main():
+def build(backdrop_png, out_gltf):
     glyphs = load_glyphs()
     g = Gltf()
-    backdrop(g)
+    backdrop(g, backdrop_png)
     g.doc["materials"].append({"name": "Logo", "pbrMetallicRoughness": {
         "baseColorFactor": [1, 1, 1, 1], "roughnessFactor": 0.6, "metallicFactor": 0.0}})
     mesh = logo_mesh(glyphs)
-    node = g.add_node({"name": "Logo", "mesh": g.add_mesh(mesh, 1), "translation": [0.0, LOGO_Y, 0.0]})
-    sway_animation(g, node)
-    os.makedirs(os.path.dirname(OUT_GLTF), exist_ok=True)
-    g.save(OUT_GLTF)
-    print("banner model: %d vertices, %d triangles -> %s" % (len(mesh.pos), len(mesh.idx) // 3, OUT_GLTF))
+    inner = len(g.doc["nodes"])
+    g.doc["nodes"].append({"name": "Logo", "mesh": g.add_mesh(mesh, 1)})
+    outer = g.add_node({"name": "LogoTurn", "children": [inner]})
+    turn_animation(g, outer, inner)
+    os.makedirs(os.path.dirname(out_gltf), exist_ok=True)
+    g.save(out_gltf)
+    print("banner model: %d vertices, %d triangles -> %s" % (len(mesh.pos), len(mesh.idx) // 3, out_gltf))
+
+
+def main():
+    os.makedirs(os.path.dirname(BACKDROP_PNG), exist_ok=True)
+    draw_backdrop().save(BACKDROP_PNG)
+    build(BACKDROP_PNG, OUT_GLTF)
 
 
 if __name__ == "__main__":
