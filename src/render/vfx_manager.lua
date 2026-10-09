@@ -134,6 +134,7 @@ function VFX.buildTextureAtlas()
         xp        = Art.frame("fx_gem", 1),
         heart     = Art.frame("fx_heart", 1),
         scroll    = Art.frame("fx_scroll", 1),
+        chest     = Art.frame("loot_chest", 1),
         spark     = Art.frame("fx_spark", 1),
         shockwave = Art.frame("fx_ring", 1),
     }
@@ -674,6 +675,7 @@ function VFX.drawLootBatch(lootPool)
             if l.type == "xp" then f = F.xp
             elseif l.type == "heart" then f = F.heart
             elseif l.type == "scroll" then f = F.scroll
+            elseif l.type == "chest" then f = F.chest or F.coin
             elseif math.floor(spin + i) % 4 == 0 then f = F.coinEdge end
             batch:setColor(1, 1, 1, 1)
             batch:add(f.quad, math.floor(l.x + 0.5), math.floor(l.y - (l.z or 0) + 0.5), 0, 1, 1, f.ox, f.oy)

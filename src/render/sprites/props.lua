@@ -358,6 +358,22 @@ local BARREL = {
     "..rrrrrr..",
 }
 
+-- Boss chest (loot "chest", src/data/boss_loot.lua): wood, gold bands, lock
+local LOOT_CHEST = {
+    "..GGGGGGGGGGGG..",
+    ".GWWWWWWWWWWWWG.",
+    "GWWwWWWWWWWWwWWG",
+    "GWWwWWWWWWWWwWWG",
+    "GGGGGGGYYGGGGGGG",
+    "GwwwwwwYYwwwwwwG",
+    "GWWwWWWkkWWWwWWG",
+    "GWWwWWWWWWWWwWWG",
+    "GWWwWWWWWWWWwWWG",
+    "GWWwWWWWWWWWwWWG",
+    "GWWwWWWWWWWWwWWG",
+    ".GGGGGGGGGGGGGG.",
+}
+
 local CRATER = {
     "..kkkkkkkk..",
     ".kddddddddk.",
@@ -511,6 +527,7 @@ function Props.define(atlas)
     d("ice_patch", { ICE_PATCH }, { I = "0099db", i = "2ce8f5", W = "ffffff" }, nil, "center")
     d("barrel", { BARREL }, { R = "e43b44", r = "a22633", I = "8b9bb4", Y = "fee761", k = "3e2731" }, "181425", "bottom", VOL)
     d("barrel_crater", { CRATER }, { k = "3e2731", d = "5a3a2a" }, nil, "center")
+    d("loot_chest", { LOOT_CHEST }, { W = "b86f50", w = "733e39", G = "feae34", Y = "fee761", k = "3e2731" }, "181425", "center")
     d("lily", { LILY, LILY_FLOWER }, { G = "63c74d", L = "3e8948", p = "f6757a", w = "ffffff" }, "193c3e")
     d("reeds", { REEDS }, { R = "3e8948", b = "733e39" }, nil, "bottom")
     d("ripple", { RIPPLE }, { W = "ffffff" }, nil)
