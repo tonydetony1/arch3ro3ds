@@ -15,6 +15,18 @@ local Palette = require("src.render.palette")
 local PixelFont = require("src.ui.pixel_font")
 local Art = require("src.render.art")
 local Icons = require("src.render.sprites.icons")
+-- Skills of the run grouped by id (first occurrence order) with their stack count; built
+-- once when the screen opens instead of on every frame
+local function groupSkills(skills)
+    local order, count = {}, {}
+    for _, sk in ipairs(skills or {}) do
+        local key = sk.id or sk.name or tostring(sk)
+        if not count[key] then order[#order + 1] = sk end
+        count[key] = (count[key] or 0) + 1
+    end
+    return order, count
+end
+
 local GameOverState = {}
 GameOverState.__index = GameOverState
 
@@ -62,6 +74,7 @@ end
 
 function GameOverState:enter(data)
     self.data = data or self.data
+    self.skillOrder, self.skillCount = groupSkills(self.data.skills)
     self.timer = 0
     self.pressedBtn = nil
 
@@ -250,11 +263,7 @@ function GameOverState:drawBottom()
     if #skills == 0 then
         PixelFont.printf("NO SKILLS THIS RUN", 4, 132, botW - 8, "center", C.steel, "main")
     else
-        local order, count = {}, {}
-        for _, sk in ipairs(skills) do
-            if not count[sk.id] then order[#order + 1] = sk end
-            count[sk.id] = (count[sk.id] or 0) + 1
-        end
+        local order, count = self.skillOrder or {}, self.skillCount or {}
         for i, sk in ipairs(order) do
             if i > 6 then
                 PixelFont.printf("+" .. (#order - 6), 4, 170, botW - 16, "right", C.silver, "main")
@@ -264,7 +273,8 @@ function GameOverState:drawBottom()
             local sx, sy = 12 + col * 154, 98 + row * 26
             Art.draw(Icons.skillIcon(sk.icon), 1, sx + 8, sy + 10)
             PixelFont.printf(sk.name, sx + 20, sy + 4, 112, "left", C.white, "main", 1, nil, 1)
-            if count[sk.id] > 1 then PixelFont.print("x" .. count[sk.id], sx + 134, sy + 4, C.yellow, "main") end
+            local n = count[sk.id or sk.name or tostring(sk)] or 1
+            if n > 1 then PixelFont.print("x" .. n, sx + 134, sy + 4, C.yellow, "main") end
         end
     end
     buttonLabel(b1, "A", "RETRY", self.pressedBtn == "retry")

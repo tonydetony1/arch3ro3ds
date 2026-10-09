@@ -14,6 +14,18 @@ local Icons = require("src.render.sprites.icons")
 
 local C = Palette.C
 
+-- Skills of the run grouped by id (first occurrence order) with their stack count; built
+-- once when the screen opens instead of on every frame
+local function groupSkills(skills)
+    local order, count = {}, {}
+    for _, sk in ipairs(skills or {}) do
+        local key = sk.id or sk.name or tostring(sk)
+        if not count[key] then order[#order + 1] = sk end
+        count[key] = (count[key] or 0) + 1
+    end
+    return order, count
+end
+
 local PauseState = {}
 PauseState.__index = PauseState
 
@@ -44,6 +56,7 @@ end
 
 function PauseState:enter(runData)
     self.runData = runData or {}
+    self.skillOrder, self.skillCount = groupSkills(self.runData.skills)
     self.confirmQuit = false
 end
 
@@ -104,18 +117,15 @@ function PauseState:drawTop()
         PixelFont.printf("NO SKILLS YET", 6, 150, w - 12, "center", C.steel, "main")
         return
     end
-    local order, count = {}, {}
-    for _, sk in ipairs(skills) do
-        if not count[sk.id] then order[#order + 1] = sk end
-        count[sk.id] = (count[sk.id] or 0) + 1
-    end
+    local order, count = self.skillOrder or {}, self.skillCount or {}
     for i, sk in ipairs(order) do
         if i > SKILL_ROWS * SKILL_COLS then break end
         local col, row = (i - 1) % SKILL_COLS, math.floor((i - 1) / SKILL_COLS)
         local sx, sy = 14 + col * 190, 96 + row * 27
         Art.drawEx(Icons.skillIcon(sk.icon), 1, sx + 10, sy + 11, 0, 2, 2)
         PixelFont.printf(sk.name, sx + 26, sy + 5, 140, "left", C.white, "main", 1, nil, 1)
-        if count[sk.id] > 1 then PixelFont.print("x" .. count[sk.id], sx + 168, sy + 5, C.yellow, "main") end
+        local n = count[sk.id or sk.name or tostring(sk)] or 1
+        if n > 1 then PixelFont.print("x" .. n, sx + 168, sy + 5, C.yellow, "main") end
     end
     if #order > SKILL_ROWS * SKILL_COLS then
         PixelFont.printf("+" .. (#order - SKILL_ROWS * SKILL_COLS) .. " MORE", 6, 220, w - 20, "right", C.silver, "main")
