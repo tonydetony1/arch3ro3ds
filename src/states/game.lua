@@ -42,6 +42,8 @@ local Perf = require("src.core.perf")
 local Bestiary = require("src.data.bestiary")
 local Balance = require("src.data.balance")
 
+local VICTORY_DELAY = 2.0 -- seconds of golden pause between the last floor and the victory screen
+
 -- Temps processeur par image accordé à la préparation de la salle suivante (secondes).
 -- Sur console, le budget est la marge laissée par l'image précédente avant 1/60 s ; hors
 -- console (pas de mesure), budgets fixes.
@@ -164,9 +166,11 @@ function GameState:enter(params)
     self.isDrafting = false
     self.draftOptions = {}
 
-    -- 8. Game Over
+    -- 8. End of the run: death (game over) or the last Ascension floor cleared (victory)
     self.isGameOver = false
     self.gameOverTimer = 0
+    self.isVictory = false
+    self.victoryTimer = 0
     self.hasSpunStartWheel = false
 
     -- Permanent talents (effects described in src/data/talents.lua)
@@ -814,6 +818,56 @@ end
 -- ============================================================================
 -- BOUCLE DE MISE À JOUR PRINCIPALE
 -- ============================================================================
+-- Last Ascension floor cleared: golden pause on the hero before the victory screen
+function GameState:winRun()
+    self.isVictory = true
+    self.victoryTimer = 0
+    self.phase = "victory"
+    Audio.play("victory", 0, 1.0)
+    Audio.playMusic("hub", 0.8)
+    Banner.show("chapter", "VICTORY!", "ASCENSION COMPLETE")
+    VFX.addSparks(self.player.x, self.player.y - 10, 30, { 1.0, 0.85, 0.3, 1.0 })
+    self:triggerShake(0.25, 3.0)
+end
+
+-- Ends the run (death or victory): banks the gold, updates records and quests, clears the saved
+-- run and opens the end-of-run screen
+function GameState:finishRun(victory)
+    Save.addGold(self.goldEarnedRun)
+    Save.addQuestProgress("gold", self.goldEarnedRun)
+    Save.addQuestProgress("runs", 1, true)
+    local sData = Save.get()
+    local recordKey = (self.gameMode == "ascension") and "ascensionMax" or "infiniteMax"
+    local isNewRecord = self.roomNumber > (sData.records[recordKey] or 1)
+    if isNewRecord then sData.records[recordKey] = self.roomNumber end
+    if victory then
+        sData.records.ascensionClears = (sData.records.ascensionClears or 0) + 1
+    else
+        Audio.play("defeat", 0, 0.9)
+        Audio.playMusic("hub", 0.8)
+    end
+    Save.clearRun()
+    if self.gameMode == "survival" then
+        Save.setEventRecord("survival", self.waveCount or 0)
+    elseif self.gameMode == "boss_rush" then
+        Save.setEventRecord("boss_rush", self.roomNumber)
+    end
+    Save.save()
+
+    self.sm:switch("gameover", {
+        victory = victory,
+        waves = self.waveCount,
+        room = self.roomNumber,
+        goldEarned = self.goldEarnedRun,
+        kills = self.kills,
+        skills = self.acquiredSkills,
+        mode = self.gameMode,
+        isNewRecord = isNewRecord,
+        bestRoom = sData.records[recordKey],
+        clears = sData.records.ascensionClears or 0,
+    })
+end
+
 function GameState:update(dt)
     -- Panneau admin : invincibilité et ultime infini
     if Admin.get("god") then
@@ -842,45 +896,17 @@ function GameState:update(dt)
         dt = dt * 0.3
     end
 
-    -- Gestion du Game Over (Transition cinématique vers GameOverState)
+    -- Victory: a short golden pause, then the end-of-run screen
+    if self.isVictory then
+        self.victoryTimer = self.victoryTimer + dt
+        if self.victoryTimer >= VICTORY_DELAY then self:finishRun(true) end
+        return
+    end
+
+    -- Game over: short pause on the dying hero, then the end-of-run screen
     if self.isGameOver then
         self.gameOverTimer = self.gameOverTimer + dt
-        if self.gameOverTimer >= 1.2 then
-            Save.addGold(self.goldEarnedRun)
-            Save.addQuestProgress("gold", self.goldEarnedRun)
-            Save.addQuestProgress("runs", 1, true)
-            local sData = Save.get()
-            local isNewRecord = false
-            local prevRecord = (self.gameMode == "ascension") and (sData.records.ascensionMax or 1) or (sData.records.infiniteMax or 1)
-            if self.roomNumber > prevRecord then
-                isNewRecord = true
-                if self.gameMode == "ascension" then
-                    sData.records.ascensionMax = self.roomNumber
-                else
-                    sData.records.infiniteMax = self.roomNumber
-                end
-            end
-            Audio.play("defeat", 0, 0.9)
-            Audio.playMusic("hub", 0.8)
-            Save.clearRun()
-            if self.gameMode == "survival" then
-                Save.setEventRecord("survival", self.waveCount or 0)
-            elseif self.gameMode == "boss_rush" then
-                Save.setEventRecord("boss_rush", self.roomNumber)
-            end
-            Save.save()
-
-            self.sm:switch("gameover", {
-                waves = self.waveCount,
-                room = self.roomNumber,
-                goldEarned = self.goldEarnedRun,
-                kills = self.kills,
-                skills = self.acquiredSkills,
-                mode = self.gameMode,
-                isNewRecord = isNewRecord,
-                bestRoom = (self.gameMode == "ascension") and sData.records.ascensionMax or sData.records.infiniteMax,
-            })
-        end
+        if self.gameOverTimer >= 1.2 then self:finishRun(false) end
         return
     end
 
@@ -1245,12 +1271,16 @@ function GameState:update(dt)
     -- 9. ENTERING THE NORTH DOOR
     if self.isGateOpen and (self.phase == "clear" or self.phase == "combat") then
         local gateCenterX = self.mapW / 2
-        -- Hitbox d'entrée généreuse : contact avec le faisceau lumineux ou le vortex au nord
+        -- Generous entry hitbox: touching the light beam or the vortex in the north
         if self.player.y <= 55 and math.abs(self.player.x - gateCenterX) <= 38 then
-            -- Déclenchement de la transition fondue
-            self.phase = "transition"
-            self.fadeDirection = 1
-            self:triggerShake(0.20, 3.0)
+            if WorldManager.isFinalFloor(self.gameMode, self.roomNumber) then
+                self:winRun()
+            else
+                -- Start the fade transition to the next room
+                self.phase = "transition"
+                self.fadeDirection = 1
+                self:triggerShake(0.20, 3.0)
+            end
         end
     end
 end
@@ -1461,6 +1491,10 @@ function GameState:drawTop(eye)
     if self.isGameOver then
         local deathAlpha = math.min(1.0, self.gameOverTimer / 1.0)
         love.graphics.setColor(0.65, 0.05, 0.08, deathAlpha * 0.45)
+        love.graphics.rectangle("fill", 0, 0, Config.TOP_WIDTH, Config.TOP_HEIGHT)
+    elseif self.isVictory then
+        local glow = math.min(1.0, self.victoryTimer / VICTORY_DELAY)
+        love.graphics.setColor(1.0, 0.85, 0.35, glow * 0.40)
         love.graphics.rectangle("fill", 0, 0, Config.TOP_WIDTH, Config.TOP_HEIGHT)
     end
 end

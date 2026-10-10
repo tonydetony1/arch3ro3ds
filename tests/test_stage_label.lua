@@ -1,6 +1,6 @@
 -- tests/test_stage_label.lua
--- The "/ 50" floor counter only makes sense in the 50-floor Ascension run: the Abyss is endless
--- and nothing stops the run at floor 50, so it used to show "STAGE 57 / 50".
+-- The "/ 50" floor counter only makes sense in the 50-floor Ascension run: the Abyss is endless.
+-- Clearing floor 50 in Ascension now ends the run with a victory.
 
 local WorldManager = require("src.core.world_manager")
 
@@ -30,6 +30,18 @@ T["the stage text adds the total only when there is one"] = function()
     assert(WorldManager.stageText("ascension", 7) == "STAGE 7 / 50")
     assert(WorldManager.stageText("ascension", 57) == "STAGE 57")
     assert(WorldManager.stageText("infinite", 7) == "STAGE 7")
+end
+
+T["clearing floor 50 ends the Ascension run"] = function()
+    assert(WorldManager.isFinalFloor("ascension", 50) == true)
+    assert(WorldManager.isFinalFloor("ascension", 49) == false)
+    assert(WorldManager.isFinalFloor("ascension", 1) == false)
+end
+
+T["the Abyss and the event modes never end on a floor"] = function()
+    assert(WorldManager.isFinalFloor("infinite", 50) == false)
+    assert(WorldManager.isFinalFloor("boss_rush", 50) == false)
+    assert(WorldManager.isFinalFloor("survival", 50) == false)
 end
 
 return T

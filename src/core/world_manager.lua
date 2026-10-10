@@ -251,9 +251,14 @@ end
 -- ============================================================================
 WorldManager.ROOMS_PER_WORLD = 10
 
--- Length of the fixed Ascension run. Nothing ends the run there (floor 51 and beyond exist), so
--- the "/ 50" counter is only shown up to it; the Abyss and the event modes have no total.
+-- Length of the fixed Ascension run: clearing its last floor ends the run with a victory. The
+-- Abyss and the event modes have no total.
 WorldManager.ASCENSION_FLOORS = 50
+
+-- True when clearing this floor ends the run (the last Ascension floor)
+function WorldManager.isFinalFloor(mode, roomNumber)
+    return mode == "ascension" and (roomNumber or 1) >= WorldManager.ASCENSION_FLOORS
+end
 
 function WorldManager.floorTotal(mode, roomNumber)
     if mode == "ascension" and (roomNumber or 1) <= WorldManager.ASCENSION_FLOORS then
