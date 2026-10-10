@@ -86,4 +86,12 @@ T["gold skills show the coin icon, not the multishot arrows"] = function()
     assert(checked >= 4, "expected the gold skills to be checked, got " .. checked)
 end
 
+T["Crit Master doubles the crit bonus damage, as its text says"] = function()
+    -- a crit deals x2 by default (+100%); doubling that bonus gives x3 (+200%)
+    local p = { critChance = 0.15, critMultiplier = 2.0 }
+    apply("crit_master", p)
+    assert(math.abs(p.critMultiplier - 3.0) < 1e-9, "crit multiplier " .. p.critMultiplier)
+    assert(math.abs(p.critChance - 0.40) < 1e-9)
+end
+
 return T

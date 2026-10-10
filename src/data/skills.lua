@@ -345,7 +345,7 @@ Skills.register({
     hooks = {
         onApply = function(p)
             p.critChance = p.critChance + 0.25
-            p.critMultiplier = (p.critMultiplier or 2.0) + 0.5
+            p.critMultiplier = (p.critMultiplier or 2.0) + 1.0 -- x2 crits become x3: the +100% bonus doubles
         end,
     }
 })
