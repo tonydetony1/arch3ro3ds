@@ -399,7 +399,7 @@ function GameState:setupRoom(roomNum)
     if spec.kind == "sanctuary" then
         Ambience.clear()
     else
-        Ambience.setLook(spec.themeIndex, VFX.particleScale)
+        Ambience.setLook(spec.themeIndex, VFX.particleScale, self.mapW, self.mapH)
     end
 
     -- Nettoyage des ennemis de la salle précédente
@@ -1577,6 +1577,7 @@ function GameState:drawTop(eye)
     Depth.push(Depth.FX)
     VFX.drawProjectileBatch(self.projectilePool)
     VFX.drawParticles()
+    Ambience.draw() -- air of the world, scrolling with the floor
     Depth.pop()
     if self.sanctuary then self.sanctuary:drawAmbient(love.timer.getTime()) end
     Perf.sec("h:tirs")
@@ -1589,11 +1590,6 @@ function GameState:drawTop(eye)
     Perf.sec("h:textes")
 
     self.camera:detach()
-
-    -- 7b. Air of the world in front of the floor (screen space with a camera parallax)
-    Depth.push(Depth.FX)
-    Ambience.draw(self.camera.x, self.camera.y)
-    Depth.pop()
 
     -- The shake moves the world only: the vignette, banners, flashes and the room wipe stay
     -- locked to the screen, so full-screen overlays never leave a gap at the edges
