@@ -992,8 +992,7 @@ function GameState:finishRun(victory)
     Save.addQuestProgress("runs", 1, true)
     local sData = Save.get()
     local recordKey = (self.gameMode == "ascension") and "ascensionMax" or "infiniteMax"
-    local isNewRecord = self.roomNumber > (sData.records[recordKey] or 1)
-    if isNewRecord then sData.records[recordKey] = self.roomNumber end
+    local isNewRecord = Save.setFloorRecord(self.gameMode, self.roomNumber)
     if victory then
         sData.records.ascensionClears = (sData.records.ascensionClears or 0) + 1
     else
@@ -1001,10 +1000,11 @@ function GameState:finishRun(victory)
         Audio.playMusic("hub", 0.8)
     end
     Save.clearRun()
+    -- Event modes keep their own records: they never touch the floor records
     if self.gameMode == "survival" then
-        Save.setEventRecord("survival", self.waveCount or 0)
+        isNewRecord = Save.setEventRecord("survival", self.waveCount or 0)
     elseif self.gameMode == "boss_rush" then
-        Save.setEventRecord("boss_rush", self.roomNumber)
+        isNewRecord = Save.setEventRecord("boss_rush", self.roomNumber)
     end
     Save.save()
 
