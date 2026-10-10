@@ -115,6 +115,8 @@ function GameState:enter(params)
     self.mapH = 480
 
     -- 2. Initialisation du joueur et application des équipements de la Forge
+    -- The state is a singleton: drop the last run's skills before the synergy check below
+    self.acquiredSkills = {}
     self.player = Player.new(self.mapW / 2, self.mapH - 50)
     -- Bonus de maîtrise du bestiaire (50 / 200 / 500 éliminations par monstre)
     self.player.mastery = Bestiary.buildMasteryTable(Save.getBestiary())
@@ -148,7 +150,6 @@ function GameState:enter(params)
     self.roomNumber = 1
     self.chapterIndex = 1
     self.ultimateCharge = 0.5
-    self.acquiredSkills = {}
 
     -- 5. Room state machine
     self.phase = "combat" -- "combat", "clear", "transition"
