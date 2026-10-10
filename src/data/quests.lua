@@ -1,5 +1,5 @@
 -- src/data/quests.lua
--- Quêtes journalières et Passe de Combat (jauge à paliers) façon Archero.
+-- Daily quests and the Battle Pass (tiered progress bar).
 -- Les compteurs vivent dans la sauvegarde ; ce fichier ne décrit que les règles.
 
 local Quests = {}

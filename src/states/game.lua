@@ -1,5 +1,5 @@
 -- src/states/game.lua
--- Boucle de gameplay Archero complète : Biomes, Loot physique, Magnétisme, Leveling exponentiel & 200 Skills Hook
+-- Gameplay loop: biomes, physical loot, magnetism, exponential levelling and skill hooks
 
 local Config = require("src.data.config")
 local Weapons = require("src.data.weapons")
@@ -117,7 +117,7 @@ function GameState:enter(params)
     self.player.mastery = Bestiary.buildMasteryTable(Save.getBestiary())
     self.player:setBounds(self.mapW, self.mapH)
 
-    -- Application du Héros sélectionné et de ses passifs uniques Archero 2
+    -- Apply the selected hero and its unique passives
     local Heroes = require("src.data.heroes")
     local curHeroId = (saveData and saveData.selectedHero) or "atreus"
     self.heroId = curHeroId
@@ -147,7 +147,7 @@ function GameState:enter(params)
     self.ultimateCharge = 0.5
     self.acquiredSkills = {}
 
-    -- 5. Machine d'états de la salle (Archero Flow)
+    -- 5. Room state machine
     self.phase = "combat" -- "combat", "clear", "transition"
     self.isGateOpen = false
     self.fadeAlpha = 0
@@ -1242,7 +1242,7 @@ function GameState:update(dt)
         end
     end
 
-    -- 9. ENTRÉE DANS LA PORTE NORD D'ARCHERO
+    -- 9. ENTERING THE NORTH DOOR
     if self.isGateOpen and (self.phase == "clear" or self.phase == "combat") then
         local gateCenterX = self.mapW / 2
         -- Hitbox d'entrée généreuse : contact avec le faisceau lumineux ou le vortex au nord
@@ -1592,7 +1592,7 @@ function GameState:triggerPause()
 end
 
 -- ============================================================================
--- 5. ULTIMES DÉDIÉS POUR CHAQUE HÉROS ARCHERO 2
+-- 5. DEDICATED ULTIMATES FOR EACH HERO
 -- ============================================================================
 function GameState:triggerUltimate()
     Audio.play("ultimate", 0, 1.0)

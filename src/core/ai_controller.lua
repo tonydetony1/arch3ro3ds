@@ -1,5 +1,5 @@
 -- src/core/ai_controller.lua
--- Contrôleur d'Intelligence Artificielle complet style "Archero" pour Nintendo 3DS & PC
+-- Monster AI controller (movement and attack patterns) for Nintendo 3DS & PC
 -- Gère les 6 archétypes stricts :
 -- 1. Melee Chargers (Loups avec Stalking / Chauves-souris)
 -- 2. Ranged Snipers (Squelettes Archers avec Ligne rouge et visée verrouillée)

@@ -1,5 +1,5 @@
 -- src/states/inventory.lua
--- Archero-style inventory and equipment panel for the bottom screen (320x240):
+-- Inventory and equipment panel for the bottom screen (320x240):
 -- 6 equipment slots around the hero, a kinetic-scrolling backpack grid, 5 colored
 -- rarity tiers and a detailed item sheet (equip / upgrade / fuse).
 --

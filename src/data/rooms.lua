@@ -1,5 +1,5 @@
 -- src/data/rooms.lua
--- Salles dessinées à la main, façon Archero : grilles ASCII de 13 x 9 cases (45 à 50 px).
+-- Hand-drawn rooms: 13 x 9 ASCII grids (45 to 50 px cells).
 -- La salle épouse exactement la grille : ce qui touche le bord de la grille touche le mur.
 -- La porte de sortie est au nord (case centrale de la 1re ligne), le héros entre par le
 -- sud (case centrale de la dernière ligne). Chaque grille est validée par Rooms.validate

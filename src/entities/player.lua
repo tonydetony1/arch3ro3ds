@@ -70,7 +70,7 @@ function Player.new(startX, startY)
     self.goldMultiplier = 1.0
     self.dodgeChance = 0
 
-    -- Compétences de tirs (Multishot Archero)
+    -- Shooting skills (multishot)
     self.frontArrows = 1
     self.diagArrows = 0
     self.rearArrows = 0
@@ -85,7 +85,7 @@ function Player.new(startX, startY)
         Pet.new("ghost_mage", 2),
     }
 
-    -- Progression (XP exponentielle Archero : 50 * (Niv ^ 1.5))
+    -- Progression (exponential XP: 50 * (level ^ 1.5))
     self.level = 1
     self.xp = 0
     self.nextLevelXp = math.floor(50 * (self.level ^ 1.5))
@@ -216,7 +216,7 @@ function Player:equipWeapon(weaponId)
     end
 end
 
--- Système d'XP exponentiel Archero
+-- Exponential XP curve
 function Player:addXp(amount)
     self.xp = self.xp + amount
     local leveledUp = false
@@ -842,7 +842,7 @@ local function drawOrbitals(self)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
--- Barre de vie façon Archero : PV chiffrés au-dessus d'une jauge verte segmentée
+-- Health bar: HP number above a segmented green gauge
 local function drawHealthBar(self)
     local barW = 24
     local x = math.floor(self.x - barW / 2)

@@ -134,7 +134,7 @@ function SelfTest.update(gameStateMachine, testFrames)
             local g = gameStateMachine.current
             g.isDrafting = false
             g.specialRoomManager.isActive = false
-            -- Validation du passage dans la porte nord d'Archero
+            -- Check going through the north door
             g.isGateOpen = true
             g.phase = "clear"
             g.player.x = g.mapW / 2
@@ -218,7 +218,7 @@ function SelfTest.update(gameStateMachine, testFrames)
             hero.x, hero.y = heroX, heroY
             print("[TEST] Wind gusts VALIDATED: the hero is pushed through collisions.")
 
-            -- C. Validation des 6 ARCHÉTYPES D'ARCHERO
+            -- C. Check the 6 monster archetypes
             g.dummyPool:clear()
 
             -- 1. Melee Charger (Loup Stalker)
@@ -739,7 +739,7 @@ function SelfTest.update(gameStateMachine, testFrames)
             print("[TEST] Companion Pets System VALIDATED: Dual autonomous familiars with smooth spring-follow & auto-shooting.")
 
         elseif testFrames == 110 then
-            -- 6. VALIDATION ARCHERO 2 : ROSTER DES 5 HÉROS & PASSIFS UNIQUES
+            -- 6. Check the roster of 5 heroes and their unique passives
             local Heroes = require("src.data.heroes")
             assert(#Heroes.getAll() == 5, "Hero roster must contain 5 distinct heroes")
 
@@ -779,7 +779,7 @@ function SelfTest.update(gameStateMachine, testFrames)
             assert(okUnlock == true, "Helix must be unlockable with gems")
             assert(Save.get().unlockedHeroes.helix == true, "Helix must now be marked unlocked")
 
-            print("[TEST] Archero 2 Hero Roster VALIDATED: 5 heroes (Atreus, Urasil, Phoren, Helix, Rolla) with unique combat passives.")
+            print("[TEST] Hero Roster VALIDATED: 5 heroes (Atreus, Urasil, Phoren, Helix, Rolla) with unique combat passives.")
 
             -- 7. VALIDATION DU CARROUSEL DE CHAPITRES
             Save.setChapter(2)
@@ -1262,7 +1262,7 @@ function SelfTest.update(gameStateMachine, testFrames)
             local mem = collectgarbage("count")
             print(string.format("[TEST] %d frames executed cleanly. RAM Lua: %.2f Ko.", testFrames, mem))
             assert(mem < 8000, "Lua RAM must remain under 8000 Ko (8 MB) for 3DS Old compatibility")
-            print("[TEST] SUCCESS: 100% Faithful Archero 2 Clone for Nintendo 3DS VALIDATED!")
+            print("[TEST] SUCCESS: 100% Arch3ro 3DS selftest VALIDATED!")
             print("[TEST] - 1. Unique Weapon Movesets (Death Scythe, Stalker Staff, Boomerang, Brightspear): OK")
             print("[TEST] - 2. Dash / Dodge Roll with 0.2s I-Frames: OK")
             print("[TEST] - 3. Interactive Explosive Barrels & Monster Spike Hazards: OK")

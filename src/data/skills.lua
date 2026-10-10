@@ -689,7 +689,7 @@ Skills.register({
 })
 
 -- ============================================================================
--- 9. POUVOIRS CLASSIQUES D'ARCHERO (marque, clone, vie bonus, nova, soin)
+-- 9. CLASSIC POWERS (mark, clone, extra life, nova, heal)
 -- ============================================================================
 Skills.register({
     id = "dark_touch",
@@ -1089,7 +1089,7 @@ function Skills.get(id)
 end
 
 -- ============================================================================
--- SYNERGIES & FUSIONS LÉGENDAIRES DE COMPÉTENCES (STYLE VAMPIRE SURVIVORS / ARCHERO 2)
+-- LEGENDARY SKILL SYNERGIES & FUSIONS
 -- ============================================================================
 Skills.SYNERGIES = {
     toxic_flame = {

@@ -1,12 +1,12 @@
 -- src/data/items.lua
--- Catalogue data-driven des équipements, armes, armures, anneaux et familiers
--- Système de raretés Archero : Commun, Atypique, Rare, Épique, Légendaire
--- Calcul dynamique des stats et des passifs débloqués par palier
+-- Data-driven catalogue of gear: weapons, armour, rings and pets
+-- Rarity tiers: Common, Uncommon, Rare, Epic, Legendary
+-- Stats and passives unlocked per tier are computed on the fly
 
 local Balance = require("src.data.balance")
 
 local Items = {
-    -- COULEURS OFFICIELLES DU DESIGN SYSTEM ARCHERO
+    -- Rarity colours of the game's design system
     RARITIES = {
         common = {
             id = "common",

@@ -185,7 +185,7 @@ function VFX.shake(intensity, duration)
     end
 end
 
--- Raccourcis sémantiques Archero
+-- Semantic shortcuts
 function VFX.shakeLight()  VFX.shake(2.5, 0.10) end -- Tir puissant / flèche
 function VFX.shakeMedium() VFX.shake(6.5, 0.18) end -- Joueur blessé / contact
 function VFX.shakeHeavy()  VFX.shake(11.0, 0.26) end -- Coup critique / explosion / mort boss

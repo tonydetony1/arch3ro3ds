@@ -1,11 +1,11 @@
 -- src/ui/banner.lua
--- Bannières de l'écran du haut, façon Archero :
---   * "chapter" : grand ruban doré à l'entrée d'un nouveau chapitre
---   * "boss"    : bandeau rouge "BOSS" + nom du monstre, à l'apparition d'un boss
---                 (titre remplaçable : "CHAMPION" en ambre pour les champions des salles x7)
---   * "clear"   : "SALLE TERMINÉE !" + or gagné dans la salle
---   * "room"    : petit rappel "SALLE 7 / 50" au début de chaque salle
--- Une seule bannière à la fois (la plus récente remplace l'autre). Aucune allocation par image.
+-- Top screen banners:
+--   * "chapter" : big golden ribbon when a new chapter starts
+--   * "boss"    : red "BOSS" strip + monster name when a boss appears
+--                 (title can be replaced: amber "CHAMPION" for the x7 room champions)
+--   * "clear"   : "ROOM CLEARED!" + gold earned in the room
+--   * "room"    : small "ROOM 7 / 50" reminder at the start of each room
+-- One banner at a time (the newest replaces the other). No allocation per frame.
 
 local Config = require("src.data.config")
 local Palette = require("src.render.palette")
@@ -105,7 +105,7 @@ function Banner.draw()
     love.graphics.setColor(1, 1, 1, 1)
 end
 
--- Barre de vie du boss en haut de l'écran (comme dans Archero)
+-- Boss health bar at the top of the screen
 function Banner.drawBossBar(boss, name)
     if not boss then return end
     local ratio = math.max(0, math.min(1, boss.hp / math.max(1, boss.maxHp)))
