@@ -650,14 +650,14 @@ end
 -- ÉTOILE D'INVINCIBILITÉ : bulle dorée de 2 s toutes les 10 s
 -- ============================================================================
 function Player:updateStar(dt)
-    if not self.hasStar then return end
+    -- The bubble always runs out (the extra life raises it too); only the Star skill refills it
     if (self.starActive or 0) > 0 then
         self.starActive = self.starActive - dt
         if self.starActive <= 0 then
             self.starActive = 0
             self.starCooldown = 10.0
         end
-    else
+    elseif self.hasStar then
         self.starCooldown = (self.starCooldown or 10.0) - dt
         if self.starCooldown <= 0 then
             self.starActive = 2.0

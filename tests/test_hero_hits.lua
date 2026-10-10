@@ -85,6 +85,23 @@ T["an enemy shot hurts the hero and can end the run"] = function()
     assert(p.hp == 0 and g.isGameOver, "the run must end at 0 HP")
 end
 
+T["an extra life revives the hero killed by an enemy shot"] = function()
+    local p = hero(20)
+    p.extraLives = 1
+    local g = game(p)
+    assert(g:hurtHero(25) == true)
+    assert(not g.isGameOver, "the extra life was skipped: the run ended")
+    assert(p.hp == 50 and p.extraLives == 0, "the hero must come back at half HP")
+end
+
+T["the revive window runs out without the Star skill"] = function()
+    local p = hero(50)
+    p.starActive = 2.0 -- set when the extra life kicks in
+    p:updateStar(2.1)
+    local dealt, blocked = p:takeDamage(10)
+    assert(not blocked and dealt == 10, "the hero stayed invulnerable after the revive window")
+end
+
 T["an enemy shot can be dodged"] = function()
     withRoll(0.1, function()
         local p = hero()

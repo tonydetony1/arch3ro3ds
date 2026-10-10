@@ -666,11 +666,32 @@ function GameState:hurtHero(dmg, chill)
     VFX.shakeMedium()
     VFX.addFCT(p.x, p.y - 12, dealt, false)
     VFX.addSparks(p.x, p.y, 6, HURT_SPARK)
-    if p.hp <= 0 and not self.isGameOver then
-        self.isGameOver = true
-        self.gameOverTimer = 0
-    end
+    self:resolveHeroDeath()
     return true
+end
+
+-- The single place where 0 HP is decided: an extra life revives the hero at half HP behind a
+-- 2 s bubble, otherwise the run ends. Shots, blasts, contact hits and hazards all end up here.
+local REVIVE_SPARK = { 1.0, 0.9, 0.4, 1.0 }
+local REVIVE_BUBBLE = 2.0
+
+function GameState:resolveHeroDeath()
+    local p = self.player
+    if p.hp > 0 or self.isGameOver then return end
+    if (p.extraLives or 0) > 0 then
+        p.extraLives = p.extraLives - 1
+        p.hp = math.floor(p.maxHp * 0.5)
+        p.starActive = math.max(p.starActive or 0, REVIVE_BUBBLE)
+        VFX.shakeHeavy()
+        VFX.addSparks(p.x, p.y, 22, REVIVE_SPARK)
+        VFX.addFCT(p.x, p.y - 24, "RESURRECTION!", true)
+        Audio.play("level_up", 0, 1.0)
+        return
+    end
+    self.isGameOver = true
+    self.gameOverTimer = 0
+    VFX.shakeHeavy()
+    VFX.hitStop(0.12)
 end
 
 -- Damage, effects and skill hooks of one arrow (or beam) hitting one monster. Returns whether
@@ -1042,24 +1063,8 @@ function GameState:update(dt)
         return
     end
 
-    -- Vie supplémentaire : résurrection avec la moitié des PV
-    if self.player.hp <= 0 and (self.player.extraLives or 0) > 0 and not self.isGameOver then
-        self.player.extraLives = self.player.extraLives - 1
-        self.player.hp = math.floor(self.player.maxHp * 0.5)
-        self.player.starActive = math.max(self.player.starActive or 0, 2.0)
-        VFX.shakeHeavy()
-        VFX.addSparks(self.player.x, self.player.y, 22, { 1.0, 0.9, 0.4, 1.0 })
-        VFX.addFCT(self.player.x, self.player.y - 24, "RESURRECTION!", true)
-        Audio.play("level_up", 0, 1.0)
-    end
-
-    -- Vérification globale de mort du joueur
-    if self.player.hp <= 0 and not self.isGameOver then
-        self.isGameOver = true
-        self.gameOverTimer = 0
-        VFX.shakeHeavy()
-        VFX.hitStop(0.12)
-    end
+    -- Hero at 0 HP from contact hits or hazards: extra life, or the end of the run
+    self:resolveHeroDeath()
 
     -- Gestion de la transition entre salles (Fade Out / Fade In)
     if self.phase == "transition" then
