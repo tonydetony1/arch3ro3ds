@@ -36,6 +36,7 @@ local files = {
     "tests.test_item_passives",
     "tests.test_monster_respawn",
     "tests.test_new_run",
+    "tests.test_orbitals",
 }
 
 local passed, failed = 0, 0

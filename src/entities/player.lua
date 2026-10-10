@@ -646,6 +646,48 @@ function Player:updateShadowClone(dt, projectilePool, dummyPool)
     end
 end
 
+-- Seconds between two hits of the same orbital on the same monster. Without it a blade hit on
+-- every frame it touched, so its damage followed the frame rate (60 FPS on PC, 30-45 on 3DS).
+Player.ORBITAL_HIT_INTERVAL = 0.2
+local ORBITAL_HIT_EPSILON = 1e-6 -- the clock adds up dt: keep 6 x (1/30) equal to 0.2
+
+-- Orbiting blades and shields: they circle the hero and cut every monster they touch
+function Player:updateOrbitals(dt, dummyPool, fctPool)
+    if not self.orbitals or #self.orbitals == 0 then return end
+    local clock = (self.orbitalClock or 0) + dt
+    self.orbitalClock = clock
+    local interval = Player.ORBITAL_HIT_INTERVAL - ORBITAL_HIT_EPSILON
+    for _, orb in ipairs(self.orbitals) do
+        orb.angle = (orb.angle + dt * 4.2) % (math.pi * 2)
+        orb.x = self.x + math.cos(orb.angle) * orb.dist
+        orb.y = self.y + math.sin(orb.angle) * orb.dist
+        -- Last hit time per monster pool slot, created once per orbital
+        orb.hitAt = orb.hitAt or {}
+        local hitAt = orb.hitAt
+
+        -- Collisions orbitales avec les monstres
+        if dummyPool and dummyPool.activeCount > 0 then
+            for i = 1, dummyPool.activeCount do
+                local dIdx = dummyPool.activeList[i]
+                local target = dummyPool.items[dIdx]
+                if target and target.alive then
+                    local odx = target.x - orb.x
+                    local ody = target.y - orb.y
+                    if (odx * odx + ody * ody) < (target.radius + 6) * (target.radius + 6)
+                        and clock - (hitAt[dIdx] or -math.huge) >= interval then
+                        hitAt[dIdx] = clock
+                        target:takeDamage(orb.dmg or 15)
+                        if fctPool then
+                            local f = fctPool:obtain()
+                            if f then f:spawn(target.x, target.y - 8, orb.dmg or 15, false) end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
 -- ============================================================================
 -- ÉTOILE D'INVINCIBILITÉ : bulle dorée de 2 s toutes les 10 s
 -- ============================================================================
@@ -783,34 +825,7 @@ function Player:update(dt, projectilePool, dummyPool, fctPool, obstacleManager, 
         self.recoil = math.max(0, self.recoil - dt * 25)
     end
 
-    -- Mise à jour des Épées / Orbes orbitaux
-    if self.orbitals and #self.orbitals > 0 then
-        for _, orb in ipairs(self.orbitals) do
-            orb.angle = (orb.angle + dt * 4.2) % (math.pi * 2)
-            orb.x = self.x + math.cos(orb.angle) * orb.dist
-            orb.y = self.y + math.sin(orb.angle) * orb.dist
-
-            -- Collisions orbitales avec les monstres
-            if dummyPool and dummyPool.activeCount > 0 then
-                for i = 1, dummyPool.activeCount do
-                    local dIdx = dummyPool.activeList[i]
-                    local target = dummyPool.items[dIdx]
-                    if target and target.alive then
-                        local odx = target.x - orb.x
-                        local ody = target.y - orb.y
-                        if (odx * odx + ody * ody) < (target.radius + 6) * (target.radius + 6) then
-                            target:takeDamage(orb.dmg or 15)
-                            if fctPool then
-                                local f = fctPool:obtain()
-                                if f then f:spawn(target.x, target.y - 8, orb.dmg or 15, false) end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
+    self:updateOrbitals(dt, dummyPool, fctPool)
     self:updateFlyingSwords(dt, dummyPool, fctPool)
     self:updateStar(dt)
     self:updateShadowClone(dt, projectilePool, dummyPool)
