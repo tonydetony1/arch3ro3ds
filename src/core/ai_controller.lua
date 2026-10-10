@@ -34,11 +34,11 @@ end
 local CONTACT_SPARK = { 1, 0.2, 0.2, 1 }
 local DODGE_SPARK = { 0.35, 0.85, 1.0, 1.0 }
 
--- Contact hit on the hero: scaled damage, ignored during the dash and invulnerability
--- frames (Player:takeDamage). Returns true when the attack is resolved: it landed, or the
--- hero dodged it (a dodge must not be rolled again every frame).
-local function hurtPlayer(player, base)
-    local dealt, blocked, reason = player:takeDamage(AIController.scaleDamage(base), true)
+-- Contact hit on the hero by `attacker`: scaled damage, ignored during the dash and
+-- invulnerability frames (Player:takeDamage). Returns true when the attack is resolved: it
+-- landed, or the hero dodged it (a dodge must not be rolled again every frame).
+local function hurtPlayer(player, base, attacker)
+    local dealt, blocked, reason = player:takeDamage(AIController.scaleDamage(base), true, "contact", attacker)
     if blocked then
         if reason ~= "dodge" then return false end
         VFX.addFCT(player.x, player.y - 12, "DODGE", false)
@@ -155,7 +155,7 @@ function bossCtx.contact(d, damage)
     local dx, dy = player.x - d.x, player.y - d.y
     local r = (d.radius or 16) + (player.radius or 9)
     if dx * dx + dy * dy > r * r then return false end
-    local dealt, blocked, reason = player:takeDamage(math.floor(damage + 0.5), true)
+    local dealt, blocked, reason = player:takeDamage(math.floor(damage + 0.5), true, "contact", d)
     if blocked then
         if reason ~= "dodge" then return false end
         VFX.addFCT(player.x, player.y - 12, "DODGE", false)
@@ -293,7 +293,7 @@ function AIController.update(dummy, dt, player, projectilePool, obstacleManager,
 
             -- Contact damage (once per dash; dodged when the hero dashes through)
             if not dummy.didHitPlayer and dist < (dummy.radius + player.radius) then
-                dummy.didHitPlayer = hurtPlayer(player, isWolf and 16 or 13)
+                dummy.didHitPlayer = hurtPlayer(player, isWolf and 16 or 13, dummy)
             end
 
             if dummy.stateTimer <= 0 then
@@ -750,7 +750,7 @@ function AIController.update(dummy, dt, player, projectilePool, obstacleManager,
 
         -- Contact damage, then a cooldown so the hero is not hit every frame
         if dist < (dummy.radius + player.radius) and dummy.cooldown <= 0 then
-            if hurtPlayer(player, isSplitter and 18 or (isMini and 8 or 12)) then
+            if hurtPlayer(player, isSplitter and 18 or (isMini and 8 or 12), dummy) then
                 dummy.cooldown = 1.0
             end
         end

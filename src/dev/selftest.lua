@@ -848,7 +848,10 @@ function SelfTest.update(gameStateMachine, testFrames)
             local pStaff = g.projectilePool:obtain()
             pStaff:spawn(g.player.x, g.player.y, 1, 0, g.player.currentWeapon, false, 0, false, { playerRef = g.player })
             assert(pStaff.dirY == 0, "Initial staff bullet direction Y must be 0")
-            pStaff:update(0.1, g.mapW, g.mapH, g.obstacleManager, g.dummyPool, g.player)
+            -- Only the test target is visible to the orb: room monsters left from earlier steps
+            -- may stand closer and made this check depend on where they wandered
+            local onlyTarget = { activeCount = 1, activeList = { 1 }, items = { dummyTrack } }
+            pStaff:update(0.1, g.mapW, g.mapH, g.obstacleManager, onlyTarget, g.player)
             assert(pStaff.dirY > 0, "Staff magic orb must curve trajectory towards enemy (tracking)")
             g.dummyPool:free(dummyTrack)
             g.projectilePool:free(pStaff)

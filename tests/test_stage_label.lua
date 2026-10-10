@@ -36,6 +36,8 @@ T["clearing floor 50 ends the Ascension run"] = function()
     assert(WorldManager.isFinalFloor("ascension", 50) == true)
     assert(WorldManager.isFinalFloor("ascension", 49) == false)
     assert(WorldManager.isFinalFloor("ascension", 1) == false)
+    -- an admin test run started past floor 50 is not stopped at its first door
+    assert(WorldManager.isFinalFloor("ascension", 51) == false)
 end
 
 T["the Abyss and the event modes never end on a floor"] = function()

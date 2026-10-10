@@ -22,12 +22,26 @@ local CombatRules = {
     -- Critical hit damage when no skill raises it (+100%)
     BASE_CRIT_MULTIPLIER = 2.0,
 
-    -- Monsters keep walking and attacking when an arrow hits them (no hit-stun, no knockback)
+    -- Monsters keep walking and attacking when an arrow hits them (no hit-stun). Plain arrows do
+    -- not push them; shots with a knockback multiplier above 1 do (see knockbackDistance).
     HIT_STUN = 0,
 
-    -- Shockwave pushes (boss phase change): impulse fades at this rate per second
+    -- Shockwave and knockback pushes: impulse fades at this rate per second (so an impulse of
+    -- d * PUSH_DECAY travels about d pixels)
     PUSH_DECAY = 10,
+
+    -- Knockback: pixels per point of knockback multiplier, capped; bosses are pushed less
+    KNOCKBACK_PER_MULT = 6,
+    KNOCKBACK_MAX = 60,
+    KNOCKBACK_BOSS = 0.35,
 }
+
+-- Distance (px) a monster is pushed back by a shot with this knockback multiplier
+function CombatRules.knockbackDistance(knockbackMult, isBoss)
+    if (knockbackMult or 1) <= 1 then return 0 end
+    local dist = math.min(CombatRules.KNOCKBACK_MAX, CombatRules.KNOCKBACK_PER_MULT * knockbackMult)
+    return isBoss and dist * CombatRules.KNOCKBACK_BOSS or dist
+end
 
 -- Damage multiplier of each front arrow when the hero fires `count` of them
 function CombatRules.frontArrowFactor(count)

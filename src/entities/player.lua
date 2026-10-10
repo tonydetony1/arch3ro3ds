@@ -11,6 +11,7 @@ local Palette = require("src.render.palette")
 local PixelFont = require("src.ui.pixel_font")
 local HeroSprites = require("src.render.sprites.heroes")
 local EliteAffixes = require("src.core.elite_affixes")
+local ItemPassives = require("src.data.item_passives")
 local CombatRules = require("src.data.combat_rules")
 
 local Player = {}
@@ -182,9 +183,14 @@ function Player:triggerDash()
     return false
 end
 
--- Dodge chance actually rolled against enemy shots (capped: the hero is never untouchable)
+-- Dodge chance actually rolled against enemy shots (capped: the hero is never untouchable).
+-- Phantom Drift adds its bonus on top while the hero is under 20% HP.
 function Player:effectiveDodge()
-    return math.min(PlayerStats.dodge_cap, self.dodgeChance or 0)
+    local dodge = math.min(PlayerStats.dodge_cap, self.dodgeChance or 0)
+    if (self.lowHpDodge or 0) > 0 and self.hp < self.maxHp * ItemPassives.LOW_HP then
+        dodge = dodge + self.lowHpDodge
+    end
+    return dodge
 end
 
 -- HP restored by a heart pickup worth `base` HP: at least a share of max HP, so hearts
@@ -196,16 +202,70 @@ end
 
 -- Returns the damage dealt, whether the hit was blocked, and why ("dash", "invulnerable" or
 -- "dodge"). `canDodge`: enemy attacks (shots, blasts, contact) can be dodged, hazards cannot.
-function Player:takeDamage(dmg, canDodge)
+-- `kind` ("shot" or "contact") and `attacker` (the monster, for contact hits) feed the item
+-- passives: damage cuts, Vindictive Frost, and the dodge rewards.
+function Player:takeDamage(dmg, canDodge, kind, attacker)
     if self.isDashing then return 0, true, "dash" end
-    if self.isInvulnerable or (self.starActive or 0) > 0 then return 0, true, "invulnerable" end
+    if self.isInvulnerable or (self.starActive or 0) > 0 or (self.hurtImmunity or 0) > 0 then
+        return 0, true, "invulnerable"
+    end
     if canDodge then
         local dodge = self:effectiveDodge()
-        if dodge > 0 and math.random() < dodge then return 0, true, "dodge" end
+        if dodge > 0 and math.random() < dodge then
+            self:onDodge()
+            return 0, true, "dodge"
+        end
     end
     local finalDmg = dmg or 15
+    local cut = (kind == "shot" and self.shotDamageCut) or (kind == "contact" and self.contactDamageCut) or 0
+    if cut > 0 then finalDmg = math.max(1, math.floor(finalDmg * (1 - cut) + 0.5)) end
     self.hp = math.max(0, self.hp - finalDmg)
+    if self.hurtImmunityTime then self.hurtImmunity = self.hurtImmunityTime end
+    if kind == "contact" and self.contactFreeze and attacker then self:freezeAttacker(attacker) end
     return finalDmg, false
+end
+
+-- Ouroboros heals at once; Lightning Agility is resolved by the game (it needs the monsters)
+function Player:onDodge()
+    if (self.dodgeHeal or 0) > 0 then
+        self.hp = math.min(self.maxHp, self.hp + self.dodgeHeal)
+    end
+    if self.dodgeLightning then self.lightningPending = true end
+end
+
+-- Vindictive Frost: a monster that hits the hero in melee freezes (bosses resist)
+function Player:freezeAttacker(m)
+    local status = m.status
+    if not status or m.isBoss or (status.freezeImmune or 0) > 0 then return end
+    status.freeze = math.max(status.freeze or 0, self.contactFreeze)
+end
+
+-- Fire rate multiplier from timed item passives (Entry Rush, Pack Leader)
+function Player:passiveHaste()
+    local haste = 1
+    if (self.entryRushTimer or 0) > 0 then haste = haste + (self.entryRush or 0) end
+    if (self.critHasteTimer or 0) > 0 then haste = haste + (self.critAttackHaste or 0) end
+    return haste
+end
+
+-- Item passive timers (immunity, crit buffs, start of room)
+function Player:updatePassiveTimers(dt)
+    if (self.hurtImmunity or 0) > 0 then self.hurtImmunity = self.hurtImmunity - dt end
+    if (self.entryRushTimer or 0) > 0 then self.entryRushTimer = self.entryRushTimer - dt end
+    if (self.critHasteTimer or 0) > 0 then self.critHasteTimer = self.critHasteTimer - dt end
+    if (self.critSpeedTimer or 0) > 0 then
+        self.critSpeedTimer = self.critSpeedTimer - dt
+        if self.critSpeedTimer <= 0 then self.critSpeedStacks = 0 end
+    end
+end
+
+-- A crit fired by the hero: Pack Leader and Lethal Gale buffs
+function Player:onCritShot()
+    if (self.critAttackHaste or 0) > 0 then self.critHasteTimer = ItemPassives.CRIT_HASTE_TIME end
+    if (self.critSpeedBoost or 0) > 0 then
+        self.critSpeedStacks = math.min(ItemPassives.CRIT_SPEED_STACKS, (self.critSpeedStacks or 0) + 1)
+        self.critSpeedTimer = ItemPassives.CRIT_SPEED_TIME
+    end
 end
 
 function Player:equipWeapon(weaponId)
@@ -295,6 +355,7 @@ function Player:handleInput(dt)
     -- Only the ice keeps the old inertia.
     local chilled = (self.chillTimer or 0) > 0
     local speed = self.speed * (self.terrainSpeedMult or 1.0) * (chilled and EliteAffixes.CHILL_SPEED or 1)
+        * (1 + (self.critSpeedStacks or 0) * (self.critSpeedBoost or 0))
     local slip = self.terrainSlip or 0
     local onIce = slip > 0.05
     local grip = 25 * (1.0 - slip * 0.82)
@@ -377,18 +438,19 @@ function Player:shoot(projectilePool)
     local effectiveDmg = math.floor(self.currentWeapon.damage * (self.damageMult + self.furyBonus))
     local rad = (self.currentWeapon.radius or 3) + self.arrowRadiusBonus
 
+    if isCrit then self:onCritShot() end
     local wData = {
         id = self.currentWeapon.id,
         type = self.currentWeapon.type,
-        projectile_speed = self.currentWeapon.projectile_speed,
+        projectile_speed = (self.currentWeapon.projectile_speed or 260) * (self.projSpeedMult or 1),
         damage = effectiveDmg,
         range = self.currentWeapon.range,
         radius = rad,
         color = self.currentWeapon.color,
-        knockback_mult = self.currentWeapon.knockback_mult,
+        knockback_mult = (self.currentWeapon.knockback_mult or 1) * (self.knockbackMult or 1),
         execute_threshold = self.currentWeapon.execute_threshold,
-        tracking_speed = self.currentWeapon.tracking_speed,
-        pierce_all = self.currentWeapon.pierce_all,
+        tracking_speed = self.currentWeapon.tracking_speed and self.currentWeapon.tracking_speed * (self.trackingMult or 1),
+        pierce_all = self.currentWeapon.pierce_all or self.pierceAll,
         return_damage_mult = self.currentWeapon.return_damage_mult,
         is_hitscan = self.currentWeapon.is_hitscan,
         sprite = self.currentWeapon.sprite,
@@ -398,10 +460,11 @@ function Player:shoot(projectilePool)
     local extra = {
         canBounceWalls = self.hasBouncyWalls,
         wallBouncesLeft = self.hasBouncyWalls and 2 or 0,
-        canPierce = self.hasPiercing or self.currentWeapon.pierce_all,
-        pierceCount = self.currentWeapon.pierce_all and 999 or (self.hasPiercing and 3 or 0),
+        canPierce = self.hasPiercing or self.currentWeapon.pierce_all or self.pierceAll,
+        pierceCount = (self.currentWeapon.pierce_all or self.pierceAll) and 999 or (self.hasPiercing and 3 or 0),
         elements = self.elements,
         playerRef = self,
+        wallPasses = self.wallPasses or 0,
     }
 
     Audio.playWeapon(self.weaponId)
@@ -641,6 +704,8 @@ function Player:update(dt, projectilePool, dummyPool, fctPool, obstacleManager, 
     VFX.updateEntity(self)
     if (self.chillTimer or 0) > 0 then self.chillTimer = self.chillTimer - dt end
 
+    self:updatePassiveTimers(dt)
+
     -- Régénération passive (compétences de soin) : accumulée puis appliquée par point entier
     if (self.hpRegen or 0) > 0 and self.hp < self.maxHp then
         self.regenPool = (self.regenPool or 0) + self.hpRegen * dt
@@ -791,7 +856,7 @@ function Player:update(dt, projectilePool, dummyPool, fctPool, obstacleManager, 
         self.aimDirX = math.cos(self.currentAngle)
         self.aimDirY = math.sin(self.currentAngle)
 
-        local effectiveFireRate = self.currentWeapon.fire_rate / self.attackSpeedMult
+        local effectiveFireRate = self.currentWeapon.fire_rate / (self.attackSpeedMult * self:passiveHaste())
         if self.fireCooldown > 0 then
             self.fireCooldown = self.fireCooldown - dt
         end

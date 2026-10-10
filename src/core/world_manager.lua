@@ -255,9 +255,10 @@ WorldManager.ROOMS_PER_WORLD = 10
 -- Abyss and the event modes have no total.
 WorldManager.ASCENSION_FLOORS = 50
 
--- True when clearing this floor ends the run (the last Ascension floor)
+-- True when clearing this floor ends the run (the last Ascension floor). Exactly floor 50: an
+-- admin test run started past it keeps going.
 function WorldManager.isFinalFloor(mode, roomNumber)
-    return mode == "ascension" and (roomNumber or 1) >= WorldManager.ASCENSION_FLOORS
+    return mode == "ascension" and roomNumber == WorldManager.ASCENSION_FLOORS
 end
 
 function WorldManager.floorTotal(mode, roomNumber)
