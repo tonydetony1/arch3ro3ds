@@ -34,6 +34,7 @@ local files = {
     "tests.test_lava_monsters",
     "tests.test_stage_label",
     "tests.test_item_passives",
+    "tests.test_monster_respawn",
 }
 
 local passed, failed = 0, 0
