@@ -2,6 +2,7 @@
 -- Acts of the Ascension: Act I = worlds 1-5 (floors 1-50), Act II = worlds 6-10 (floors 51-100).
 -- Act II ends with the last world that exists, so it grows as new worlds ship.
 local WorldManager = require("src.core.world_manager")
+local Save = require("src.data.save")
 
 local LAST_FLOOR = #WorldManager.CHAPTERS * WorldManager.ROOMS_PER_WORLD
 
@@ -65,12 +66,13 @@ T["a missing or zero floor counts as floor 1"] = function()
     assert(WorldManager.floorTotal("ascension", 0) == 50)
 end
 
--- Runs fn with WorldManager.CHAPTERS cut down to its first `count` entries, then restores it
+-- Runs fn with WorldManager.CHAPTERS resized to `count` entries (cut down, or extended with
+-- copies of the last world), then restores it
 local function withWorlds(count, fn)
     local original = WorldManager.CHAPTERS
-    local truncated = {}
-    for i = 1, count do truncated[i] = original[i] end
-    WorldManager.CHAPTERS = truncated
+    local resized = {}
+    for i = 1, count do resized[i] = original[i] or original[#original] end
+    WorldManager.CHAPTERS = resized
     local ok, err = pcall(fn)
     WorldManager.CHAPTERS = original
     assert(ok, err)
@@ -89,8 +91,6 @@ T["an act ends with the last world that exists"] = function()
         assert(first == 1 and last == 30, tostring(first) .. "-" .. tostring(last))
     end)
 end
-
-local Save = require("src.data.save")
 
 -- Runs `fn(records)` on fresh records, then restores them
 local function withRecords(fn)
@@ -124,12 +124,33 @@ T["Act II is open on saves that went past floor 50 before the victory existed"] 
     end)
 end
 
+T["an Abyss record does not unlock Act II"] = function()
+    withRecords(function(records)
+        records.infiniteMax = 80
+        assert(not Save.isActUnlocked(2))
+    end)
+end
+
+T["Act II needs a floor past 50 or a clear: floor 50 alone keeps it locked"] = function()
+    withRecords(function(records)
+        records.ascensionMax = 50
+        assert(not Save.isActUnlocked(2))
+        records.ascensionMax = 51
+        assert(Save.isActUnlocked(2))
+    end)
+end
+
+T["a missing act counts as Act I"] = function()
+    assert(Save.isActUnlocked(nil))
+end
+
 T["the world carousel reaches the last world"] = function()
     local saved = Save.get().selectedChapter
     local real = Save.save
     Save.save = function() end
-    local ok, err = pcall(function()
-        assert(Save.setChapter(99) == #WorldManager.CHAPTERS)
+    -- 8 worlds: a clamp stuck on the old hard-coded 6 would stop short of the last one
+    local ok, err = pcall(withWorlds, 8, function()
+        assert(Save.setChapter(99) == 8)
         assert(Save.setChapter(0) == 1)
     end)
     Save.save = real
