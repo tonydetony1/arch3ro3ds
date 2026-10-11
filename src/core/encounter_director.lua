@@ -143,7 +143,7 @@ local function championType(pool)
 end
 
 -- compose(chapterIndex, roomNumber, opts) -> { waves, budget, hpMult, signature, newType, shooterCap }
--- opts.difficulty : multiplicateur de budget (mode Difficile, chantier 4)
+-- opts.difficulty: budget multiplier (Hard mode, workstream 4)
 function Director.compose(chapterIndex, roomNumber, opts)
     opts = opts or {}
     local chap = WorldManager.getChapter(chapterIndex)
@@ -153,7 +153,7 @@ function Director.compose(chapterIndex, roomNumber, opts)
     -- The cap follows the absolute depth: the Abyss cycles the worlds but keeps getting tougher
     local shooterCap = Encounters.shooterCap(WorldManager.worldDepth(roomNumber))
 
-    -- Budget : difficulté du mode (chantier 4) sinon réglage admin THREAT BUDGET
+    -- Budget: the mode difficulty (workstream 4), otherwise the admin THREAT BUDGET setting
     local raw = Encounters.budget(roomNumber, opts.difficulty or Admin.get("budgetMult"))
     if newType then raw = raw * Encounters.NEW_TYPE_BUDGET_MULT end
     local budget = math.min(raw, Encounters.BUDGET_CAP)

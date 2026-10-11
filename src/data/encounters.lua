@@ -75,6 +75,7 @@ function Encounters.eliteCount(room)
     return 3
 end
 
+-- `chapter` is the absolute world depth (WorldManager.worldDepth): it keeps growing in the Abyss
 function Encounters.shooterCap(chapter)
     return (chapter <= 2) and 2 or 3
 end

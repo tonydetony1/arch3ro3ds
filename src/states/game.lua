@@ -617,7 +617,7 @@ function GameState:handleMonsterDeath(target)
         VFX.addRing(target.x, target.y + 4, target.elite and "amber" or "white", target.elite and 3 or 2)
     end
     AIController.onDeath(target, self.dummyPool, self.fctPool)
-    -- Élite "volatile" : explosion télégraphiée à l'endroit de sa mort (bombe ennemie)
+    -- "Volatile" elite: telegraphed explosion where it died (enemy bomb)
     local blast = EliteAffixes.onDeath(target, WorldManager.worldDepth(self.roomNumber))
     if blast then
         local bomb = self.projectilePool:obtain()

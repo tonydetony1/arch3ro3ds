@@ -6,6 +6,7 @@ local GameState = require("src.states.game")
 local Save = require("src.data.save")
 local Balance = require("src.data.balance")
 local WorldManager = require("src.core.world_manager")
+local EliteAffixes = require("src.core.elite_affixes")
 local withLoveStubs = require("tests.love_stubs")
 
 -- A game state whose switches to other states are recorded
@@ -41,6 +42,23 @@ T["bosses scale with the world depth, not the cycled world"] = function()
         end
         assert(boss, "no boss spawned")
         assert(boss.chapterIndex == 7, "boss damage depth " .. tostring(boss.chapterIndex))
+    end)
+end
+
+T["a volatile elite's blast scales with the world depth, not the cycled world"] = function()
+    withLoveStubs(function()
+        local g = newGame()
+        g:enter({ mode = "infinite" })
+        g.roomNumber = 70
+        local d = g.dummyPool:obtain()
+        d:spawn(100, 100, 50, "slime")
+        EliteAffixes.apply(d, { "volatile" })
+        assert(g.projectilePool.activeCount == 0, "a projectile is already in flight")
+        g:handleMonsterDeath(d)
+        assert(g.projectilePool.activeCount == 1, "the volatile elite left no blast")
+        local bomb = g.projectilePool.items[g.projectilePool.activeList[1]]
+        local expected = EliteAffixes.BLAST_BASE + EliteAffixes.BLAST_PER_CHAPTER * 7
+        assert(bomb.damage == expected, "blast damage " .. tostring(bomb.damage) .. ", expected " .. expected)
     end)
 end
 

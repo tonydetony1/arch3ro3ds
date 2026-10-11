@@ -1,7 +1,8 @@
 -- src/data/bosses.lua
 -- Fiches des boss : 3 phases (seuils PHASE_AT), un déplacement et un cycle d'attaques par
 -- phase ; catalogue d'attaques exécutées par src/core/boss_brain.lua. Module pur.
--- Dégâts : valeurs du chapitre 1, multipliées par (1 + DAMAGE_PER_CHAPTER x (chapitre - 1)).
+-- Damage: world 1 values, multiplied by (1 + DAMAGE_PER_CHAPTER x (depth - 1)), where depth is the
+-- absolute world depth (WorldManager.worldDepth), which keeps growing in the Abyss.
 
 local Bosses = {
     PHASE_AT = { 0.66, 0.33 },   -- passage en phase 2 puis 3 (part des PV restants)
