@@ -57,4 +57,37 @@ T["the Abyss cycles the worlds past the last floor"] = function()
     assert(WorldManager.worldOfRoom(LAST_FLOOR + 11) == 2)
 end
 
+T["a missing or zero floor counts as floor 1"] = function()
+    assert(WorldManager.actOfRoom(nil) == 1)
+    assert(WorldManager.actOfRoom(0) == 1)
+    assert(WorldManager.isFinalFloor("ascension", nil) == false)
+    assert(WorldManager.offersNextAct("ascension", nil) == false)
+    assert(WorldManager.floorTotal("ascension", 0) == 50)
+end
+
+-- Runs fn with WorldManager.CHAPTERS cut down to its first `count` entries, then restores it
+local function withWorlds(count, fn)
+    local original = WorldManager.CHAPTERS
+    local truncated = {}
+    for i = 1, count do truncated[i] = original[i] end
+    WorldManager.CHAPTERS = truncated
+    local ok, err = pcall(fn)
+    WorldManager.CHAPTERS = original
+    assert(ok, err)
+end
+
+T["without Act II worlds, Act II does not exist and Act I offers no next act"] = function()
+    withWorlds(5, function()
+        assert(WorldManager.actFloors(2) == nil)
+        assert(WorldManager.offersNextAct("ascension", 50) == false)
+    end)
+end
+
+T["an act ends with the last world that exists"] = function()
+    withWorlds(3, function()
+        local first, last = WorldManager.actFloors(1)
+        assert(first == 1 and last == 30, tostring(first) .. "-" .. tostring(last))
+    end)
+end
+
 return T

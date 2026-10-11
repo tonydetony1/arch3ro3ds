@@ -1,5 +1,6 @@
 -- src/core/world_manager.lua
--- Worlds (biomes), chapters, procedural palettes, monster pools and the difficulty curve
+-- Worlds (biomes), chapters, acts of the Ascension, procedural palettes, monster pools and the
+-- difficulty curve
 
 local Balance = require("src.data.balance")
 local Encounters = require("src.data.encounters")
@@ -306,6 +307,7 @@ end
 
 -- Act of a floor, or nil past the last act (the Abyss)
 function WorldManager.actOfRoom(roomNumber)
+    roomNumber = math.max(1, roomNumber or 1)
     for act = 1, #WorldManager.ACT_WORLDS do
         local first, last = WorldManager.actFloors(act)
         if first and roomNumber >= first and roomNumber <= last then return act end
@@ -325,6 +327,7 @@ end
 -- Exact floors only: an admin test run started past them keeps going.
 function WorldManager.isFinalFloor(mode, roomNumber)
     if mode ~= "ascension" then return false end
+    roomNumber = math.max(1, roomNumber or 1)
     local act = WorldManager.actOfRoom(roomNumber)
     if not act then return false end
     local _, last = WorldManager.actFloors(act)
@@ -334,13 +337,14 @@ end
 -- True when the act ending on this floor is followed by another one (CONTINUE is offered)
 function WorldManager.offersNextAct(mode, roomNumber)
     if not WorldManager.isFinalFloor(mode, roomNumber) then return false end
+    roomNumber = math.max(1, roomNumber or 1)
     return WorldManager.actFloors(WorldManager.actOfRoom(roomNumber) + 1) ~= nil
 end
 
 -- Length of the current act in Ascension ("STAGE 7 / 50"), nil elsewhere
 function WorldManager.floorTotal(mode, roomNumber)
     if mode ~= "ascension" then return nil end
-    local act = WorldManager.actOfRoom(roomNumber or 1)
+    local act = WorldManager.actOfRoom(roomNumber)
     if not act then return nil end
     local _, last = WorldManager.actFloors(act)
     return last
