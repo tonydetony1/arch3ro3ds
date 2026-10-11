@@ -381,6 +381,7 @@ function Save.saveRun(game)
         mode = game.gameMode,
         room = game.roomNumber,
         gold = game.goldEarnedRun or 0,
+        goldBoost = game.goldBoost or 1,
         kills = game.kills or 0,
         ultimate = game.ultimateCharge or 0,
         heroId = game.player.heroId,

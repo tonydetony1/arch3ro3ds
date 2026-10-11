@@ -146,6 +146,8 @@ function GameState:enter(params)
 
     -- 4. Économie & Progression de la run
     self.goldEarnedRun = 0
+    -- Energy spent at launch (menu) multiplies every coin of the run
+    self.goldBoost = params.boosted and Balance.ENERGY.goldMult or 1
     self.kills = 0
     self.roomNumber = 1
     self.chapterIndex = 1
@@ -207,13 +209,25 @@ function GameState:enter(params)
     end
 end
 
+-- Multiplier on every coin of the run: the energy bonus and the admin GOLD setting
+function GameState:runGoldMult()
+    return (self.goldBoost or 1) * Admin.get("goldMult")
+end
+
+-- Adds `base` gold to the run, multiplied by the run's gold bonus. Returns the gold added.
+function GameState:addRunGold(base)
+    local gained = math.floor(base * self:runGoldMult() + 0.5)
+    self.goldEarnedRun = self.goldEarnedRun + gained
+    return gained
+end
+
 -- Gold won in the room, for the "ROOM CLEARED!" banner: coins already picked up plus the
 -- coins still on the ground, which the magnet pulls in right after the clear (most of
 -- them, since the hero only shoots while standing still: the banner used to say +0)
 function GameState:roomClearGold()
     local total = (self.goldEarnedRun or 0) - (self.roomGoldStart or 0)
     local pool = self.lootPool
-    local mult = Admin.get("goldMult")
+    local mult = self:runGoldMult()
     for i = 1, pool.activeCount do
         local loot = pool.items[pool.activeList[i]]
         if loot.type == "coin" then
@@ -287,6 +301,7 @@ function GameState:applyResume(run)
     self.hasSpunStartWheel = true
     self.roomNumber = run.room or 1
     self.goldEarnedRun = run.gold or 0
+    self.goldBoost = run.goldBoost or 1
     self.kills = run.kills or 0
     self.ultimateCharge = run.ultimate or 0
     if run.weapon then self.player:equipWeapon(run.weapon) end
@@ -899,7 +914,7 @@ function GameState:dropLoot(x, y, isBoss)
     -- Un boss garantit un pactole proportionnel à la profondeur atteinte
     if isBoss then
         local bonus = math.random(Balance.LOOT.bossBonusMin, Balance.LOOT.bossBonusMax)
-        self.goldEarnedRun = self.goldEarnedRun + math.floor(bonus * depth * 2.5)
+        self:addRunGold(bonus * depth * 2.5)
     end
 
     for i = 1, dropCount do
@@ -1184,7 +1199,7 @@ function GameState:update(dt)
         if not keepAlive then
             -- Butin collecté par le joueur !
             if lType == "coin" then
-                self.goldEarnedRun = self.goldEarnedRun + math.floor(lVal * Admin.get("goldMult") + 0.5)
+                self:addRunGold(lVal)
                 Audio.play("pickup_coin", 0.12, 0.5)
                 -- Golden Aura: each coin heals
                 if (self.player.coinHeal or 0) > 0 then
