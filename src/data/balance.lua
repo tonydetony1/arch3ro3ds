@@ -21,6 +21,10 @@ Balance.ENERGY = {
     goldMult = 1.5,      -- multiplicateur d'or quand la partie est boostée
 }
 
+-- A fresh Act II run starts on floor 51, where rooms hold about 30 times the HP of floor 1:
+-- the hero gets this many drafts right after the start wheel. Tune on Azahar and on console.
+Balance.ACT2_HEAD_START_DRAFTS = 8
+
 -- Énergie nécessaire pour booster une partie dans le mode donné
 function Balance.energyCost(mode)
     if mode == "boss_rush" or mode == "survival" then

@@ -70,4 +70,55 @@ T["the shooter cap follows the world depth in the Abyss"] = function()
     assert(enc.shooterCap == 3, "shooter cap on floor 65: " .. tostring(enc.shooterCap))
 end
 
+-- Runs `fn` with the Glory talent off (it adds a free draft at the start of every run)
+local function withoutGlory(fn)
+    local talents = Save.getTalents()
+    local glory = talents.glory
+    talents.glory = 0
+    local ok, err = pcall(fn)
+    talents.glory = glory
+    assert(ok, err)
+end
+
+T["an Act II run starts on its first floor with the start wheel"] = function()
+    withLoveStubs(function() withoutGlory(function()
+        local g = newGame()
+        g:enter({ mode = "ascension", act = 2 })
+        assert(g.roomNumber == 51, "started on floor " .. g.roomNumber)
+        assert(g.phase == "wheel", "no start wheel on floor 51: " .. tostring(g.phase))
+    end) end)
+end
+
+T["the Act II head start chains its drafts after the wheel"] = function()
+    withLoveStubs(function() withoutGlory(function()
+        local g = newGame()
+        g:enter({ mode = "ascension", act = 2 })
+        g:specialRoomDone()
+        for i = 1, Balance.ACT2_HEAD_START_DRAFTS do
+            assert(g.isDrafting, "draft " .. i .. " did not open")
+            g:pickDraft(1)
+        end
+        assert(not g.isDrafting, "one draft too many")
+        assert(#g.acquiredSkills == Balance.ACT2_HEAD_START_DRAFTS)
+    end) end)
+end
+
+T["a normal Ascension run still starts on floor 1"] = function()
+    withLoveStubs(function() withoutGlory(function()
+        local g = newGame()
+        g:enter({ mode = "ascension" })
+        assert(g.roomNumber == 1)
+        g:specialRoomDone()
+        assert(not g.isDrafting, "no head start in Act I")
+    end) end)
+end
+
+T["the act is ignored outside the Ascension"] = function()
+    withLoveStubs(function() withoutGlory(function()
+        local g = newGame()
+        g:enter({ mode = "infinite", act = 2 })
+        assert(g.roomNumber == 1)
+    end) end)
+end
+
 return T

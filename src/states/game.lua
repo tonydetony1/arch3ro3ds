@@ -176,6 +176,10 @@ function GameState:enter(params)
     self.isVictory = false
     self.victoryTimer = 0
     self.hasSpunStartWheel = false
+    -- First floor of this run (51 for Act II): the start wheel is played there
+    self.runStartRoom = 1
+    -- Drafts waiting to open one after the other (Glory talent, Act II head start)
+    self.queuedDrafts = 0
 
     -- Permanent talents (effects described in src/data/talents.lua)
     local talents = Save.getTalents()
@@ -195,18 +199,24 @@ function GameState:enter(params)
         self.hasSpunStartWheel = self.roomNumber > 1
     end
 
-    -- Lancement de la première salle
-    self:setupRoom(self.roomNumber)
-
-    -- Talent Gloire : offre immédiatement un Draft de départ gratuit !
-    -- Si la salle 1 débute par la Roue de la Fortune, différer le Draft juste après la roue
-    if talents and (talents.glory or 0) >= 1 then
-        if self.phase == "wheel" then
-            self.pendingGloryDraft = true
-        else
-            self:openDraft()
+    -- Act II launched from the hub: the run starts on the act's first floor with a head start
+    if params.act and self.gameMode == "ascension" and not params.resume and not params.startRoom then
+        local first = WorldManager.actFloors(params.act)
+        if first and first > 1 then
+            self.runStartRoom = first
+            self.roomNumber = first
+            self.queuedDrafts = Balance.ACT2_HEAD_START_DRAFTS
         end
     end
+
+    -- Launch the first room
+    self:setupRoom(self.roomNumber)
+
+    -- Glory talent: one free draft at the start. Queued drafts open after the start wheel.
+    if talents and (talents.glory or 0) >= 1 then
+        self.queuedDrafts = self.queuedDrafts + 1
+    end
+    if self.phase ~= "wheel" then self:openQueuedDraft() end
 end
 
 -- Multiplier on every coin of the run: the energy bonus and the admin GOLD setting
@@ -332,7 +342,7 @@ function GameState:roomSpec(roomNum)
     -- Grille de la salle : centre dégagé pour boss / roue / survie, vide pour les sanctuaires
     local kind = "combat"
     if roomType == "boss" or self.gameMode == "survival"
-        or (roomNum == 1 and not self.hasSpunStartWheel) then
+        or (roomNum == self.runStartRoom and not self.hasSpunStartWheel) then
         kind = "arena"
     elseif roomType == "angel" or roomType == "devil" then
         kind = "sanctuary"
@@ -438,7 +448,7 @@ function GameState:setupRoom(roomNum)
         self.pendingSpawns = {}
         self.specialRoomManager:setup(self.roomType, self.player, self.roomNumber, nil, { approach = true })
         self.sanctuary = Sanctuary.new(self.roomType, self.mapW, self.mapH)
-    elseif roomNum == 1 and not self.hasSpunStartWheel then
+    elseif roomNum == self.runStartRoom and not self.hasSpunStartWheel then
         -- ROUE DE LA FORTUNE DE DÉPART (LUCKY WHEEL)
         self.hasSpunStartWheel = true
         self.phase = "wheel"
@@ -522,6 +532,14 @@ function GameState:openDraft()
     self.draftCursor = 2
     self.draftOptions = Skills.getRandomDraft(3, self.acquiredSkills, self.player)
     VFX.shakeLight()
+end
+
+-- Opens the next queued draft, if any: the head start chains several, one per pick
+function GameState:openQueuedDraft()
+    if self.queuedDrafts > 0 and not self.isDrafting then
+        self.queuedDrafts = self.queuedDrafts - 1
+        self:openDraft()
+    end
 end
 
 -- Fait sauter du butin physique lors de l'élimination d'un monstre
@@ -1735,6 +1753,7 @@ function GameState:pickDraft(idx)
     Audio.play("ui_confirm", 0, 0.9)
     self.isDrafting = false
     self:triggerShake(0.1, 2.5)
+    self:openQueuedDraft()
 end
 
 -- Ultime : uniquement si la jauge est pleine
@@ -1751,11 +1770,8 @@ function GameState:specialRoomDone()
     if self.phase == "wheel" then
         self.phase = "combat"
         self.spawnWarningTimer = 0.55
-        -- Talent Gloire en attente : le tirage s'ouvre maintenant que la roue est résolue
-        if self.pendingGloryDraft then
-            self.pendingGloryDraft = false
-            self:openDraft()
-        end
+        -- Drafts queued at the start (Glory, Act II head start) open once the wheel is done
+        self:openQueuedDraft()
     else
         self.isGateOpen = true
         self.phase = "clear"
