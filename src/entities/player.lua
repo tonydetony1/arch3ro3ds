@@ -646,8 +646,8 @@ function Player:updateShadowClone(dt, projectilePool, dummyPool)
     end
 end
 
--- Seconds between two hits of the same orbital on the same monster. Without it a blade hit on
--- every frame it touched, so its damage followed the frame rate (60 FPS on PC, 30-45 on 3DS).
+-- Seconds between two orbital hits on the same monster. Without it a blade hit on every frame it
+-- touched, so its damage followed the frame rate (60 FPS on PC, 30-45 on 3DS).
 Player.ORBITAL_HIT_INTERVAL = 0.2
 local ORBITAL_HIT_EPSILON = 1e-6 -- the clock adds up dt: keep 6 x (1/30) equal to 0.2
 
@@ -661,9 +661,6 @@ function Player:updateOrbitals(dt, dummyPool, fctPool)
         orb.angle = (orb.angle + dt * 4.2) % (math.pi * 2)
         orb.x = self.x + math.cos(orb.angle) * orb.dist
         orb.y = self.y + math.sin(orb.angle) * orb.dist
-        -- Last hit time per monster pool slot, created once per orbital
-        orb.hitAt = orb.hitAt or {}
-        local hitAt = orb.hitAt
 
         -- Collisions orbitales avec les monstres
         if dummyPool and dummyPool.activeCount > 0 then
@@ -673,9 +670,10 @@ function Player:updateOrbitals(dt, dummyPool, fctPool)
                 if target and target.alive then
                     local odx = target.x - orb.x
                     local ody = target.y - orb.y
+                    -- Last orbital hit on this monster: a number on the monster, no table
                     if (odx * odx + ody * ody) < (target.radius + 6) * (target.radius + 6)
-                        and clock - (hitAt[dIdx] or -math.huge) >= interval then
-                        hitAt[dIdx] = clock
+                        and clock - (target.orbitalHitAt or -math.huge) >= interval then
+                        target.orbitalHitAt = clock
                         target:takeDamage(orb.dmg or 15)
                         if fctPool then
                             local f = fctPool:obtain()
