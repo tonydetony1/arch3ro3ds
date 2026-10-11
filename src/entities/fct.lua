@@ -1,5 +1,5 @@
 -- src/entities/fct.lua
--- Floating Combat Text (Dégâts flottants style Archero)
+-- Floating Combat Text (floating damage numbers)
 -- Poolé universellement pour ZÉRO allocation pendant les combats intenses
 
 local FCT = {}

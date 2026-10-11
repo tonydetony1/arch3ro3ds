@@ -9,6 +9,8 @@ local Art = require("src.render.art")
 local Pet = {}
 Pet.__index = Pet
 
+local TWIN_ANGLE = 0.20 -- radians between the two fireballs of Twin Flame
+
 -- Per-pet characteristics, keyed by Forge item id.
 -- `damage` is the value of the starting item (level 1): the Forge multiplies it.
 local DEFS = {
@@ -48,7 +50,30 @@ function Pet.new(petId, slotIndex, power)
     self.damage = math.max(1, math.floor(def.damage * (power or 1) + 0.5))
     self.range = 260
     self.radius = 6
+    -- Item passives (src/data/item_passives.lua): haste, wall passes, freeze, bounces, burn, twin
+    self.haste = 1
+    self.wallPasses = 0
+    self.freezeChance = 0
+    self.bounces = 0
+    self.burns = false
+    self.twin = false
+    -- Reused shot settings (no allocation per shot)
+    self.shotData = { projectile_speed = def.speed, damage = self.damage, range = self.range,
+        radius = def.radius, color = def.color }
+    self.shotExtra = { wallPasses = 0, elements = nil }
+    self.fireElements = { fire = true, fireBoost = 0 }
+    self.iceElements = { ice = true }
     return self
+end
+
+-- One pet shot; `elements` may be nil
+function Pet:fireShot(projectilePool, dirX, dirY, elements)
+    local proj = projectilePool:obtain()
+    if not proj then return end
+    local extra = self.shotExtra
+    extra.wallPasses = self.wallPasses
+    extra.elements = elements
+    proj:spawn(self.x + dirX * 6, self.y + dirY * 6, dirX, dirY, self.shotData, false, self.bounces, false, extra)
 end
 
 function Pet:update(dt, player, projectilePool, dummyPool)
@@ -66,7 +91,7 @@ function Pet:update(dt, player, projectilePool, dummyPool)
 
     -- 2. Target search and auto-fire
     self.fireTimer = self.fireTimer + dt
-    if self.fireTimer >= self.fireCooldown and projectilePool and dummyPool and dummyPool.activeCount > 0 then
+    if self.fireTimer >= self.fireCooldown / self.haste and projectilePool and dummyPool and dummyPool.activeCount > 0 then
         local closestSq = self.range * self.range
         local bestTarget = nil
 
@@ -92,17 +117,18 @@ function Pet:update(dt, player, projectilePool, dummyPool)
             if dist > 1 then
                 local dirX = bdx / dist
                 local dirY = bdy / dist
-                local proj = projectilePool:obtain()
-                if proj then
-                    local def = self.def
-                    local pData = {
-                        projectile_speed = def.speed,
-                        damage = self.damage,
-                        range = self.range,
-                        radius = def.radius,
-                        color = def.color,
-                    }
-                    proj:spawn(self.x + dirX * 6, self.y + dirY * 6, dirX, dirY, pData, false, 0, false)
+                local elements = nil
+                if self.burns then
+                    self.fireElements.fireBoost = (player.elements and player.elements.fireBoost) or 0
+                    elements = self.fireElements
+                elseif self.freezeChance > 0 and math.random() < self.freezeChance then
+                    elements = self.iceElements
+                end
+                self:fireShot(projectilePool, dirX, dirY, elements)
+                if self.twin then
+                    -- Twin Flame: a second fireball, slightly apart
+                    local c, sn = math.cos(TWIN_ANGLE), math.sin(TWIN_ANGLE)
+                    self:fireShot(projectilePool, dirX * c - dirY * sn, dirX * sn + dirY * c, elements)
                 end
             end
         end

@@ -1,12 +1,12 @@
 -- src/data/items.lua
--- Catalogue data-driven des équipements, armes, armures, anneaux et familiers
--- Système de raretés Archero : Commun, Atypique, Rare, Épique, Légendaire
--- Calcul dynamique des stats et des passifs débloqués par palier
+-- Data-driven catalogue of gear: weapons, armour, rings and pets
+-- Rarity tiers: Common, Uncommon, Rare, Epic, Legendary
+-- Stats and passives unlocked per tier are computed on the fly
 
 local Balance = require("src.data.balance")
 
 local Items = {
-    -- COULEURS OFFICIELLES DU DESIGN SYSTEM ARCHERO
+    -- Rarity colours of the game's design system
     RARITIES = {
         common = {
             id = "common",
@@ -82,7 +82,7 @@ local Items = {
             passives = {
                 uncommon  = { name = "Raw Power", desc = "Base Attack increased by +25%." },
                 rare      = { name = "Eagle Eye", desc = "+10% Critical Hit Chance." },
-                epic      = { name = "Fractal Arrows", desc = "Fires +1 Diagonal Arrow without damage penalty." },
+                epic      = { name = "Fractal Arrows", desc = "Fires a pair of diagonal arrows at full damage." },
                 legendary = { name = "Solar Judgment", desc = "Arrows pierce 1 obstacle and deal +50% Crit." },
             },
         },
@@ -99,8 +99,8 @@ local Items = {
             passives = {
                 uncommon  = { name = "Sharpened", desc = "Base Attack increased by +25%." },
                 rare      = { name = "Celestial Frenzy", desc = "+12% Global Attack Speed." },
-                epic      = { name = "Blade Dance", desc = "Unleashes a rear cone volley of daggers." },
-                legendary = { name = "Lethal Gale", desc = "Each critical hit increases speed by 5%." },
+                epic      = { name = "Blade Dance", desc = "Throws an extra dagger behind the hero." },
+                legendary = { name = "Lethal Gale", desc = "Each critical hit adds +5% move speed for 3s (up to +25%)." },
             },
         },
         heavy_ballista = {
@@ -149,7 +149,7 @@ local Items = {
             desc = "Crushing reaping blade knocking monsters back and executing weakened foes (<30% HP).",
             passives = {
                 uncommon  = { name = "Sinister Edge", desc = "Base Attack increased by +25%." },
-                rare      = { name = "Massive Impact", desc = "Decupled knockback pushing back even giant beasts." },
+                rare      = { name = "Massive Impact", desc = "Ten times the knockback: even bosses are pushed back." },
                 epic      = { name = "Coup de Grace", desc = "Instantly executes any monster below 30% HP." },
                 legendary = { name = "Soul Reaper", desc = "Each kill restores +1.5% Max HP." },
             },
@@ -254,7 +254,7 @@ local Items = {
                 uncommon  = { name = "Royal Plating", desc = "Base HP increased by +25%." },
                 rare      = { name = "Thirst for Gold", desc = "+20% Gold collected in combat." },
                 epic      = { name = "Golden Aura", desc = "Each gold coin collected restores 2 HP." },
-                legendary = { name = "Eternal Monarch", desc = "Increases damage by 1% per 100 gold held." },
+                legendary = { name = "Eternal Monarch", desc = "+1% damage per 100 gold held (up to +30%)." },
             },
         },
 
@@ -274,7 +274,7 @@ local Items = {
                 uncommon  = { name = "Bite", desc = "Base Attack increased by +25%." },
                 rare      = { name = "Keen Senses", desc = "+7% Critical Hit Chance." },
                 epic      = { name = "Ferocity", desc = "+20% Damage against ground monsters (Slimes)." },
-                legendary = { name = "Pack Leader", desc = "Critical hits boost attack speed." },
+                legendary = { name = "Pack Leader", desc = "Critical hits give +15% attack speed for 2s." },
             },
         },
         bear_ring = {
@@ -369,7 +369,7 @@ local Items = {
             desc = "Spits fireballs causing area-of-effect explosions.",
             passives = {
                 uncommon  = { name = "Incandescent Breath", desc = "Base Attack increased by +25%." },
-                rare      = { name = "Blaze", desc = "Larger explosion radius and 2s burn." },
+                rare      = { name = "Blaze", desc = "Fireballs set monsters on fire." },
                 epic      = { name = "Twin Flame", desc = "Fires 2 explosive fireballs simultaneously." },
                 legendary = { name = "Heart of the Volcano", desc = "Increases all fire damage by +15%." },
             },

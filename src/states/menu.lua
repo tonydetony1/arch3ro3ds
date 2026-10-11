@@ -1,5 +1,5 @@
 -- src/states/menu.lua
--- Hub & Menu Principal style Archero 2 / Gummy UI pour Nintendo 3DS & PC
+-- Hub and main menu for Nintendo 3DS & PC
 -- Vitrine Top Screen (400x240) Diorama 3D & Interface Tactile Gummy Bottom Screen (320x240)
 -- 5 Onglets : JOUER (Carousel Mondes & Patrouille), HÉROS (5 Rôdeurs & Passifs), FORGE (Inventaire & Fusion 3->1), TALENTS, COFFRES
 

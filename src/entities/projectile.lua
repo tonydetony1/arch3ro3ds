@@ -40,12 +40,17 @@ function Projectile.create(index)
     self.rotAngle = 0
     self.executeThreshold = nil
     self.knockbackMult = 1.0
+    self.wallPasses = 0
+    self.insideWall = false
     self.trackingSpeed = 0
     self.pierceAll = false
     self.isReturning = false
     self.returnDamageMult = 1.0
     self.baseDamage = 0
     self.isHitscan = false
+    -- Starlight Prism: two refracted beams drawn with the main one (start, end of each)
+    self.prismCount = 0
+    self.prism = { 0, 0, 0, 0, 0, 0, 0, 0 }
     self.laserStartX = 0
     self.laserStartY = 0
     self.laserEndX = 0
@@ -89,6 +94,7 @@ function Projectile:spawn(startX, startY, dirX, dirY, weapon, isCrit, bounces, i
     self.isReturning = false
     self.returnDamageMult = weapon.return_damage_mult or 0.65
     self.isHitscan = weapon.is_hitscan or false
+    self.prismCount = 0
     self.beamFired = false
     self.laserTimer = 0
     self.playerRef = extra and extra.playerRef or nil
@@ -108,6 +114,9 @@ function Projectile:spawn(startX, startY, dirX, dirY, weapon, isCrit, bounces, i
     self.canPierce = (extra and extra.canPierce) or self.pierceAll
     self.pierceCount = self.pierceAll and 999 or ((extra and extra.pierceCount) or 0)
     self.elements = (extra and extra.elements) or nil
+    -- Obstacles the shot may fly through (Solar Judgment, Multiple Orbs, Spectral Laser)
+    self.wallPasses = (extra and extra.wallPasses) or 0
+    self.insideWall = false
 
     if self.isEnemy then
         self.color = {1.0, 0.20, 0.20, 1.0} -- Rouge vif ennemi
@@ -326,8 +335,14 @@ function Projectile:update(dt, mapW, mapH, obstacleManager, dummyPool, player)
         return false
     end
 
-    -- 3. SYSTÈME DE COUVERTURE : Destruction nette contre les Rochers/Murs pour tirs directs !
+    -- 3. Cover: direct shots break on rocks and walls, unless they may fly through this one
     if obstacleManager and obstacleManager:blocksProjectile(self.x, self.y, self.radius) then
+        if self.insideWall then return true end
+        if self.wallPasses > 0 then
+            self.wallPasses = self.wallPasses - 1
+            self.insideWall = true
+            return true
+        end
         if self.behavior == "boomerang" and not self.isReturning then
             self.isReturning = true
             self.damage = math.max(4, math.floor(self.baseDamage * self.returnDamageMult))
@@ -337,6 +352,7 @@ function Projectile:update(dt, mapW, mapH, obstacleManager, dummyPool, player)
         end
         return false
     end
+    self.insideWall = false
 
     return true
 end
@@ -353,6 +369,18 @@ function Projectile:draw()
         love.graphics.setColor(1.0, 1.0, 0.9, alpha * 0.95)
         love.graphics.setLineWidth(self.radius * 1.2)
         love.graphics.line(self.laserStartX, self.laserStartY, self.laserEndX, self.laserEndY)
+        love.graphics.setLineWidth(1)
+        -- Refracted beams (Starlight Prism), thinner
+        local pr = self.prism
+        for k = 0, self.prismCount - 1 do
+            local b = k * 4
+            love.graphics.setColor(self.color[1], self.color[2], self.color[3], alpha * 0.40)
+            love.graphics.setLineWidth(self.radius * 1.8)
+            love.graphics.line(pr[b + 1], pr[b + 2], pr[b + 3], pr[b + 4])
+            love.graphics.setColor(1.0, 1.0, 0.9, alpha * 0.9)
+            love.graphics.setLineWidth(self.radius * 0.8)
+            love.graphics.line(pr[b + 1], pr[b + 2], pr[b + 3], pr[b + 4])
+        end
         love.graphics.setLineWidth(1)
         -- Impact étincelant à la cible
         love.graphics.setColor(1.0, 1.0, 1.0, alpha)

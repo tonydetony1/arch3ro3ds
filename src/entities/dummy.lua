@@ -11,6 +11,7 @@ local EliteAffixes = require("src.core.elite_affixes")
 local Art = require("src.render.art")
 local Admin = require("src.data.admin")
 local CombatRules = require("src.data.combat_rules")
+local Physics = require("src.core.physics")
 
 local Dummy = {}
 Dummy.__index = Dummy
@@ -28,6 +29,10 @@ local FIRE_TICK = 0.35
 local FIRE_SHARE = 0.04
 local POISON_TICK = 0.60
 local POISON_SHARE = 0.05
+local BLEED_TIME = 3.0  -- Saw Tooth: bleed lasts 3 s after the last hit
+local BLEED_TICK = 1.0
+local BLEED_DAMAGE = 10 -- per tick ("10 damage/sec")
+local BLEED_SPARK = { 0.85, 0.10, 0.15, 1.0 }
 
 function Dummy.create(index)
     local self = setmetatable({}, Dummy)
@@ -227,20 +232,25 @@ function Dummy:spawn(x, y, hp, monsterType)
     self.didHitPlayer = false
     self.knockX = 0
     self.knockY = 0
+    self.pushX = 0 -- knockback impulse (weapons and items with a knockback multiplier)
+    self.pushY = 0
     self.hitStop = 0
 
     self.status = {
         fire = 0,
         fireTimer = 0,
+        fireMult = 1,
         poison = 0,
         poisonTimer = 0,
+        bleed = 0,
+        bleedTimer = 0,
         freeze = 0,
         freezeImmune = 0,
     }
 end
 
 -- Réception des dégâts avec vérification d'invulnérabilité sous terre
-function Dummy:takeDamage(dmg, hitDirX, hitDirY, elements)
+function Dummy:takeDamage(dmg, hitDirX, hitDirY, elements, knockbackMult)
     if not AIController.canTakeDamage(self) then
         return false -- Invincible quand sous terre
     end
@@ -267,6 +277,11 @@ function Dummy:takeDamage(dmg, hitDirX, hitDirY, elements)
         if elements.fire then
             if status.fire <= 0 then status.fireTimer = 0 end
             status.fire = FIRE_TIME
+            status.fireMult = 1 + (elements.fireBoost or 0) -- Heart of the Volcano
+        end
+        if elements.bleed then
+            if status.bleed <= 0 then status.bleedTimer = 0 end
+            status.bleed = BLEED_TIME
         end
         if elements.poison then
             if status.poison <= 0 then status.poisonTimer = 0 end
@@ -280,11 +295,18 @@ function Dummy:takeDamage(dmg, hitDirX, hitDirY, elements)
     -- An arrow does not stop a monster (CombatRules.HIT_STUN is 0)
     self.hitStop = CombatRules.HIT_STUN
 
-    -- Knockback : recul physique réactif
+    -- Visual recoil of the sprite on every hit
     if hitDirX and hitDirY then
         local kForce = (self.type == "golem" or self.type == "splitter") and 5 or 14
         self.knockX = hitDirX * kForce
         self.knockY = hitDirY * kForce
+    end
+    -- Real knockback: only shots with a knockback multiplier above 1 (Death Scythe, Seismic
+    -- Shock, Massive Impact, set bonus) push the monster back, bosses less
+    if hitDirX and hitDirY and (knockbackMult or 1) > 1 then
+        local dist = CombatRules.knockbackDistance(knockbackMult, self.isBoss)
+        self.pushX = hitDirX * dist * CombatRules.PUSH_DECAY
+        self.pushY = hitDirY * dist * CombatRules.PUSH_DECAY
     end
 
     return (self.hp <= 0)
@@ -324,6 +346,14 @@ function Dummy:update(dt, player, projectilePool, obstacleManager, dummyPool, fc
         if math.abs(self.knockX) < 0.2 then self.knockX = 0 end
         if math.abs(self.knockY) < 0.2 then self.knockY = 0 end
     end
+    if self.pushX ~= 0 or self.pushY ~= 0 then
+        Physics.moveAndSlide(self, self.pushX, self.pushY, dt, self.radius, obstacleManager, false, mapW, mapH)
+        local keep = math.max(0, 1.0 - dt * CombatRules.PUSH_DECAY)
+        self.pushX, self.pushY = self.pushX * keep, self.pushY * keep
+        if math.abs(self.pushX) < 1.0 and math.abs(self.pushY) < 1.0 then
+            self.pushX, self.pushY = 0, 0
+        end
+    end
 
     -- 3. Gestion des statuts élémentaires (Feu, Poison, Glace)
     local frozen = false
@@ -349,10 +379,22 @@ function Dummy:update(dt, player, projectilePool, obstacleManager, dummyPool, fc
             status.fireTimer = status.fireTimer + dt
             if status.fireTimer >= FIRE_TICK then
                 status.fireTimer = 0
-                local dot = math.max(3, math.floor(self.maxHp * FIRE_SHARE * dotScale))
+                local dot = math.max(3, math.floor(self.maxHp * FIRE_SHARE * dotScale * (status.fireMult or 1)))
                 self.hp = self.hp - dot
                 VFX.addFCT(self.x, self.y - 14, dot, false)
                 VFX.addSparks(self.x, self.y, 3, {1.0, 0.4, 0.1, 1.0})
+            end
+        end
+
+        -- Bleed (Saw Tooth): flat damage every second while it lasts
+        if status.bleed > 0 then
+            status.bleed = status.bleed - dt
+            status.bleedTimer = status.bleedTimer + dt
+            if status.bleedTimer >= BLEED_TICK then
+                status.bleedTimer = 0
+                self.hp = self.hp - BLEED_DAMAGE
+                VFX.addFCT(self.x, self.y - 14, BLEED_DAMAGE, false)
+                VFX.addSparks(self.x, self.y, 3, BLEED_SPARK)
             end
         end
 

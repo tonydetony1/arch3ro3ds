@@ -1,7 +1,7 @@
 -- src/states/gameover.lua
--- Écran de Game Over cinématique et stylé pour Nintendo 3DS (LÖVEPotion) & PC (LÖVE2D)
--- Top Screen (400x240) : Sépulture du Héros Déchu, Fantôme Chibi, Braises incandescentes & God Rays
--- Bottom Screen (320x240) : Rapport de Run Gummy, Statistiques (Étage, Kills, Or), et Boutons Tactiles 3D
+-- End-of-run screen for Nintendo 3DS (LÖVE Potion) & PC (LÖVE)
+-- Top screen (400x240): the fallen hero's grave with embers, or the victorious hero in golden light
+-- Bottom screen (320x240): battle report (floor, kills, gold), skills of the run and two buttons
 
 local Config = require("src.data.config")
 local Audio = require("src.audio.audio")
@@ -15,6 +15,12 @@ local Palette = require("src.render.palette")
 local PixelFont = require("src.ui.pixel_font")
 local Art = require("src.render.art")
 local Icons = require("src.render.sprites.icons")
+local MenuTop = require("src.ui.menu_top")
+
+-- Confetti colours of the victory screen (the embers of the game over screen, recoloured)
+local CONFETTI = {
+    { 1.0, 0.85, 0.30 }, { 1.0, 1.0, 1.0 }, { 0.17, 0.91, 0.96 }, { 1.0, 0.68, 0.20 },
+}
 -- Skills of the run grouped by id (first occurrence order) with their stack count; built
 -- once when the screen opens instead of on every frame
 local function groupSkills(skills)
@@ -102,7 +108,51 @@ end
 -- ============================================================================
 -- TOP SCREEN (400x240) : MONUMENT DU HÉROS DÉCHU & AMBIANCE DRAMATIQUE
 -- ============================================================================
+-- Victory: the hero stands in golden light, confetti falls, "VICTORY!" banner
+function GameOverState:drawVictoryTop()
+    local C = Palette.C
+    local w, h = Config.TOP_WIDTH, Config.TOP_HEIGHT
+    local t = love.timer.getTime()
+    local mx = w / 2
+
+    love.graphics.setColor(0.10, 0.08, 0.20, 1.0)
+    love.graphics.rectangle("fill", 0, 0, w, h)
+    love.graphics.setColor(0.35, 0.25, 0.45, 0.35)
+    love.graphics.circle("fill", mx, 150, 110)
+    UI.drawGodRays(mx, 150, 220, 14, t * 0.3, { 1.0, 0.85, 0.35, 0.16 })
+    love.graphics.setColor(1.0, 0.85, 0.35, 0.30 + 0.10 * math.sin(t * 2.4))
+    love.graphics.ellipse("fill", mx, 196, 70, 12)
+
+    for i, p in ipairs(self.embers) do
+        local col = CONFETTI[(i % #CONFETTI) + 1]
+        local waveX = p.x + math.sin(t * p.driftSpeed + p.phase) * p.driftAmp
+        love.graphics.setColor(col[1], col[2], col[3], 0.55 + 0.35 * math.sin(t * 3.5 + p.phase))
+        love.graphics.push()
+        love.graphics.translate(waveX, p.y)
+        love.graphics.rotate(p.rot)
+        love.graphics.rectangle("fill", -p.size / 2, -p.size / 4, p.size, p.size / 2)
+        love.graphics.pop()
+    end
+
+    local save = Save.get()
+    love.graphics.setColor(1, 1, 1, 1)
+    MenuTop.drawHero(save.selectedHero or "atreus", t, save.equipped, 196)
+
+    Skin.panel(mx - 150, 10, 300, 48, "dark")
+    Skin.rect(C.yellow, mx - 147, 11, 294, 2)
+    PixelFont.printf("VICTORY!", mx - 150, 15, 300, "center", C.yellow, "main", 2)
+    PixelFont.printf("ASCENSION COMPLETE - " .. (self.data.room or 50) .. " FLOORS", mx - 150, 40, 300, "center",
+        C.white, "main", 1, nil, 1)
+    local clears = self.data.clears or 1
+    Skin.pill(mx - 70, 64, 140, 18, "gold")
+    PixelFont.printf(clears > 1 and ("CLEAR #" .. clears) or "FIRST CLEAR!", mx - 70, 67, 140, "center", C.white, "main")
+end
+
 function GameOverState:drawTop()
+    if self.data.victory then
+        self:drawVictoryTop()
+        return
+    end
     local w = Config.TOP_WIDTH
     local h = Config.TOP_HEIGHT
     local t = love.timer.getTime()
@@ -277,7 +327,7 @@ function GameOverState:drawBottom()
             if n > 1 then PixelFont.print("x" .. n, sx + 134, sy + 4, C.yellow, "main") end
         end
     end
-    buttonLabel(b1, "A", "RETRY", self.pressedBtn == "retry")
+    buttonLabel(b1, "A", self.data.victory and "AGAIN" or "RETRY", self.pressedBtn == "retry")
     buttonLabel(b2, "B", "MENU", self.pressedBtn == "hub")
 end
 

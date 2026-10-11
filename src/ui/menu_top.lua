@@ -149,13 +149,15 @@ end
 -- ----------------------------------------------------------------------------
 -- STAR ELEMENTS ON THE DAIS
 -- ----------------------------------------------------------------------------
-local function drawHero(heroId, t, equipped)
+-- feetY (optional): height of the hero's feet, the dais top by default
+local function drawHero(heroId, t, equipped, feetY)
+    feetY = feetY or FEET_Y
     local bob = floor(math.sin(t * 2.2) * 2)
-    local bottom = FEET_Y - 1 + bob
+    local bottom = feetY - 1 + bob
     local x = W / 2
     local variant = (heroId ~= "atreus") and heroId or nil
     Palette.set(C.ink, 0.30)
-    love.graphics.ellipse("fill", x, FEET_Y + 2, 22 - bob, 5)
+    love.graphics.ellipse("fill", x, feetY + 2, 22 - bob, 5)
     love.graphics.setColor(1, 1, 1, 1)
     Art.drawEx("hero_legs", 1, x, bottom, 0, 3, 3)
     Art.drawEx("hero_body", 1, x, bottom - 9, 0, 3, 3, false, variant)
@@ -570,5 +572,9 @@ function MenuTop.draw(menu, t)
     if page.priceIcon then Art.draw(page.priceIcon, 1, RIGHT_X + 20, CARD_Y + 29) end
     drawStrip(page.title, page.titleColor, page.hints)
 end
+
+
+-- Hero with equipment and pets, also used by the victory screen
+MenuTop.drawHero = drawHero
 
 return MenuTop

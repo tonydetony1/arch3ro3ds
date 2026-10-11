@@ -1,5 +1,5 @@
 -- src/states/game.lua
--- Boucle de gameplay Archero complète : Biomes, Loot physique, Magnétisme, Leveling exponentiel & 200 Skills Hook
+-- Gameplay loop: biomes, physical loot, magnetism, exponential levelling and skill hooks
 
 local Config = require("src.data.config")
 local Weapons = require("src.data.weapons")
@@ -41,6 +41,9 @@ local Bestiary = require("src.data.bestiary")
 local Perf = require("src.core.perf")
 local Bestiary = require("src.data.bestiary")
 local Balance = require("src.data.balance")
+local ItemPassives = require("src.data.item_passives")
+
+local VICTORY_DELAY = 2.0 -- seconds of golden pause between the last floor and the victory screen
 
 -- Temps processeur par image accordé à la préparation de la salle suivante (secondes).
 -- Sur console, le budget est la marge laissée par l'image précédente avant 1/60 s ; hors
@@ -117,7 +120,7 @@ function GameState:enter(params)
     self.player.mastery = Bestiary.buildMasteryTable(Save.getBestiary())
     self.player:setBounds(self.mapW, self.mapH)
 
-    -- Application du Héros sélectionné et de ses passifs uniques Archero 2
+    -- Apply the selected hero and its unique passives
     local Heroes = require("src.data.heroes")
     local curHeroId = (saveData and saveData.selectedHero) or "atreus"
     self.heroId = curHeroId
@@ -147,7 +150,7 @@ function GameState:enter(params)
     self.ultimateCharge = 0.5
     self.acquiredSkills = {}
 
-    -- 5. Machine d'états de la salle (Archero Flow)
+    -- 5. Room state machine
     self.phase = "combat" -- "combat", "clear", "transition"
     self.isGateOpen = false
     self.fadeAlpha = 0
@@ -164,9 +167,11 @@ function GameState:enter(params)
     self.isDrafting = false
     self.draftOptions = {}
 
-    -- 8. Game Over
+    -- 8. End of the run: death (game over) or the last Ascension floor cleared (victory)
     self.isGameOver = false
     self.gameOverTimer = 0
+    self.isVictory = false
+    self.victoryTimer = 0
     self.hasSpunStartWheel = false
 
     -- Permanent talents (effects described in src/data/talents.lua)
@@ -219,6 +224,11 @@ end
 
 -- Forge equipment: each of the 6 slots counts exactly once, and each item's level,
 -- rarity and stars apply in combat
+-- Rarity tier of an owned item (fusions raise it), which unlocks its passives
+local function passiveTier(itemId)
+    return Items.getRarityData(Save.getItemRarity(itemId)).tier
+end
+
 function GameState:applyEquipment(equipped)
     local player = self.player
 
@@ -258,8 +268,16 @@ function GameState:applyEquipment(equipped)
     for i, slot in ipairs(PET_SLOTS) do
         local pId = equipped[slot]
         if pId then
-            table.insert(player.pets, Pet.new(pId, i, Save.getItemPower(pId)))
+            local pet = Pet.new(pId, i, Save.getItemPower(pId))
+            ItemPassives.applyPet(pet, pId, passiveTier(pId))
+            table.insert(player.pets, pet)
         end
+    end
+
+    -- Item passives unlocked by each worn item's current rarity
+    local ctx = { gold = Save.get().gold or 0 }
+    for _, itemId in pairs(equipped) do
+        ItemPassives.applyHero(player, itemId, passiveTier(itemId), ctx)
     end
 end
 
@@ -335,6 +353,8 @@ function GameState:setupRoom(roomNum)
     AIController.setDamageScale(WorldManager.damageMult(roomNum))
     self.roomType = spec.roomType
     self.bossWheelDone = false
+    -- Entry Rush: faster shots during the first seconds of each room
+    if (self.player.entryRush or 0) > 0 then self.player.entryRushTimer = ItemPassives.ENTRY_RUSH_TIME end
 
     self.mapW, self.mapH = spec.mapW, spec.mapH
 
@@ -379,7 +399,7 @@ function GameState:setupRoom(roomNum)
     if spec.kind == "sanctuary" then
         Ambience.clear()
     else
-        Ambience.setLook(spec.themeIndex, VFX.particleScale)
+        Ambience.setLook(spec.themeIndex, VFX.particleScale, self.mapW, self.mapH)
     end
 
     -- Nettoyage des ennemis de la salle précédente
@@ -505,6 +525,8 @@ function GameState:masteryDamage(target, dmg)
     if target.isBoss and (p.bossDamageMult or 1) ~= 1 then
         mult = mult * p.bossDamageMult
     end
+    -- Item passives: Ferocity, Aerial Hunt, Primal Rage
+    mult = mult * ItemPassives.damageFactor(p, target)
 
     local out = (mult == 1) and dmg or math.floor(dmg * mult + 0.5)
 
@@ -555,6 +577,11 @@ end
 -- ============================================================================
 function GameState:handleMonsterDeath(target)
     Audio.play(target.isBoss and "explosion" or "monster_die", 0.1, target.isBoss and 1.0 or 0.6)
+    -- Soul Reaper: each kill restores a share of max HP
+    local p = self.player
+    if (p.killHeal or 0) > 0 and p.hp > 0 then
+        p.hp = math.min(p.maxHp, p.hp + math.max(1, math.floor(p.maxHp * p.killHeal + 0.5)))
+    end
     Save.recordKill(target.type)
     Save.addQuestProgress("kills", 1)
     if target.isBoss then Save.addQuestProgress("bosses", 1) end
@@ -628,7 +655,7 @@ local DODGE_SPARK = { 0.35, 0.85, 1.0, 1.0 }
 
 function GameState:hurtHero(dmg, chill)
     local p = self.player
-    local dealt, blocked, reason = p:takeDamage(dmg, true)
+    local dealt, blocked, reason = p:takeDamage(dmg, true, "shot")
     if blocked then
         VFX.addFCT(p.x, p.y - 12, (reason == "invulnerable") and "BLOCK" or "DODGE", false)
         VFX.addSparks(p.x, p.y, 5, DODGE_SPARK)
@@ -666,6 +693,7 @@ function GameState:applyArrowHit(proj, target)
         self.player.hp = math.min(self.player.maxHp, self.player.hp + heal)
     end
     local isDead = target:takeDamage(dmgOut, proj.dirX, proj.dirY, proj.elements, proj.knockbackMult)
+    if self.player.orbBlast and proj.behavior == "staff" then self:orbBlast(target, dmgOut) end
 
     if isExecute then
         VFX.addFCT(target.x, target.y - 16, "EXECUTE!", true)
@@ -721,8 +749,32 @@ function GameState:applyArrowHit(proj, target)
     return isDead, isExecute
 end
 
+-- Celestial Comet: a staff orb blasts the monsters around the one it hits
+local ORB_BLAST_RADIUS, ORB_BLAST_SHARE = 40, 0.5
+local ORB_BLAST_SPARK = { 0.75, 0.55, 1.0, 1.0 }
+
+-- Celestial Comet blast around `target` (other monsters only; deaths are resolved each frame)
+function GameState:orbBlast(target, dmg)
+    local share = math.max(1, math.floor(dmg * ORB_BLAST_SHARE))
+    local pool, rSq = self.dummyPool, ORB_BLAST_RADIUS * ORB_BLAST_RADIUS
+    for i = 1, pool.activeCount do
+        local m = pool.items[pool.activeList[i]]
+        if m and m.alive and m ~= target and not m.isBurrowed then
+            local dx, dy = m.x - target.x, m.y - target.y
+            if dx * dx + dy * dy <= rSq then
+                m:takeDamage(share)
+                VFX.addFCT(m.x, m.y - 10, share, false)
+            end
+        end
+    end
+    VFX.addSparks(target.x, target.y, 8, ORB_BLAST_SPARK)
+    VFX.addRing(target.x, target.y + 4, "white", 2)
+end
+
 -- Scratch lists of GameState:fireBeam, reused so a shot allocates nothing
 local beamTargets, beamOrder = {}, {}
+local PRISM_ANGLE, PRISM_LENGTH, PRISM_DAMAGE = math.pi / 4, 220, 0.5 -- Starlight Prism
+
 
 -- A hitscan beam (Brightspear) hits every monster on its line at once, from the nearest to the
 -- farthest, and stops at the first rock. Each target after the first takes less damage (the
@@ -731,20 +783,51 @@ function GameState:fireBeam(proj)
     if proj.beamFired then return end
     proj.beamFired = true
     local sx, sy = proj.laserStartX, proj.laserStartY
-    local ex, ey = proj.laserEndX, proj.laserEndY
-    if self.obstacleManager then
-        local reach = self.obstacleManager:shotReach(sx, sy, ex, ey, proj.radius)
-        if reach < 1 then
-            ex, ey = sx + (ex - sx) * reach, sy + (ey - sy) * reach
-            proj.laserEndX, proj.laserEndY = ex, ey
+    local ex, ey = self:beamEnd(proj, sx, sy, proj.laserEndX, proj.laserEndY)
+    proj.laserEndX, proj.laserEndY = ex, ey
+
+    local n = self:collectBeamTargets(proj, sx, sy, ex, ey, nil)
+    local first = beamTargets[1]
+    local fx, fy = first and first.x, first and first.y
+    local baseDamage = proj.damage
+    self:hitBeamTargets(proj, n)
+
+    -- Starlight Prism: the first monster struck refracts two beams at 45 degrees, half damage
+    if self.player.prism and first then
+        local dirX, dirY = ex - sx, ey - sy
+        local len = math.sqrt(dirX * dirX + dirY * dirY)
+        if len > 0 then dirX, dirY = dirX / len, dirY / len end
+        proj.prismCount = 0
+        for k = 0, 1 do
+            local a = (k == 0) and PRISM_ANGLE or -PRISM_ANGLE
+            local c, sn = math.cos(a), math.sin(a)
+            local rx, ry = dirX * c - dirY * sn, dirX * sn + dirY * c
+            local px, py = self:beamEnd(proj, fx, fy, fx + rx * PRISM_LENGTH, fy + ry * PRISM_LENGTH)
+            local b = k * 4
+            proj.prism[b + 1], proj.prism[b + 2], proj.prism[b + 3], proj.prism[b + 4] = fx, fy, px, py
+            proj.prismCount = k + 1
+            proj.damage = math.max(1, math.floor(baseDamage * PRISM_DAMAGE))
+            self:hitBeamTargets(proj, self:collectBeamTargets(proj, fx, fy, px, py, first))
         end
     end
+end
 
+-- End of a beam from (sx, sy) toward (ex, ey): it stops at the first rock
+function GameState:beamEnd(proj, sx, sy, ex, ey)
+    if self.obstacleManager then
+        local reach = self.obstacleManager:shotReach(sx, sy, ex, ey, proj.radius)
+        if reach < 1 then return sx + (ex - sx) * reach, sy + (ey - sy) * reach end
+    end
+    return ex, ey
+end
+
+-- Monsters on a beam segment, sorted from the start (beamTargets[1..n]); `skip` is left out
+function GameState:collectBeamTargets(proj, sx, sy, ex, ey, skip)
     local pool = self.dummyPool
     local n = 0
     for i = 1, pool.activeCount do
         local m = pool.items[pool.activeList[i]]
-        if m and m.alive and not m.isBurrowed then
+        if m and m.alive and not m.isBurrowed and m ~= skip then
             local distSq, t = Physics.distToSegmentSq(m.x, m.y, sx, sy, ex, ey)
             local reachR = m.radius + proj.radius
             if distSq <= reachR * reachR then
@@ -758,7 +841,11 @@ function GameState:fireBeam(proj)
             end
         end
     end
+    return n
+end
 
+-- Hits beamTargets[1..n] in order (each one after the first takes the piercing cut)
+function GameState:hitBeamTargets(proj, n)
     for i = 1, n do
         local m = beamTargets[i]
         beamTargets[i] = nil
@@ -814,6 +901,105 @@ end
 -- ============================================================================
 -- BOUCLE DE MISE À JOUR PRINCIPALE
 -- ============================================================================
+-- Swirling Typhoon: monsters near a flying boomerang are drawn toward it (bosses resist)
+local TYPHOON_RADIUS, TYPHOON_PULL = 56, 90 -- px, px/s at the edge of the swirl
+function GameState:typhoonPull(dt)
+    local projs, pool = self.projectilePool, self.dummyPool
+    for i = 1, projs.activeCount do
+        local proj = projs.items[projs.activeList[i]]
+        if proj and proj.alive and not proj.isEnemy and proj.behavior == "boomerang" then
+            for j = 1, pool.activeCount do
+                local m = pool.items[pool.activeList[j]]
+                if m and m.alive and not m.isBoss and not m.isBurrowed then
+                    local dx, dy = proj.x - m.x, proj.y - m.y
+                    local d = math.sqrt(dx * dx + dy * dy)
+                    if d > 4 and d < TYPHOON_RADIUS then
+                        Physics.moveAndSlide(m, dx / d * TYPHOON_PULL, dy / d * TYPHOON_PULL, dt, m.radius,
+                            self.obstacleManager, false, self.mapW, self.mapH)
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Lightning Agility: a dodge sends chain lightning to the 3 nearest monsters
+local DODGE_LIGHTNING_TARGETS, DODGE_LIGHTNING_RANGE = 3, 150
+local LIGHTNING_SPARK = { 0.45, 0.75, 1.0, 1.0 }
+function GameState:dodgeLightning()
+    local p, pool = self.player, self.dummyPool
+    local dmg = math.max(8, math.floor(p.currentWeapon.damage * (p.damageMult or 1) * 0.6))
+    self.lightningWave = (self.lightningWave or 0) + 1 -- marks the monsters already struck
+    local rangeSq = DODGE_LIGHTNING_RANGE * DODGE_LIGHTNING_RANGE
+    for _ = 1, DODGE_LIGHTNING_TARGETS do
+        local best, bestSq = nil, rangeSq
+        for i = 1, pool.activeCount do
+            local m = pool.items[pool.activeList[i]]
+            if m and m.alive and not m.isBurrowed and m.lightningMark ~= self.lightningWave then
+                local dx, dy = m.x - p.x, m.y - p.y
+                local dsq = dx * dx + dy * dy
+                if dsq < bestSq then best, bestSq = m, dsq end
+            end
+        end
+        if not best then break end
+        best.lightningMark = self.lightningWave
+        best:takeDamage(dmg)
+        VFX.addFCT(best.x, best.y - 10, dmg, true)
+        VFX.addSparks(best.x, best.y, 6, LIGHTNING_SPARK)
+    end
+    Audio.play("hit", 0.1, 0.6)
+end
+
+-- Last Ascension floor cleared: golden pause on the hero before the victory screen
+function GameState:winRun()
+    self.isVictory = true
+    self.victoryTimer = 0
+    self.phase = "victory"
+    Audio.play("victory", 0, 1.0)
+    Audio.playMusic("hub", 0.8)
+    Banner.show("chapter", "VICTORY!", "ASCENSION COMPLETE")
+    VFX.addSparks(self.player.x, self.player.y - 10, 30, { 1.0, 0.85, 0.3, 1.0 })
+    self:triggerShake(0.25, 3.0)
+end
+
+-- Ends the run (death or victory): banks the gold, updates records and quests, clears the saved
+-- run and opens the end-of-run screen
+function GameState:finishRun(victory)
+    Save.addGold(self.goldEarnedRun)
+    Save.addQuestProgress("gold", self.goldEarnedRun)
+    Save.addQuestProgress("runs", 1, true)
+    local sData = Save.get()
+    local recordKey = (self.gameMode == "ascension") and "ascensionMax" or "infiniteMax"
+    local isNewRecord = self.roomNumber > (sData.records[recordKey] or 1)
+    if isNewRecord then sData.records[recordKey] = self.roomNumber end
+    if victory then
+        sData.records.ascensionClears = (sData.records.ascensionClears or 0) + 1
+    else
+        Audio.play("defeat", 0, 0.9)
+        Audio.playMusic("hub", 0.8)
+    end
+    Save.clearRun()
+    if self.gameMode == "survival" then
+        Save.setEventRecord("survival", self.waveCount or 0)
+    elseif self.gameMode == "boss_rush" then
+        Save.setEventRecord("boss_rush", self.roomNumber)
+    end
+    Save.save()
+
+    self.sm:switch("gameover", {
+        victory = victory,
+        waves = self.waveCount,
+        room = self.roomNumber,
+        goldEarned = self.goldEarnedRun,
+        kills = self.kills,
+        skills = self.acquiredSkills,
+        mode = self.gameMode,
+        isNewRecord = isNewRecord,
+        bestRoom = sData.records[recordKey],
+        clears = sData.records.ascensionClears or 0,
+    })
+end
+
 function GameState:update(dt)
     -- Panneau admin : invincibilité et ultime infini
     if Admin.get("god") then
@@ -842,45 +1028,17 @@ function GameState:update(dt)
         dt = dt * 0.3
     end
 
-    -- Gestion du Game Over (Transition cinématique vers GameOverState)
+    -- Victory: a short golden pause, then the end-of-run screen
+    if self.isVictory then
+        self.victoryTimer = self.victoryTimer + dt
+        if self.victoryTimer >= VICTORY_DELAY then self:finishRun(true) end
+        return
+    end
+
+    -- Game over: short pause on the dying hero, then the end-of-run screen
     if self.isGameOver then
         self.gameOverTimer = self.gameOverTimer + dt
-        if self.gameOverTimer >= 1.2 then
-            Save.addGold(self.goldEarnedRun)
-            Save.addQuestProgress("gold", self.goldEarnedRun)
-            Save.addQuestProgress("runs", 1, true)
-            local sData = Save.get()
-            local isNewRecord = false
-            local prevRecord = (self.gameMode == "ascension") and (sData.records.ascensionMax or 1) or (sData.records.infiniteMax or 1)
-            if self.roomNumber > prevRecord then
-                isNewRecord = true
-                if self.gameMode == "ascension" then
-                    sData.records.ascensionMax = self.roomNumber
-                else
-                    sData.records.infiniteMax = self.roomNumber
-                end
-            end
-            Audio.play("defeat", 0, 0.9)
-            Audio.playMusic("hub", 0.8)
-            Save.clearRun()
-            if self.gameMode == "survival" then
-                Save.setEventRecord("survival", self.waveCount or 0)
-            elseif self.gameMode == "boss_rush" then
-                Save.setEventRecord("boss_rush", self.roomNumber)
-            end
-            Save.save()
-
-            self.sm:switch("gameover", {
-                waves = self.waveCount,
-                room = self.roomNumber,
-                goldEarned = self.goldEarnedRun,
-                kills = self.kills,
-                skills = self.acquiredSkills,
-                mode = self.gameMode,
-                isNewRecord = isNewRecord,
-                bestRoom = (self.gameMode == "ascension") and sData.records.ascensionMax or sData.records.infiniteMax,
-            })
-        end
+        if self.gameOverTimer >= 1.2 then self:finishRun(false) end
         return
     end
 
@@ -996,6 +1154,11 @@ function GameState:update(dt)
 
     -- 5. Mise à jour des projectiles (couverture tactique rocheuse), monstres (IA) et textes
     self.projectilePool:update(dt, self.mapW, self.mapH, self.obstacleManager, self.dummyPool, self.player)
+    if self.player.typhoon then self:typhoonPull(dt) end
+    if self.player.lightningPending then
+        self.player.lightningPending = false
+        self:dodgeLightning()
+    end
     Perf.sec("u:tirs")
     if self.bossIntroTimer > 0 then
         self.bossIntroTimer = self.bossIntroTimer - dt -- monstres figés pendant l'intro du boss
@@ -1017,6 +1180,10 @@ function GameState:update(dt)
             if lType == "coin" then
                 self.goldEarnedRun = self.goldEarnedRun + math.floor(lVal * Admin.get("goldMult") + 0.5)
                 Audio.play("pickup_coin", 0.12, 0.5)
+                -- Golden Aura: each coin heals
+                if (self.player.coinHeal or 0) > 0 then
+                    self.player.hp = math.min(self.player.maxHp, self.player.hp + self.player.coinHeal)
+                end
             elseif lType == "xp" then
                 Audio.play("pickup_gem", 0.1, 0.5)
                 local leveledUp = self.player:addXp(math.floor(lVal * (self.player.xpMultiplier or 1.0)))
@@ -1242,15 +1409,19 @@ function GameState:update(dt)
         end
     end
 
-    -- 9. ENTRÉE DANS LA PORTE NORD D'ARCHERO
+    -- 9. ENTERING THE NORTH DOOR
     if self.isGateOpen and (self.phase == "clear" or self.phase == "combat") then
         local gateCenterX = self.mapW / 2
-        -- Hitbox d'entrée généreuse : contact avec le faisceau lumineux ou le vortex au nord
+        -- Generous entry hitbox: touching the light beam or the vortex in the north
         if self.player.y <= 55 and math.abs(self.player.x - gateCenterX) <= 38 then
-            -- Déclenchement de la transition fondue
-            self.phase = "transition"
-            self.fadeDirection = 1
-            self:triggerShake(0.20, 3.0)
+            if WorldManager.isFinalFloor(self.gameMode, self.roomNumber) then
+                self:winRun()
+            else
+                -- Start the fade transition to the next room
+                self.phase = "transition"
+                self.fadeDirection = 1
+                self:triggerShake(0.20, 3.0)
+            end
         end
     end
 end
@@ -1406,6 +1577,7 @@ function GameState:drawTop(eye)
     Depth.push(Depth.FX)
     VFX.drawProjectileBatch(self.projectilePool)
     VFX.drawParticles()
+    Ambience.draw() -- air of the world, scrolling with the floor
     Depth.pop()
     if self.sanctuary then self.sanctuary:drawAmbient(love.timer.getTime()) end
     Perf.sec("h:tirs")
@@ -1418,11 +1590,6 @@ function GameState:drawTop(eye)
     Perf.sec("h:textes")
 
     self.camera:detach()
-
-    -- 7b. Air of the world in front of the floor (screen space with a camera parallax)
-    Depth.push(Depth.FX)
-    Ambience.draw(self.camera.x, self.camera.y)
-    Depth.pop()
 
     -- The shake moves the world only: the vignette, banners, flashes and the room wipe stay
     -- locked to the screen, so full-screen overlays never leave a gap at the edges
@@ -1461,6 +1628,10 @@ function GameState:drawTop(eye)
     if self.isGameOver then
         local deathAlpha = math.min(1.0, self.gameOverTimer / 1.0)
         love.graphics.setColor(0.65, 0.05, 0.08, deathAlpha * 0.45)
+        love.graphics.rectangle("fill", 0, 0, Config.TOP_WIDTH, Config.TOP_HEIGHT)
+    elseif self.isVictory then
+        local glow = math.min(1.0, self.victoryTimer / VICTORY_DELAY)
+        love.graphics.setColor(1.0, 0.85, 0.35, glow * 0.40)
         love.graphics.rectangle("fill", 0, 0, Config.TOP_WIDTH, Config.TOP_HEIGHT)
     end
 end
@@ -1592,7 +1763,7 @@ function GameState:triggerPause()
 end
 
 -- ============================================================================
--- 5. ULTIMES DÉDIÉS POUR CHAQUE HÉROS ARCHERO 2
+-- 5. DEDICATED ULTIMATES FOR EACH HERO
 -- ============================================================================
 function GameState:triggerUltimate()
     Audio.play("ultimate", 0, 1.0)

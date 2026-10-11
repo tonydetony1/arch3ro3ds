@@ -1,6 +1,6 @@
 -- src/data/heroes.lua
--- Catalogue des Héros Archero 2 avec caractéristiques uniques et passifs de combat
--- Optimisé pour Nintendo 3DS (Zéro allocation GC au runtime)
+-- Hero catalogue with unique stats and combat passives
+-- Built for Nintendo 3DS (no GC allocation at runtime)
 
 local Heroes = {
     ROSTER = {

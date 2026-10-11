@@ -598,7 +598,7 @@ function Save.upgradeTalent(talentName)
 end
 
 -- ============================================================================
--- ARCHERO 2 SYSTEMS: HEROES, AFK PATROL, CHAPTERS & FUSION
+-- META SYSTEMS: HEROES, AFK PATROL, CHAPTERS & FUSION
 -- ============================================================================
 
 -- Active hero selection
