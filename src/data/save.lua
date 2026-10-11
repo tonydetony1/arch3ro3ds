@@ -858,10 +858,22 @@ function Save.getEvents()
 end
 
 function Save.setChapter(chapIndex)
+    local WorldManager = require("src.core.world_manager")
     local d = Save.get()
-    d.selectedChapter = math.max(1, math.min(6, chapIndex))
+    d.selectedChapter = math.max(1, math.min(#WorldManager.CHAPTERS, chapIndex))
     Save.save()
     return d.selectedChapter
+end
+
+-- Act I is always open. Act II opens with the first Act I clear, or on saves that went past
+-- floor 50 before the floor-50 victory existed.
+function Save.isActUnlocked(act)
+    if act <= 1 then return true end
+    local records = Save.get().records or {}
+    if act == 2 then
+        return (records.ascensionClears or 0) >= 1 or (records.ascensionMax or 1) > 50
+    end
+    return false
 end
 
 -- Achievements: claim completed achievement reward

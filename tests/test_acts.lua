@@ -90,4 +90,51 @@ T["an act ends with the last world that exists"] = function()
     end)
 end
 
+local Save = require("src.data.save")
+
+-- Runs `fn(records)` on fresh records, then restores them
+local function withRecords(fn)
+    local records = Save.get().records
+    local saved = {}
+    for k, v in pairs(records) do saved[k] = v end
+    for k in pairs(saved) do records[k] = nil end
+    records.ascensionMax, records.infiniteMax = 1, 0
+    local ok, err = pcall(fn, records)
+    for k in pairs(records) do records[k] = nil end
+    for k, v in pairs(saved) do records[k] = v end
+    assert(ok, err)
+end
+
+T["Act I is always open"] = function()
+    withRecords(function() assert(Save.isActUnlocked(1)) end)
+end
+
+T["Act II opens with the first Act I clear"] = function()
+    withRecords(function(records)
+        assert(not Save.isActUnlocked(2))
+        records.ascensionClears = 1
+        assert(Save.isActUnlocked(2))
+    end)
+end
+
+T["Act II is open on saves that went past floor 50 before the victory existed"] = function()
+    withRecords(function(records)
+        records.ascensionMax = 57
+        assert(Save.isActUnlocked(2))
+    end)
+end
+
+T["the world carousel reaches the last world"] = function()
+    local saved = Save.get().selectedChapter
+    local real = Save.save
+    Save.save = function() end
+    local ok, err = pcall(function()
+        assert(Save.setChapter(99) == #WorldManager.CHAPTERS)
+        assert(Save.setChapter(0) == 1)
+    end)
+    Save.save = real
+    Save.get().selectedChapter = saved
+    assert(ok, err)
+end
+
 return T
