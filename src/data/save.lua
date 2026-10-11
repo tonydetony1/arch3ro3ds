@@ -381,6 +381,7 @@ function Save.saveRun(game)
         mode = game.gameMode,
         room = game.roomNumber,
         gold = game.goldEarnedRun or 0,
+        goldBoost = game.goldBoost or 1,
         kills = game.kills or 0,
         ultimate = game.ultimateCharge or 0,
         heroId = game.player.heroId,
@@ -819,6 +820,23 @@ function Save.getBestiary()
     local d = Save.get()
     d.bestiary = d.bestiary or {}
     return d.bestiary
+end
+
+-- Deepest floor reached in Ascension or the Abyss, whether the run ends in death or is
+-- abandoned. Event modes keep their own records (Save.setEventRecord): their room count is not a
+-- floor, and the Abyss record unlocks chest rarities. Returns true on a new record. Does not write
+-- the save: the caller saves once (an SD write costs about 0.1 s).
+local FLOOR_RECORD_KEY = { ascension = "ascensionMax", infinite = "infiniteMax" }
+
+function Save.setFloorRecord(mode, room)
+    local key = FLOOR_RECORD_KEY[mode]
+    if not key then return false end
+    local records = Save.get().records
+    if (room or 0) > (records[key] or 0) then
+        records[key] = room
+        return true
+    end
+    return false
 end
 
 function Save.setEventRecord(mode, value)

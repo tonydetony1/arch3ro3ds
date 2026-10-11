@@ -240,6 +240,8 @@ function PauseState:touchpressed(id, tx, ty)
             if self.runData.goldEarned and self.runData.goldEarned > 0 then
                 Save.addGold(self.runData.goldEarned)
             end
+            -- An abandoned run still counts for the floor record
+            if Save.setFloorRecord(self.runData.mode, self.runData.room) then Save.save() end
             -- Dépile la pause et bascule sur le Menu Hub
             self.sm:pop()
             Save.clearRun() -- quitter = abandonner la course

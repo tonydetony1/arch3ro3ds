@@ -115,6 +115,8 @@ function GameState:enter(params)
     self.mapH = 480
 
     -- 2. Initialisation du joueur et application des équipements de la Forge
+    -- The state is a singleton: drop the last run's skills before the synergy check below
+    self.acquiredSkills = {}
     self.player = Player.new(self.mapW / 2, self.mapH - 50)
     -- Bonus de maîtrise du bestiaire (50 / 200 / 500 éliminations par monstre)
     self.player.mastery = Bestiary.buildMasteryTable(Save.getBestiary())
@@ -144,11 +146,12 @@ function GameState:enter(params)
 
     -- 4. Économie & Progression de la run
     self.goldEarnedRun = 0
+    -- Energy spent at launch (menu) multiplies every coin of the run
+    self.goldBoost = params.boosted and Balance.ENERGY.goldMult or 1
     self.kills = 0
     self.roomNumber = 1
     self.chapterIndex = 1
     self.ultimateCharge = 0.5
-    self.acquiredSkills = {}
 
     -- 5. Room state machine
     self.phase = "combat" -- "combat", "clear", "transition"
@@ -206,13 +209,25 @@ function GameState:enter(params)
     end
 end
 
+-- Multiplier on every coin of the run: the energy bonus and the admin GOLD setting
+function GameState:runGoldMult()
+    return (self.goldBoost or 1) * Admin.get("goldMult")
+end
+
+-- Adds `base` gold to the run, multiplied by the run's gold bonus. Returns the gold added.
+function GameState:addRunGold(base)
+    local gained = math.floor(base * self:runGoldMult() + 0.5)
+    self.goldEarnedRun = self.goldEarnedRun + gained
+    return gained
+end
+
 -- Gold won in the room, for the "ROOM CLEARED!" banner: coins already picked up plus the
 -- coins still on the ground, which the magnet pulls in right after the clear (most of
 -- them, since the hero only shoots while standing still: the banner used to say +0)
 function GameState:roomClearGold()
     local total = (self.goldEarnedRun or 0) - (self.roomGoldStart or 0)
     local pool = self.lootPool
-    local mult = Admin.get("goldMult")
+    local mult = self:runGoldMult()
     for i = 1, pool.activeCount do
         local loot = pool.items[pool.activeList[i]]
         if loot.type == "coin" then
@@ -286,6 +301,7 @@ function GameState:applyResume(run)
     self.hasSpunStartWheel = true
     self.roomNumber = run.room or 1
     self.goldEarnedRun = run.gold or 0
+    self.goldBoost = run.goldBoost or 1
     self.kills = run.kills or 0
     self.ultimateCharge = run.ultimate or 0
     if run.weapon then self.player:equipWeapon(run.weapon) end
@@ -666,11 +682,32 @@ function GameState:hurtHero(dmg, chill)
     VFX.shakeMedium()
     VFX.addFCT(p.x, p.y - 12, dealt, false)
     VFX.addSparks(p.x, p.y, 6, HURT_SPARK)
-    if p.hp <= 0 and not self.isGameOver then
-        self.isGameOver = true
-        self.gameOverTimer = 0
-    end
+    self:resolveHeroDeath()
     return true
+end
+
+-- The single place where 0 HP is decided: an extra life revives the hero at half HP behind a
+-- 2 s bubble, otherwise the run ends. Shots, blasts, contact hits and hazards all end up here.
+local REVIVE_SPARK = { 1.0, 0.9, 0.4, 1.0 }
+local REVIVE_BUBBLE = 2.0
+
+function GameState:resolveHeroDeath()
+    local p = self.player
+    if p.hp > 0 or self.isGameOver then return end
+    if (p.extraLives or 0) > 0 then
+        p.extraLives = p.extraLives - 1
+        p.hp = math.floor(p.maxHp * 0.5)
+        p.starActive = math.max(p.starActive or 0, REVIVE_BUBBLE)
+        VFX.shakeHeavy()
+        VFX.addSparks(p.x, p.y, 22, REVIVE_SPARK)
+        VFX.addFCT(p.x, p.y - 24, "RESURRECTION!", true)
+        Audio.play("level_up", 0, 1.0)
+        return
+    end
+    self.isGameOver = true
+    self.gameOverTimer = 0
+    VFX.shakeHeavy()
+    VFX.hitStop(0.12)
 end
 
 -- Damage, effects and skill hooks of one arrow (or beam) hitting one monster. Returns whether
@@ -877,7 +914,7 @@ function GameState:dropLoot(x, y, isBoss)
     -- Un boss garantit un pactole proportionnel à la profondeur atteinte
     if isBoss then
         local bonus = math.random(Balance.LOOT.bossBonusMin, Balance.LOOT.bossBonusMax)
-        self.goldEarnedRun = self.goldEarnedRun + math.floor(bonus * depth * 2.5)
+        self:addRunGold(bonus * depth * 2.5)
     end
 
     for i = 1, dropCount do
@@ -970,8 +1007,7 @@ function GameState:finishRun(victory)
     Save.addQuestProgress("runs", 1, true)
     local sData = Save.get()
     local recordKey = (self.gameMode == "ascension") and "ascensionMax" or "infiniteMax"
-    local isNewRecord = self.roomNumber > (sData.records[recordKey] or 1)
-    if isNewRecord then sData.records[recordKey] = self.roomNumber end
+    local isNewRecord = Save.setFloorRecord(self.gameMode, self.roomNumber)
     if victory then
         sData.records.ascensionClears = (sData.records.ascensionClears or 0) + 1
     else
@@ -979,10 +1015,11 @@ function GameState:finishRun(victory)
         Audio.playMusic("hub", 0.8)
     end
     Save.clearRun()
+    -- Event modes keep their own records: they never touch the floor records
     if self.gameMode == "survival" then
-        Save.setEventRecord("survival", self.waveCount or 0)
+        isNewRecord = Save.setEventRecord("survival", self.waveCount or 0)
     elseif self.gameMode == "boss_rush" then
-        Save.setEventRecord("boss_rush", self.roomNumber)
+        isNewRecord = Save.setEventRecord("boss_rush", self.roomNumber)
     end
     Save.save()
 
@@ -1042,24 +1079,8 @@ function GameState:update(dt)
         return
     end
 
-    -- Vie supplémentaire : résurrection avec la moitié des PV
-    if self.player.hp <= 0 and (self.player.extraLives or 0) > 0 and not self.isGameOver then
-        self.player.extraLives = self.player.extraLives - 1
-        self.player.hp = math.floor(self.player.maxHp * 0.5)
-        self.player.starActive = math.max(self.player.starActive or 0, 2.0)
-        VFX.shakeHeavy()
-        VFX.addSparks(self.player.x, self.player.y, 22, { 1.0, 0.9, 0.4, 1.0 })
-        VFX.addFCT(self.player.x, self.player.y - 24, "RESURRECTION!", true)
-        Audio.play("level_up", 0, 1.0)
-    end
-
-    -- Vérification globale de mort du joueur
-    if self.player.hp <= 0 and not self.isGameOver then
-        self.isGameOver = true
-        self.gameOverTimer = 0
-        VFX.shakeHeavy()
-        VFX.hitStop(0.12)
-    end
+    -- Hero at 0 HP from contact hits or hazards: extra life, or the end of the run
+    self:resolveHeroDeath()
 
     -- Gestion de la transition entre salles (Fade Out / Fade In)
     if self.phase == "transition" then
@@ -1178,7 +1199,7 @@ function GameState:update(dt)
         if not keepAlive then
             -- Butin collecté par le joueur !
             if lType == "coin" then
-                self.goldEarnedRun = self.goldEarnedRun + math.floor(lVal * Admin.get("goldMult") + 0.5)
+                self:addRunGold(lVal)
                 Audio.play("pickup_coin", 0.12, 0.5)
                 -- Golden Aura: each coin heals
                 if (self.player.coinHeal or 0) > 0 then

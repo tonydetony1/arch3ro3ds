@@ -81,6 +81,10 @@ function Dummy:spawn(x, y, hp, monsterType)
     self.type = monsterType or "slime"
     self.isBoss = false
     self.isEnraged = false
+    -- Pooled slot: drop the previous boss's brain (phase, attack) and phase-change stun
+    self.brain = nil
+    self.bossInvuln = false
+    self.orbitalHitAt = nil -- Player:updateOrbitals hit interval
     self.darkMark = 0
     self.enrageFlash = 0
     self.attackRateMult = 1.0
