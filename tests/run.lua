@@ -40,6 +40,7 @@ local files = {
     "tests.test_records",
     "tests.test_energy_boost",
     "tests.test_acts",
+    "tests.test_act_two",
 }
 
 local passed, failed = 0, 0

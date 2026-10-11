@@ -142,7 +142,7 @@ local function championType(pool)
     return pool[1]
 end
 
--- compose(chapterIndex, roomNumber, opts) -> { waves, budget, hpMult, signature, newType }
+-- compose(chapterIndex, roomNumber, opts) -> { waves, budget, hpMult, signature, newType, shooterCap }
 -- opts.difficulty : multiplicateur de budget (mode Difficile, chantier 4)
 function Director.compose(chapterIndex, roomNumber, opts)
     opts = opts or {}
@@ -150,7 +150,8 @@ function Director.compose(chapterIndex, roomNumber, opts)
     local pool, newType = Encounters.unlocked(chap.monsterPool or { "slime" }, roomNumber)
     local rng = lcg(chapterIndex * 7919 + roomNumber * 104729 + 17)
     local signature = Director.signature(chap.monsterPool or pool, roomNumber)
-    local shooterCap = Encounters.shooterCap(chapterIndex)
+    -- The cap follows the absolute depth: the Abyss cycles the worlds but keeps getting tougher
+    local shooterCap = Encounters.shooterCap(WorldManager.worldDepth(roomNumber))
 
     -- Budget : difficulté du mode (chantier 4) sinon réglage admin THREAT BUDGET
     local raw = Encounters.budget(roomNumber, opts.difficulty or Admin.get("budgetMult"))
@@ -158,7 +159,10 @@ function Director.compose(chapterIndex, roomNumber, opts)
     local budget = math.min(raw, Encounters.BUDGET_CAP)
     local hpMult = Encounters.hpOverflow(raw)
 
-    local result = { budget = budget, hpMult = hpMult, signature = signature, newType = newType, waves = {} }
+    local result = {
+        budget = budget, hpMult = hpMult, signature = signature, newType = newType,
+        shooterCap = shooterCap, waves = {},
+    }
     local remaining = Encounters.MAX_PER_ROOM
 
     if Encounters.isChampionRoom(roomNumber) then

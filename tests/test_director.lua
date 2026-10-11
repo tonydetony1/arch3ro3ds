@@ -65,7 +65,7 @@ T["chaque vague commence par un monstre de pression"] = function()
 end
 
 T["invocateurs et tireurs plafonnés"] = function()
-    eachCombatRoom(function(room, chapter, enc)
+    eachCombatRoom(function(room, _, enc)
         for _, wave in ipairs(enc.waves) do
             local summoners, shooters = 0, 0
             for _, s in ipairs(wave) do
@@ -73,7 +73,7 @@ T["invocateurs et tireurs plafonnés"] = function()
                 if Encounters.ROLE[s.type] == "shooter" then shooters = shooters + 1 end
             end
             assert(summoners <= 1, "salle " .. room)
-            assert(shooters <= Encounters.shooterCap(chapter), "salle " .. room)
+            assert(shooters <= Encounters.shooterCap(WorldManager.worldDepth(room)), "salle " .. room)
         end
     end)
 end

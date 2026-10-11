@@ -490,7 +490,8 @@ function GameState:spawnMonstersNow()
         if d then
             d:spawn(sp.x, sp.y, sp.hp, sp.type)
             d.isBoss = sp.isBoss or false
-            d.chapterIndex = self.chapterIndex -- dégâts des boss selon le chapitre
+            -- Boss damage scales with the absolute world depth (the Abyss cycles the worlds)
+            d.chapterIndex = WorldManager.worldDepth(self.roomNumber)
             if d.isBoss then bossType = sp.type end
             if sp.affixes then
                 EliteAffixes.apply(d, sp.affixes, sp.champion)
@@ -617,7 +618,7 @@ function GameState:handleMonsterDeath(target)
     end
     AIController.onDeath(target, self.dummyPool, self.fctPool)
     -- Élite "volatile" : explosion télégraphiée à l'endroit de sa mort (bombe ennemie)
-    local blast = EliteAffixes.onDeath(target, self.chapterIndex)
+    local blast = EliteAffixes.onDeath(target, WorldManager.worldDepth(self.roomNumber))
     if blast then
         local bomb = self.projectilePool:obtain()
         if bomb then
