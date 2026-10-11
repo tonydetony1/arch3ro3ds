@@ -247,57 +247,108 @@ function WorldManager.getChapter(chapterIndex)
 end
 
 -- ============================================================================
--- WORLDS OF A RUN: 10 floors per world, the last world (Abyss only) is endless
+-- WORLDS OF A RUN: 10 floors per world. Past the last world, the Abyss cycles them again.
 -- ============================================================================
 WorldManager.ROOMS_PER_WORLD = 10
 
--- Length of the fixed Ascension run: clearing its last floor ends the run with a victory. The
--- Abyss and the event modes have no total.
-WorldManager.ASCENSION_FLOORS = 50
-
--- True when clearing this floor ends the run (the last Ascension floor). Exactly floor 50: an
--- admin test run started past it keeps going.
-function WorldManager.isFinalFloor(mode, roomNumber)
-    return mode == "ascension" and roomNumber == WorldManager.ASCENSION_FLOORS
+-- Absolute world depth of a floor (1 for floors 1-10, 7 for 61-70...), even past the last
+-- world: bosses and elite blasts scale on it, so the Abyss keeps getting tougher
+function WorldManager.worldDepth(roomNumber)
+    return math.floor((math.max(1, roomNumber or 1) - 1) / WorldManager.ROOMS_PER_WORLD) + 1
 end
 
-function WorldManager.floorTotal(mode, roomNumber)
-    if mode == "ascension" and (roomNumber or 1) <= WorldManager.ASCENSION_FLOORS then
-        return WorldManager.ASCENSION_FLOORS
+-- World whose scenery and monsters a floor uses (the Abyss cycles the worlds)
+function WorldManager.worldOfRoom(roomNumber)
+    return (WorldManager.worldDepth(roomNumber) - 1) % #WorldManager.CHAPTERS + 1
+end
+
+-- First and last floor of a world
+function WorldManager.worldFloors(world)
+    local first = (world - 1) * WorldManager.ROOMS_PER_WORLD + 1
+    return first, first + WorldManager.ROOMS_PER_WORLD - 1
+end
+
+-- Hub progress of a world from the best floor ever reached. `openFloor` (optional) is the first
+-- floor of an act the player may start from: its world shows as unlocked before it is reached.
+-- { first, last, total, reached, unlocked, cleared }
+function WorldManager.worldProgress(world, bestFloor, openFloor)
+    local first, last = WorldManager.worldFloors(world)
+    local best = math.max(1, bestFloor or 1)
+    local total = last - first + 1
+    local reached = math.min(total, math.max(0, best - first + 1))
+    return {
+        first = first, last = last, total = total, reached = reached,
+        unlocked = best >= first or (openFloor ~= nil and first <= openFloor),
+        cleared = best > last,
+    }
+end
+
+-- ============================================================================
+-- ACTS OF THE ASCENSION: Act I = worlds 1-5, Act II = worlds 6-10. Clearing the last floor of an
+-- act is a victory. An act ends with the last world that exists, so Act II grows as worlds ship.
+-- ============================================================================
+WorldManager.ACT_WORLDS = { { 1, 5 }, { 6, 10 } }
+WorldManager.ACT_NAMES = { "ACT I", "ACT II" }
+
+-- Length of Act I, shown on the hub record card
+WorldManager.ASCENSION_FLOORS = 50
+
+-- First and last floor of an act, or nil when none of its worlds exists yet
+function WorldManager.actFloors(act)
+    local span = WorldManager.ACT_WORLDS[act]
+    if not span then return nil end
+    local lastWorld = math.min(span[2], #WorldManager.CHAPTERS)
+    if lastWorld < span[1] then return nil end
+    local first = WorldManager.worldFloors(span[1])
+    local _, last = WorldManager.worldFloors(lastWorld)
+    return first, last
+end
+
+-- Act of a floor, or nil past the last act (the Abyss)
+function WorldManager.actOfRoom(roomNumber)
+    for act = 1, #WorldManager.ACT_WORLDS do
+        local first, last = WorldManager.actFloors(act)
+        if first and roomNumber >= first and roomNumber <= last then return act end
     end
     return nil
+end
+
+-- Act a world belongs to
+function WorldManager.actOfWorld(world)
+    for act, span in ipairs(WorldManager.ACT_WORLDS) do
+        if world >= span[1] and world <= span[2] then return act end
+    end
+    return nil
+end
+
+-- True when clearing this floor ends an Ascension act (floor 50, then the last floor of Act II).
+-- Exact floors only: an admin test run started past them keeps going.
+function WorldManager.isFinalFloor(mode, roomNumber)
+    if mode ~= "ascension" then return false end
+    local act = WorldManager.actOfRoom(roomNumber)
+    if not act then return false end
+    local _, last = WorldManager.actFloors(act)
+    return roomNumber == last
+end
+
+-- True when the act ending on this floor is followed by another one (CONTINUE is offered)
+function WorldManager.offersNextAct(mode, roomNumber)
+    if not WorldManager.isFinalFloor(mode, roomNumber) then return false end
+    return WorldManager.actFloors(WorldManager.actOfRoom(roomNumber) + 1) ~= nil
+end
+
+-- Length of the current act in Ascension ("STAGE 7 / 50"), nil elsewhere
+function WorldManager.floorTotal(mode, roomNumber)
+    if mode ~= "ascension" then return nil end
+    local act = WorldManager.actOfRoom(roomNumber or 1)
+    if not act then return nil end
+    local _, last = WorldManager.actFloors(act)
+    return last
 end
 
 function WorldManager.stageText(mode, roomNumber)
     local total = WorldManager.floorTotal(mode, roomNumber)
     return "STAGE " .. roomNumber .. (total and (" / " .. total) or "")
-end
-
-function WorldManager.worldOfRoom(roomNumber)
-    local world = math.floor((math.max(1, roomNumber or 1) - 1) / WorldManager.ROOMS_PER_WORLD) + 1
-    return math.min(#WorldManager.CHAPTERS, world)
-end
-
--- First and last floor of a world (last = nil for the endless world)
-function WorldManager.worldFloors(world)
-    local first = (world - 1) * WorldManager.ROOMS_PER_WORLD + 1
-    if world >= #WorldManager.CHAPTERS then return first, nil end
-    return first, first + WorldManager.ROOMS_PER_WORLD - 1
-end
-
--- Hub progress of a world from the best floor ever reached:
--- { first, last, total (nil if endless), reached, unlocked, cleared }
-function WorldManager.worldProgress(world, bestFloor)
-    local first, last = WorldManager.worldFloors(world)
-    local best = math.max(1, bestFloor or 1)
-    local reached = math.max(0, best - first + 1)
-    local total = last and (last - first + 1) or nil
-    if total then reached = math.min(total, reached) end
-    return {
-        first = first, last = last, total = total, reached = reached,
-        unlocked = best >= first,
-        cleared = total ~= nil and best > last,
-    }
 end
 
 -- ============================================================================
