@@ -158,4 +158,126 @@ T["the world carousel reaches the last world"] = function()
     assert(ok, err)
 end
 
+-- The menu module loads drawing modules: it needs LOVE stubbed
+local withLoveStubs = require("tests.love_stubs")
+
+T["the hub launches Act II only for an unlocked Act II world in Ascension"] = function()
+    withLoveStubs(function()
+        local MenuState = require("src.states.menu")
+        assert(MenuState.launchAct("ascension", 6, true) == 2)
+        assert(MenuState.launchAct("ascension", 6, false) == 1, "locked Act II falls back to Act I")
+        assert(MenuState.launchAct("ascension", 3, true) == 1)
+        assert(MenuState.launchAct("infinite", 6, true) == nil, "the Abyss has no act")
+    end)
+end
+
+-- A hub menu whose switches are recorded; the energy and the saved run do not touch the save
+local function launchFrom(selectedChapter, mode)
+    local MenuState = require("src.states.menu")
+    local launched
+    local menu = MenuState.new({ switch = function(_, name, params) launched = { name = name, params = params } end })
+    menu.saveData = Save.get()
+    menu.selectedMode = mode
+    local savedChapter, spend, getRun = menu.saveData.selectedChapter, Save.spendEnergy, Save.getRun
+    menu.saveData.selectedChapter = selectedChapter
+    Save.spendEnergy = function() return false end
+    Save.getRun = function() return nil end
+    local ok, err = pcall(menu.launchGame, menu)
+    menu.saveData.selectedChapter = savedChapter
+    Save.spendEnergy, Save.getRun = spend, getRun
+    assert(ok, err)
+    return launched
+end
+
+T["BATTLE on an unlocked Act II world launches Act II"] = function()
+    withLoveStubs(function() withRecords(function(records)
+        records.ascensionClears = 1
+        local launched = launchFrom(6, "ascension")
+        assert(launched.name == "game" and launched.params.mode == "ascension")
+        assert(launched.params.act == 2, "act " .. tostring(launched.params.act))
+        assert(launched.params.chapter == nil, "the ignored chapter parameter is back")
+    end) end)
+end
+
+T["BATTLE on a locked Act II world, or on an Act I world, launches Act I"] = function()
+    withLoveStubs(function() withRecords(function(records)
+        assert(launchFrom(6, "ascension").params.act == 1, "locked Act II was launched")
+        records.ascensionClears = 1
+        assert(launchFrom(3, "ascension").params.act == 1)
+        assert(launchFrom(6, "infinite").params.act == nil, "the Abyss got an act")
+    end) end)
+end
+
+-- Texts drawn by the Play tab of a hub whose carousel stands on `world`
+local function playTabTexts(world)
+    local MenuState = require("src.states.menu")
+    local PixelFont = require("src.ui.pixel_font")
+    local menu = MenuState.new({ switch = function() end })
+    menu.saveData = Save.get()
+    local savedChapter = menu.saveData.selectedChapter
+    menu.saveData.selectedChapter = world
+    local printed = {}
+    local printf = PixelFont.printf
+    PixelFont.printf = function(text, ...) printed[#printed + 1] = tostring(text) end
+    local ok, err = pcall(menu.drawPlayTab, menu)
+    PixelFont.printf = printf
+    menu.saveData.selectedChapter = savedChapter
+    assert(ok, err)
+    return table.concat(printed, "|")
+end
+
+T["the Void City card says to clear Act I while Act II is locked"] = function()
+    withLoveStubs(function() withRecords(function()
+        local seen = playTabTexts(6)
+        assert(seen:find("LOCKED: CLEAR ACT I", 1, true), "no act lock text: " .. seen)
+    end) end)
+end
+
+T["the Void City card is open once Act II is unlocked"] = function()
+    withLoveStubs(function() withRecords(function(records)
+        records.ascensionClears = 1
+        local seen = playTabTexts(6)
+        assert(not seen:find("LOCKED", 1, true), "still locked: " .. seen)
+    end) end)
+end
+
+T["an Abyss record past floor 50 does not open the Void City card"] = function()
+    withLoveStubs(function() withRecords(function(records)
+        records.infiniteMax = 80
+        local seen = playTabTexts(6)
+        assert(seen:find("LOCKED: CLEAR ACT I", 1, true), "the card looks open: " .. seen)
+    end) end)
+end
+
+T["an Act I world card keeps its floor lock"] = function()
+    withLoveStubs(function() withRecords(function()
+        local seen = playTabTexts(5)
+        assert(seen:find("LOCKED: FLOOR 41+", 1, true), "no floor lock text: " .. seen)
+        assert(not seen:find("CLEAR ACT I", 1, true))
+    end) end)
+end
+
+T["the hub BEST card counts floors out of the act the record is in"] = function()
+    withLoveStubs(function() withRecords(function(records)
+        local MenuState = require("src.states.menu")
+        local MenuTop = require("src.ui.menu_top")
+        local PixelFont = require("src.ui.pixel_font")
+        local _, last2 = WorldManager.actFloors(2)
+        local function bestCard(best)
+            records.ascensionMax = best
+            local menu = MenuState.new({ switch = function() end })
+            menu.saveData = Save.get()
+            local printed = {}
+            local printf = PixelFont.printf
+            PixelFont.printf = function(text, ...) printed[#printed + 1] = tostring(text) end
+            local ok, err = pcall(MenuTop.draw, menu, 0)
+            PixelFont.printf = printf
+            assert(ok, err)
+            return "|" .. table.concat(printed, "|") .. "|"
+        end
+        assert(bestCard(30):find("|30/50|", 1, true), "Act I record")
+        assert(bestCard(55):find("|55/" .. last2 .. "|", 1, true), "Act II record")
+    end) end)
+end
+
 return T
