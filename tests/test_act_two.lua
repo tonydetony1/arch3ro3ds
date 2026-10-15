@@ -70,15 +70,20 @@ T["the shooter cap follows the world depth in the Abyss"] = function()
     assert(enc.shooterCap == 3, "shooter cap on floor 65: " .. tostring(enc.shooterCap))
 end
 
--- Runs `fn` with the Glory talent off (it adds a free draft at the start of every run)
-local function withoutGlory(fn)
+-- Runs `fn` with the Glory talent at `level` (it adds a free draft at the start of every run).
+-- The talent is restored and no saved run is left behind, whatever happens in `fn`.
+local function withGlory(level, fn)
     local talents = Save.getTalents()
     local glory = talents.glory
-    talents.glory = 0
+    talents.glory = level
+    Save.clearRun()
     local ok, err = pcall(fn)
     talents.glory = glory
+    Save.clearRun()
     assert(ok, err)
 end
+
+local function withoutGlory(fn) withGlory(0, fn) end
 
 T["an Act II run starts on its first floor with the start wheel"] = function()
     withLoveStubs(function() withoutGlory(function()
@@ -118,6 +123,65 @@ T["the act is ignored outside the Ascension"] = function()
         local g = newGame()
         g:enter({ mode = "infinite", act = 2 })
         assert(g.roomNumber == 1)
+        assert(g.queuedDrafts == 0)
+    end) end)
+end
+
+T["an Act II launch saves no run before the first floor is played"] = function()
+    withLoveStubs(function() withoutGlory(function()
+        local g = newGame()
+        g:enter({ mode = "ascension", act = 2 })
+        assert(Save.getRun() == nil, "a run snapshot was saved on entry: it would resume without the head start")
+    end) end)
+end
+
+T["entering the first floor of Act II does not count a cleared room for the quests"] = function()
+    withLoveStubs(function() withoutGlory(function()
+        local before = Save.getDailyQuests().progress.rooms or 0
+        local g = newGame()
+        g:enter({ mode = "ascension", act = 2 })
+        local after = Save.getDailyQuests().progress.rooms or 0
+        assert(after == before, "room quest went from " .. before .. " to " .. after)
+    end) end)
+end
+
+T["the Glory draft waits for the start wheel, then opens once"] = function()
+    withLoveStubs(function() withGlory(1, function()
+        local g = newGame()
+        g:enter({ mode = "ascension" })
+        assert(g.phase == "wheel", "floor 1 does not start with the wheel")
+        assert(not g.isDrafting, "the Glory draft opened over the wheel")
+        g:specialRoomDone()
+        assert(g.isDrafting, "the Glory draft did not open after the wheel")
+        g:pickDraft(1)
+        assert(not g.isDrafting, "a second draft opened")
+        assert(g.queuedDrafts == 0)
+    end) end)
+end
+
+T["Glory adds one draft to the Act II head start"] = function()
+    withLoveStubs(function() withGlory(1, function()
+        local g = newGame()
+        g:enter({ mode = "ascension", act = 2 })
+        assert(not g.isDrafting, "a draft opened over the wheel")
+        g:specialRoomDone()
+        local total = Balance.ACT2_HEAD_START_DRAFTS + 1
+        for i = 1, total do
+            assert(g.isDrafting, "draft " .. i .. " did not open")
+            g:pickDraft(1)
+        end
+        assert(not g.isDrafting, "one draft too many")
+        assert(#g.acquiredSkills == total)
+    end) end)
+end
+
+T["an admin start room skips the Act II head start"] = function()
+    withLoveStubs(function() withoutGlory(function()
+        local g = newGame()
+        g:enter({ mode = "ascension", act = 2, startRoom = 30 })
+        assert(g.roomNumber == 30, "started on floor " .. g.roomNumber)
+        assert(g.queuedDrafts == 0, "queued " .. g.queuedDrafts .. " drafts")
+        assert(not g.isDrafting)
     end) end)
 end
 

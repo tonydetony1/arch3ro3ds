@@ -339,7 +339,7 @@ function GameState:roomSpec(roomNum)
     elseif self.gameMode == "survival" then
         roomType = "combat"
     end
-    -- Grille de la salle : centre dégagé pour boss / roue / survie, vide pour les sanctuaires
+    -- Room grid: clear centre for boss / wheel / survival, empty for sanctuaries
     local kind = "combat"
     if roomType == "boss" or self.gameMode == "survival"
         or (roomNum == self.runStartRoom and not self.hasSpunStartWheel) then
@@ -368,7 +368,7 @@ function GameState:prefetchNextRoom()
 end
 
 function GameState:setupRoom(roomNum)
-    if roomNum > 1 then Save.addQuestProgress("rooms", 1) end
+    if roomNum > self.runStartRoom then Save.addQuestProgress("rooms", 1) end
     local spec = self:roomSpec(roomNum)
     Audio.playMusic(spec.roomType == "boss" and "boss" or (spec.kind == "sanctuary" and "hub" or "battle"), 0.5)
     -- Salle préparée pendant la précédente : on termine ce qui reste (souvent rien)
@@ -449,7 +449,7 @@ function GameState:setupRoom(roomNum)
         self.specialRoomManager:setup(self.roomType, self.player, self.roomNumber, nil, { approach = true })
         self.sanctuary = Sanctuary.new(self.roomType, self.mapW, self.mapH)
     elseif roomNum == self.runStartRoom and not self.hasSpunStartWheel then
-        -- ROUE DE LA FORTUNE DE DÉPART (LUCKY WHEEL)
+        -- STARTING LUCKY WHEEL
         self.hasSpunStartWheel = true
         self.phase = "wheel"
         self.spawnWarningTimer = 0
@@ -471,7 +471,7 @@ function GameState:setupRoom(roomNum)
     self.camera:setPosition(self.player.x, self.player.y)
 
     -- Sauvegarde automatique : la course reprend ici si la console est éteinte
-    if roomNum > 1 and not self.isGameOver then
+    if roomNum > self.runStartRoom and not self.isGameOver then
         Save.saveRun(self)
     end
 
