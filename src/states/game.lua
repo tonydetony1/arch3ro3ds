@@ -37,6 +37,7 @@ local Sanctuary = require("src.render.sanctuary")
 local Depth = require("src.render.depth")
 local Audio = require("src.audio.audio")
 local Banner = require("src.ui.banner")
+local ActChoice = require("src.ui.act_choice")
 local Bestiary = require("src.data.bestiary")
 local Perf = require("src.core.perf")
 local Bestiary = require("src.data.bestiary")
@@ -1013,9 +1014,35 @@ function GameState:winRun()
     self.phase = "victory"
     Audio.play("victory", 0, 1.0)
     Audio.playMusic("hub", 0.8)
-    Banner.show("chapter", "VICTORY!", "ASCENSION COMPLETE")
+    local act = WorldManager.actOfRoom(self.roomNumber) or 1
+    Banner.show("chapter", "VICTORY!", WorldManager.ACT_NAMES[act] .. " COMPLETE")
     VFX.addSparks(self.player.x, self.player.y - 10, 30, { 1.0, 0.85, 0.3, 1.0 })
     self:triggerShake(0.25, 3.0)
+end
+
+-- Act I cleared and the player goes on: the clear counts (floor record, clears), the gold stays
+-- in the run, and the fade leads to the first floor of Act II with the same hero and build
+function GameState:continueToNextAct()
+    local records = Save.get().records
+    Save.setFloorRecord(self.gameMode, self.roomNumber)
+    records.ascensionClears = (records.ascensionClears or 0) + 1
+    Save.save()
+    self.isVictory = false
+    self.victoryTimer = 0
+    Audio.playMusic("battle", 0.6)
+    self.phase = "transition"
+    self.fadeDirection = 1
+end
+
+-- Act choice made (touch, buttons or keys): "continue" or "finish"
+function GameState:chooseAct(id)
+    if self.phase ~= "act_choice" then return end
+    Audio.play("ui_confirm", 0, 0.9)
+    if id == "continue" then
+        self:continueToNextAct()
+    elseif id == "finish" then
+        self:finishRun(true)
+    end
 end
 
 -- Ends the run (death or victory): banks the gold, updates records and quests, clears the saved
@@ -1027,8 +1054,11 @@ function GameState:finishRun(victory)
     local sData = Save.get()
     local recordKey = (self.gameMode == "ascension") and "ascensionMax" or "infiniteMax"
     local isNewRecord = Save.setFloorRecord(self.gameMode, self.roomNumber)
+    -- Each act counts its own clears (Act I: ascensionClears, shipped before the acts)
+    local act = WorldManager.actOfRoom(self.roomNumber) or 1
+    local clearsKey = (act == 2) and "act2Clears" or "ascensionClears"
     if victory then
-        sData.records.ascensionClears = (sData.records.ascensionClears or 0) + 1
+        sData.records[clearsKey] = (sData.records[clearsKey] or 0) + 1
     else
         Audio.play("defeat", 0, 0.9)
         Audio.playMusic("hub", 0.8)
@@ -1052,7 +1082,8 @@ function GameState:finishRun(victory)
         mode = self.gameMode,
         isNewRecord = isNewRecord,
         bestRoom = sData.records[recordKey],
-        clears = sData.records.ascensionClears or 0,
+        clears = sData.records[clearsKey] or 0,
+        act = act,
     })
 end
 
@@ -1084,10 +1115,18 @@ function GameState:update(dt)
         dt = dt * 0.3
     end
 
-    -- Victory: a short golden pause, then the end-of-run screen
+    -- Victory: a short golden pause, then the choice to go on to the next act (end of Act I) or
+    -- the end-of-run screen
     if self.isVictory then
         self.victoryTimer = self.victoryTimer + dt
-        if self.victoryTimer >= VICTORY_DELAY then self:finishRun(true) end
+        if self.phase == "victory" and self.victoryTimer >= VICTORY_DELAY then
+            if WorldManager.offersNextAct(self.gameMode, self.roomNumber) then
+                self.phase = "act_choice"
+                self.actChoiceCursor = 1
+            else
+                self:finishRun(true)
+            end
+        end
         return
     end
 
@@ -1694,6 +1733,10 @@ function GameState:drawBottom()
         self.hud:drawDraftModal(self.draftOptions, self.acquiredSkills, self.draftCursor)
     end
 
+    if self.phase == "act_choice" then
+        ActChoice.draw(self.actChoiceCursor)
+    end
+
     -- Voile sombre lors du Game Over
     if self.isGameOver then
         local deathAlpha = math.min(1.0, self.gameOverTimer / 1.0)
@@ -1709,6 +1752,12 @@ function GameState:touchpressed(id, tx, ty)
     local pb = self.pauseBtn
     if tx >= pb.x and tx <= pb.x + pb.w and ty >= pb.y and ty <= pb.y + pb.h then
         self:triggerPause()
+        return
+    end
+
+    if self.phase == "act_choice" then
+        local id = ActChoice.hit(tx, ty)
+        if id then self:chooseAct(id) end
         return
     end
 
@@ -1923,6 +1972,18 @@ function GameState:gamepadpressed(joystick, button)
         return
     end
 
+    if self.phase == "act_choice" then
+        local n = #ActChoice.BUTTONS
+        if button == "dpup" then
+            self.actChoiceCursor = (self.actChoiceCursor - 2) % n + 1
+        elseif button == "dpdown" then
+            self.actChoiceCursor = self.actChoiceCursor % n + 1
+        elseif button == "a" then
+            self:chooseAct(ActChoice.BUTTONS[self.actChoiceCursor].id)
+        end
+        return
+    end
+
     if self.specialRoomManager and self.specialRoomManager:isOfferOpen() then
         local key = ({ a = "a", b = "b", x = "x", y = "b" })[button]
         if key then self:keypressed(key) end
@@ -1952,6 +2013,22 @@ function GameState:gamepadpressed(joystick, button)
 end
 
 function GameState:keypressed(key)
+    if self.phase == "act_choice" then
+        local n = #ActChoice.BUTTONS
+        if key == "up" then
+            self.actChoiceCursor = (self.actChoiceCursor - 2) % n + 1
+        elseif key == "down" then
+            self.actChoiceCursor = self.actChoiceCursor % n + 1
+        elseif key == "return" or key == "space" or key == "a" then
+            self:chooseAct(ActChoice.BUTTONS[self.actChoiceCursor].id)
+        elseif key == "1" then
+            self:chooseAct("continue")
+        elseif key == "2" then
+            self:chooseAct("finish")
+        end
+        return
+    end
+
     if key == "return" or key == "start" or key == "p" or key == "escape" then
         if not (self.specialRoomManager and self.specialRoomManager:isOfferOpen() and (key == "return" or key == "space")) then
             self:triggerPause()

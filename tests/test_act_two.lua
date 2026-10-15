@@ -185,4 +185,110 @@ T["an admin start room skips the Act II head start"] = function()
     end) end)
 end
 
+-- Runs `fn(records)` and restores the records afterwards; no saved run is left behind either
+-- (continuing into Act II writes a run snapshot on floor 51)
+local function withRecords(fn)
+    local records = Save.get().records
+    local saved = {}
+    for k, v in pairs(records) do saved[k] = v end
+    Save.clearRun()
+    local ok, err = pcall(fn, records)
+    for k in pairs(records) do records[k] = nil end
+    for k, v in pairs(saved) do records[k] = v end
+    Save.clearRun()
+    assert(ok, err)
+end
+
+-- An Ascension run that just cleared `room`
+local function clearedFloor(room)
+    local g = newGame()
+    g:enter({ mode = "ascension" })
+    g.roomNumber = room
+    g:winRun()
+    return g
+end
+
+T["clearing floor 50 offers to continue into Act II"] = function()
+    withLoveStubs(function() withRecords(function()
+        local g = clearedFloor(50)
+        runUntil(g, function(s) return s.phase == "act_choice" or s.switched end)
+        assert(g.phase == "act_choice", "the run ended without the choice")
+    end) end)
+end
+
+T["CONTINUE goes on to floor 51 with the same build and gold"] = function()
+    withLoveStubs(function() withRecords(function(records)
+        local clears = records.ascensionClears or 0
+        local g = clearedFloor(50)
+        runUntil(g, function(s) return s.phase == "act_choice" end)
+        g.goldEarnedRun = 500
+        local skills = #g.acquiredSkills
+        g:chooseAct("continue")
+        runUntil(g, function(s) return s.roomNumber == 51 end)
+        assert(not g.switched, "the run ended")
+        assert(g.goldEarnedRun == 500, "gold lost: " .. g.goldEarnedRun)
+        assert(#g.acquiredSkills == skills)
+        assert(records.ascensionClears == clears + 1, "the Act I clear was not counted")
+    end) end)
+end
+
+T["END THE RUN opens the Act I victory screen"] = function()
+    withLoveStubs(function() withRecords(function()
+        local g = clearedFloor(50)
+        runUntil(g, function(s) return s.phase == "act_choice" end)
+        g:chooseAct("finish")
+        assert(g.switched and g.switched.name == "gameover" and g.switched.data.victory)
+        assert(g.switched.data.act == 1)
+    end) end)
+end
+
+T["clearing the last floor of Act II ends the run with its own victory"] = function()
+    withLoveStubs(function() withRecords(function(records)
+        local _, last = WorldManager.actFloors(2)
+        local clears = records.act2Clears or 0
+        local g = clearedFloor(last)
+        runUntil(g, function(s) return s.switched or s.phase == "act_choice" end)
+        assert(g.switched and g.switched.data.victory, "no victory screen")
+        assert(g.switched.data.act == 2)
+        assert(records.act2Clears == clears + 1, "the Act II clear was not counted")
+    end) end)
+end
+
+T["the Act I choice answers to keys, console buttons and touch"] = function()
+    withLoveStubs(function() withRecords(function()
+        local g = clearedFloor(50)
+        runUntil(g, function(s) return s.phase == "act_choice" end)
+        assert(g.actChoiceCursor == 1)
+        g:drawBottom() -- the panel draws without error
+        g:keypressed("down")
+        assert(g.actChoiceCursor == 2, "down did not move the cursor")
+        g:gamepadpressed(nil, "dpup")
+        assert(g.actChoiceCursor == 1, "dpup did not move the cursor")
+        g:gamepadpressed(nil, "dpdown")
+        assert(g.actChoiceCursor == 2, "dpdown did not move the cursor")
+        g:gamepadpressed(nil, "a") -- END THE RUN
+        assert(g.switched and g.switched.name == "gameover", "A on the second button did not end the run")
+
+        local g2 = clearedFloor(50)
+        runUntil(g2, function(s) return s.phase == "act_choice" end)
+        g2:keypressed("return") -- confirms the choice instead of pausing (the stub has no push)
+        assert(g2.phase == "transition", "return did not continue: " .. tostring(g2.phase))
+
+        local g3 = clearedFloor(50)
+        runUntil(g3, function(s) return s.phase == "act_choice" end)
+        g3:touchpressed(1, 160, 180) -- END THE RUN button
+        assert(g3.switched and g3.switched.name == "gameover", "touching END THE RUN did not end the run")
+    end) end)
+end
+
+T["the choice is ignored outside the end of Act I"] = function()
+    withLoveStubs(function() withRecords(function()
+        local g = newGame()
+        g:enter({ mode = "ascension" })
+        g.roomNumber = 20
+        g:chooseAct("finish")
+        assert(not g.switched, "chooseAct acted outside the choice")
+    end) end)
+end
+
 return T
