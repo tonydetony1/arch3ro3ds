@@ -208,6 +208,12 @@ local function clearedFloor(room)
     return g
 end
 
+-- Runs until the Act I choice is shown and its input grace has elapsed
+local function reachChoice(g)
+    runUntil(g, function(s) return s.phase == "act_choice" end)
+    runUntil(g, function(s) return (s.actChoiceGrace or 0) <= 0 end)
+end
+
 T["clearing floor 50 offers to continue into Act II"] = function()
     withLoveStubs(function() withRecords(function()
         local g = clearedFloor(50)
@@ -220,7 +226,7 @@ T["CONTINUE goes on to floor 51 with the same build and gold"] = function()
     withLoveStubs(function() withRecords(function(records)
         local clears = records.ascensionClears or 0
         local g = clearedFloor(50)
-        runUntil(g, function(s) return s.phase == "act_choice" end)
+        reachChoice(g)
         g.goldEarnedRun = 500
         local skills = #g.acquiredSkills
         g:chooseAct("continue")
@@ -235,7 +241,7 @@ end
 T["END THE RUN opens the Act I victory screen"] = function()
     withLoveStubs(function() withRecords(function()
         local g = clearedFloor(50)
-        runUntil(g, function(s) return s.phase == "act_choice" end)
+        reachChoice(g)
         g:chooseAct("finish")
         assert(g.switched and g.switched.name == "gameover" and g.switched.data.victory)
         assert(g.switched.data.act == 1)
@@ -257,7 +263,7 @@ end
 T["the Act I choice answers to keys, console buttons and touch"] = function()
     withLoveStubs(function() withRecords(function()
         local g = clearedFloor(50)
-        runUntil(g, function(s) return s.phase == "act_choice" end)
+        reachChoice(g)
         assert(g.actChoiceCursor == 1)
         g:drawBottom() -- the panel draws without error
         g:keypressed("down")
@@ -270,12 +276,12 @@ T["the Act I choice answers to keys, console buttons and touch"] = function()
         assert(g.switched and g.switched.name == "gameover", "A on the second button did not end the run")
 
         local g2 = clearedFloor(50)
-        runUntil(g2, function(s) return s.phase == "act_choice" end)
+        reachChoice(g2)
         g2:keypressed("return") -- confirms the choice instead of pausing (the stub has no push)
         assert(g2.phase == "transition", "return did not continue: " .. tostring(g2.phase))
 
         local g3 = clearedFloor(50)
-        runUntil(g3, function(s) return s.phase == "act_choice" end)
+        reachChoice(g3)
         g3:touchpressed(1, 160, 180) -- END THE RUN button
         assert(g3.switched and g3.switched.name == "gameover", "touching END THE RUN did not end the run")
     end) end)
@@ -288,6 +294,35 @@ T["the choice is ignored outside the end of Act I"] = function()
         g.roomNumber = 20
         g:chooseAct("finish")
         assert(not g.switched, "chooseAct acted outside the choice")
+    end) end)
+end
+
+T["pausing on the Act I choice is refused: abandoning would forfeit the clear"] = function()
+    withLoveStubs(function() withRecords(function()
+        local g = clearedFloor(50)
+        local pushes = 0
+        g.sm.push = function() pushes = pushes + 1 end
+        reachChoice(g)
+        local pb = g.pauseBtn
+        g:gamepadpressed(nil, "start")
+        g:touchpressed(1, pb.x + pb.w / 2, pb.y + pb.h / 2)
+        g:keypressed("escape")
+        g:keypressed("p")
+        assert(pushes == 0, "the pause screen opened " .. pushes .. " time(s) on the choice")
+        assert(g.phase == "act_choice", "the choice was lost: " .. tostring(g.phase))
+    end) end)
+end
+
+T["a tap right after the Act I choice appears is ignored"] = function()
+    withLoveStubs(function() withRecords(function()
+        local g = clearedFloor(50)
+        runUntil(g, function(s) return s.phase == "act_choice" end)
+        g:chooseAct("continue")
+        g:touchpressed(1, 160, 120) -- on the CONTINUE button
+        assert(g.phase == "act_choice", "an early tap picked: " .. tostring(g.phase))
+        runUntil(g, function(s) return (s.actChoiceGrace or 0) <= 0 end)
+        g:chooseAct("continue")
+        assert(g.phase == "transition", "the choice never opened: " .. tostring(g.phase))
     end) end)
 end
 

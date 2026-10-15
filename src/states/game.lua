@@ -45,6 +45,9 @@ local Balance = require("src.data.balance")
 local ItemPassives = require("src.data.item_passives")
 
 local VICTORY_DELAY = 2.0 -- seconds of golden pause between the last floor and the victory screen
+-- Seconds after the Act I choice appears during which taps and keys are ignored (the panel sits
+-- over the HUD's DASH and ULT zones, which the player may still be mashing)
+local ACT_CHOICE_GRACE = 0.3
 
 -- Temps processeur par image accordé à la préparation de la salle suivante (secondes).
 -- Sur console, le budget est la marge laissée par l'image précédente avant 1/60 s ; hors
@@ -176,6 +179,8 @@ function GameState:enter(params)
     self.gameOverTimer = 0
     self.isVictory = false
     self.victoryTimer = 0
+    self.actChoiceCursor = 1 -- Act I choice (CONTINUE / END THE RUN)
+    self.actChoiceGrace = 0
     self.hasSpunStartWheel = false
     -- First floor of this run (51 for Act II): the start wheel is played there
     self.runStartRoom = 1
@@ -1007,7 +1012,8 @@ function GameState:dodgeLightning()
     Audio.play("hit", 0.1, 0.6)
 end
 
--- Last Ascension floor cleared: golden pause on the hero before the victory screen
+-- Last floor of an act cleared: golden pause on the hero, then the victory screen or, at the end
+-- of Act I, the choice to go on to Act II
 function GameState:winRun()
     self.isVictory = true
     self.victoryTimer = 0
@@ -1036,7 +1042,7 @@ end
 
 -- Act choice made (touch, buttons or keys): "continue" or "finish"
 function GameState:chooseAct(id)
-    if self.phase ~= "act_choice" then return end
+    if self.phase ~= "act_choice" or self.actChoiceGrace > 0 then return end
     Audio.play("ui_confirm", 0, 0.9)
     if id == "continue" then
         self:continueToNextAct()
@@ -1123,9 +1129,12 @@ function GameState:update(dt)
             if WorldManager.offersNextAct(self.gameMode, self.roomNumber) then
                 self.phase = "act_choice"
                 self.actChoiceCursor = 1
+                self.actChoiceGrace = ACT_CHOICE_GRACE
             else
                 self:finishRun(true)
             end
+        elseif self.phase == "act_choice" and self.actChoiceGrace > 0 then
+            self.actChoiceGrace = self.actChoiceGrace - dt
         end
         return
     end
@@ -1756,8 +1765,8 @@ function GameState:touchpressed(id, tx, ty)
     end
 
     if self.phase == "act_choice" then
-        local id = ActChoice.hit(tx, ty)
-        if id then self:chooseAct(id) end
+        local choice = ActChoice.hit(tx, ty)
+        if choice then self:chooseAct(choice) end
         return
     end
 
@@ -1840,6 +1849,8 @@ function GameState:touchreleased(id, tx, ty)
 end
 
 function GameState:triggerPause()
+    -- The Act I clear is only recorded by the choice: abandoning from the pause screen would lose it
+    if self.phase == "act_choice" then return end
     self.sm:push("pause", {
         room = self.roomNumber,
         goldEarned = self.goldEarnedRun,
