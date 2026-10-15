@@ -142,7 +142,7 @@ function GameOverState:drawVictoryTop()
     Skin.rect(C.yellow, mx - 147, 11, 294, 2)
     PixelFont.printf("VICTORY!", mx - 150, 15, 300, "center", C.yellow, "main", 2)
     local actName = WorldManager.ACT_NAMES[self.data.act or 1] or "ASCENSION"
-    PixelFont.printf(actName .. " COMPLETE - " .. (self.data.room or 50) .. " FLOORS", mx - 150, 40, 300, "center",
+    PixelFont.printf(actName .. " COMPLETE - FLOOR " .. (self.data.room or 50), mx - 150, 40, 300, "center",
         C.white, "main", 1, nil, 1)
     local clears = self.data.clears or 1
     Skin.pill(mx - 70, 64, 140, 18, "gold")

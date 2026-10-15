@@ -358,10 +358,12 @@ T["the end-of-run screen names the act and clamps the best floor to it"] = funct
         PixelFont.printf = printf
         assert(ok, err)
         local seen = table.concat(printed, "|")
-        assert(seen:find("ACT I COMPLETE", 1, true), "no ACT I title: " .. seen)
-        assert(seen:find("ACT II COMPLETE", 1, true), "no ACT II title: " .. seen)
-        assert(seen:find("BEST 50/50", 1, true), "BEST not clamped to Act I: " .. seen)
         local _, last2 = WorldManager.actFloors(2)
+        -- The subtitle gives the floor reached, not a floor count (an Act II run starts on floor 51)
+        assert(seen:find("ACT I COMPLETE - FLOOR 50", 1, true), "no ACT I title: " .. seen)
+        assert(seen:find("ACT II COMPLETE - FLOOR " .. last2, 1, true), "no ACT II title: " .. seen)
+        assert(not seen:find("FLOORS", 1, true), "a floor count is still shown: " .. seen)
+        assert(seen:find("BEST 50/50", 1, true), "BEST not clamped to Act I: " .. seen)
         assert(seen:find("BEST " .. last2 .. "/" .. last2, 1, true), "BEST not clamped to Act II")
     end)
 end
