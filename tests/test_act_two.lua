@@ -326,4 +326,44 @@ T["a tap right after the Act I choice appears is ignored"] = function()
     end) end)
 end
 
+T["RETRY after an Act II run starts Act II again"] = function()
+    withLoveStubs(function()
+        local GameOverState = require("src.states.gameover")
+        local launched
+        local screen = setmetatable({
+            sm = { switch = function(_, name, params) launched = { name = name, params = params } end },
+            data = { mode = "ascension", act = 2, room = 55 },
+        }, { __index = GameOverState })
+        screen:retryRun()
+        assert(launched.name == "game" and launched.params.act == 2, "RETRY lost the act")
+    end)
+end
+
+T["the end-of-run screen names the act and clamps the best floor to it"] = function()
+    withLoveStubs(function()
+        local GameOverState = require("src.states.gameover")
+        local PixelFont = require("src.ui.pixel_font")
+        local printed = {}
+        local printf = PixelFont.printf
+        PixelFont.printf = function(text, ...) printed[#printed + 1] = tostring(text) end
+        local ok, err = pcall(function()
+            for _, act in ipairs({ 1, 2 }) do
+                local _, last = WorldManager.actFloors(act)
+                local screen = GameOverState.new({})
+                screen:enter({ mode = "ascension", act = act, room = last, victory = true, bestRoom = 99 })
+                screen:drawTop()
+                screen:drawBottom()
+            end
+        end)
+        PixelFont.printf = printf
+        assert(ok, err)
+        local seen = table.concat(printed, "|")
+        assert(seen:find("ACT I COMPLETE", 1, true), "no ACT I title: " .. seen)
+        assert(seen:find("ACT II COMPLETE", 1, true), "no ACT II title: " .. seen)
+        assert(seen:find("BEST 50/50", 1, true), "BEST not clamped to Act I: " .. seen)
+        local _, last2 = WorldManager.actFloors(2)
+        assert(seen:find("BEST " .. last2 .. "/" .. last2, 1, true), "BEST not clamped to Act II")
+    end)
+end
+
 return T
