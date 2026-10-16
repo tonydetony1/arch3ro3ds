@@ -313,6 +313,23 @@ T["pausing on the Act I choice is refused: abandoning would forfeit the clear"] 
     end) end)
 end
 
+T["pausing during the golden victory pause is refused too"] = function()
+    withLoveStubs(function() withRecords(function()
+        local pushes = 0
+        for _, floor in ipairs({ 50, select(2, WorldManager.actFloors(2)) }) do
+            local g = clearedFloor(floor)
+            g.sm.push = function() pushes = pushes + 1 end
+            local pb = g.pauseBtn
+            g:gamepadpressed(nil, "start")
+            g:touchpressed(1, pb.x + pb.w / 2, pb.y + pb.h / 2)
+            g:keypressed("escape")
+            g:keypressed("p")
+            assert(g.phase == "victory", "the victory pause was left: " .. tostring(g.phase))
+        end
+        assert(pushes == 0, "the pause screen opened " .. pushes .. " time(s) during a victory")
+    end) end)
+end
+
 T["a tap right after the Act I choice appears is ignored"] = function()
     withLoveStubs(function() withRecords(function()
         local g = clearedFloor(50)

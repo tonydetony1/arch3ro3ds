@@ -158,7 +158,7 @@ function GameState:enter(params)
     self.ultimateCharge = 0.5
 
     -- 5. Room state machine
-    self.phase = "combat" -- "combat", "clear", "transition"
+    self.phase = "combat" -- "combat", "clear", "transition", "wheel", "boss_wheel", "victory", "act_choice"
     self.isGateOpen = false
     self.fadeAlpha = 0
     self.fadeDirection = 0 -- 1 = fade out, -1 = fade in
@@ -1040,6 +1040,12 @@ function GameState:continueToNextAct()
     self.fadeDirection = 1
 end
 
+-- Moves the act choice cursor up (-1) or down (1), wrapping around
+function GameState:moveActChoice(step)
+    local n = #ActChoice.BUTTONS
+    self.actChoiceCursor = (self.actChoiceCursor - 1 + step) % n + 1
+end
+
 -- Act choice made (touch, buttons or keys): "continue" or "finish"
 function GameState:chooseAct(id)
     if self.phase ~= "act_choice" or self.actChoiceGrace > 0 then return end
@@ -1849,8 +1855,9 @@ function GameState:touchreleased(id, tx, ty)
 end
 
 function GameState:triggerPause()
-    -- The Act I clear is only recorded by the choice: abandoning from the pause screen would lose it
-    if self.phase == "act_choice" then return end
+    -- No pause from the golden victory pause to the act choice: the clear is only recorded at the
+    -- end of it, so abandoning from the pause screen would lose it
+    if self.isVictory then return end
     self.sm:push("pause", {
         room = self.roomNumber,
         goldEarned = self.goldEarnedRun,
@@ -1984,11 +1991,10 @@ function GameState:gamepadpressed(joystick, button)
     end
 
     if self.phase == "act_choice" then
-        local n = #ActChoice.BUTTONS
         if button == "dpup" then
-            self.actChoiceCursor = (self.actChoiceCursor - 2) % n + 1
+            self:moveActChoice(-1)
         elseif button == "dpdown" then
-            self.actChoiceCursor = self.actChoiceCursor % n + 1
+            self:moveActChoice(1)
         elseif button == "a" then
             self:chooseAct(ActChoice.BUTTONS[self.actChoiceCursor].id)
         end
@@ -2025,11 +2031,10 @@ end
 
 function GameState:keypressed(key)
     if self.phase == "act_choice" then
-        local n = #ActChoice.BUTTONS
         if key == "up" then
-            self.actChoiceCursor = (self.actChoiceCursor - 2) % n + 1
+            self:moveActChoice(-1)
         elseif key == "down" then
-            self.actChoiceCursor = self.actChoiceCursor % n + 1
+            self:moveActChoice(1)
         elseif key == "return" or key == "space" or key == "a" then
             self:chooseAct(ActChoice.BUTTONS[self.actChoiceCursor].id)
         elseif key == "1" then
