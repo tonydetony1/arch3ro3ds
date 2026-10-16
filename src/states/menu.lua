@@ -391,8 +391,8 @@ function MenuState:drawPlayTab()
     local actOpen = Save.isActUnlocked(act)
     local openFloor = actOpen and (WorldManager.actFloors(act)) or nil
     local prog = WorldManager.worldProgress(chap.id, best, openFloor)
-    -- The best floor mixes in the Abyss record: it must not open a world whose act is locked
-    if not actOpen then prog.unlocked = false end
+    -- The best floor mixes in the Abyss record: it must not open (or fill) a world whose act is locked
+    if not actOpen then prog.unlocked, prog.reached = false, 0 end
 
     -- 1. World carousel: tall arrows on both sides, world card in the middle
     Skin.button(PLAY_PREV.x, PLAY_PREV.y, PLAY_PREV.w, PLAY_PREV.h, "blue", self.pressedBtn == "chap_prev")

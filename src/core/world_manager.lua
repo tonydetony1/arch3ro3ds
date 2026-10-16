@@ -291,9 +291,6 @@ end
 WorldManager.ACT_WORLDS = { { 1, 5 }, { 6, 10 } }
 WorldManager.ACT_NAMES = { "ACT I", "ACT II" }
 
--- Length of Act I, shown on the hub record card
-WorldManager.ASCENSION_FLOORS = 50
-
 -- First and last floor of an act, or nil when none of its worlds exists yet
 function WorldManager.actFloors(act)
     local span = WorldManager.ACT_WORLDS[act]
