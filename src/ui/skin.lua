@@ -17,22 +17,6 @@ local function set(c, a)
     love.graphics.setColor(c[1], c[2], c[3], a or c[4] or 1)
 end
 
--- Pixel pré-coloré de l'atlas pour (couleur, opacité), ou nil
-local function pxSpriteAny(c, a)
-    local name = PxColors.nameOf(c)
-    if not name then return nil end
-    local sprite = PxColors.spriteName(name, a or c[4] or 1)
-    if sprite and Art.has(sprite) then return sprite end
-    return nil
-end
-
--- Variante pour les formes composées (coins arrondis) : seulement pendant l'enregistrement
--- des parties fixes (Gpu.beginRecord). En dessin direct, un seul polygone coûte moins cher
--- en Lua que les 2r+1 sprites de l'escalier sur Old 3DS (mesuré).
-local function pxSprite(c, a)
-    if not Gpu.isRecording() then return nil end
-    return pxSpriteAny(c, a)
-end
 
 -- Aplat : pixel pré-coloré étiré (regroupé avec les autres sprites par l'auto-batcher),
 -- sinon rectangle teinté classique. Toujours en sprite quand la couleur existe : un
@@ -58,6 +42,14 @@ local function rectQuad(c, a)
     return q
 end
 
+-- Composite shapes (rounded corners) from pre-coloured pixels: only while recording the fixed
+-- parts (Gpu.beginRecord). In direct drawing one polygon still costs less than the stepped sprites
+-- on Old 3DS (measured again after the fast Skin.rect path: 14.6 ms vs 10.7 ms for a menu page).
+local function pxSprite(c, a)
+    if not Gpu.isRecording() then return nil end
+    return rectQuad(c, a)
+end
+
 local function rect(c, x, y, w, h, a)
     if w <= 0 or h <= 0 then return end
     local q = rectQuad(c, a)
@@ -78,7 +70,7 @@ local octo = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 function Skin.roundRect(c, x, y, w, h, r, a)
     x, y, w, h = floor(x), floor(y), floor(w), floor(h)
     if w <= 0 or h <= 0 then return end
-    -- Couleur précuite : coins en escalier faits de pixels étirés (tous dans le même lot)
+    -- Baked colour: stepped corners made of stretched pixels (all in the same batch)
     if pxSprite(c, a) then
         if r <= 0 or w <= r * 2 or h <= r * 2 then
             rect(c, x, y, w, h, a)
@@ -121,14 +113,59 @@ end
 -- Disque : un seul polygone (l'ancien balayage ligne par ligne coûtait 2r+1 appels GPU,
 -- soit ~250 appels pour une icône ronde : c'était la moitié du coût du HUD sur 3DS)
 local discSegments = {}
+
+-- Rows of the disc polygon (same vertices as love.graphics.circle around a pixel centre), as
+-- { dy, dx0, width } relative to the centre pixel: pixels whose centre lies inside, like the GPU
+local discRowCache = {}
+local function discRows(r, seg)
+    local key = r * 64 + seg
+    local rows = discRowCache[key]
+    if rows then return rows end
+    rows = {}
+    local rr = r + 0.5
+    local vx, vy = {}, {}
+    for i = 0, seg do
+        local phi = i * 2 * math.pi / seg
+        vx[i], vy[i] = rr * math.cos(phi), rr * math.sin(phi)
+    end
+    for dy = -r - 1, r + 1 do
+        local xmin, xmax = math.huge, -math.huge
+        for i = 0, seg - 1 do
+            local y1, y2 = vy[i], vy[i + 1]
+            if (y1 <= dy and y2 > dy) or (y2 <= dy and y1 > dy) then
+                local x = vx[i] + (dy - y1) * (vx[i + 1] - vx[i]) / (y2 - y1)
+                if x < xmin then xmin = x end
+                if x > xmax then xmax = x end
+            end
+        end
+        -- Pixel dx (centre at dx from the disc centre) is lit when xmin <= dx < xmax
+        local x0, x1 = math.ceil(xmin), math.ceil(xmax) - 1
+        if xmin < xmax and x1 >= x0 then rows[#rows + 1] = { dy, x0, x1 - x0 + 1 } end
+    end
+    discRowCache[key] = rows
+    return rows
+end
+
 function Skin.disc(c, cx, cy, r, a)
     if r <= 0 then return end
-    set(c, a)
     local seg = discSegments[r]
     if not seg then
         seg = math.max(10, math.min(32, floor(r * 1.4)))
         discSegments[r] = seg
     end
+    -- While recording a sprite batch: the same disc as rows of pre-coloured pixels, when its opacity
+    -- is exactly a baked level (a twentieth); otherwise the exact primitive (not recordable)
+    local a20 = (a or c[4] or 1) * 20
+    if math.abs(a20 - floor(a20 + 0.5)) < 1e-6 and pxSprite(c, a) then
+        local px, py = floor(cx), floor(cy)
+        local rows = discRows(r, seg)
+        for i = 1, #rows do
+            local row = rows[i]
+            rect(c, px + row[2], py + row[1], row[3], 1, a)
+        end
+        return
+    end
+    set(c, a)
     love.graphics.circle("fill", floor(cx) + 0.5, floor(cy) + 0.5, r + 0.5, seg)
 end
 

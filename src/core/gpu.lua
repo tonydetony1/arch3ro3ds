@@ -123,6 +123,9 @@ local cr, cg, cb, ca = 1, 1, 1, 1 -- couleur courante (suivie par l'enveloppe de
 -- ensuite en 1 seul appel GPU tant qu'elles ne changent pas.
 -- ============================================================================
 local recordSB = nil
+local recordCount = 0 -- sprites recorded since boot: a sliced recording checks its time every RECORD_SLICE
+local RECORD_SLICE = 16
+local Slice = require("src.core.slice")
 local recordMissed = 0 -- draws dropped by a recording (not white atlas sprites): see Gpu.recordMisses
 
 function Gpu.isRecording()
@@ -191,6 +194,8 @@ function Gpu.addSprite(image, quad, x, y, r, sx, sy, ox, oy)
     end
     if recordSB then
         recordSB:add(quad, x, y, r or 0, sx or 1, sy or 1, ox or 0, oy or 0)
+        recordCount = recordCount + 1
+        if recordCount % RECORD_SLICE == 0 then Slice.check() end
         return
     end
     if not auto then
@@ -205,6 +210,13 @@ end
 function Gpu.beginRecord(sb)
     flush()
     sb:clear()
+    recordSB = sb
+end
+
+-- Goes on recording into `sb` without clearing it: a recording spread over several frames (a
+-- sliced task) is resumed with this and paused with Gpu.endRecord around each slice
+function Gpu.resumeRecord(sb)
+    flush()
     recordSB = sb
 end
 
@@ -238,6 +250,8 @@ function Gpu.install()
         if recordSB then
             if obj == autoImage and colorIsWhite and type(a) == "userdata" then
                 recordSB:add(a, ...)
+                recordCount = recordCount + 1
+                if recordCount % RECORD_SLICE == 0 then Slice.check() end
             else
                 recordMissed = recordMissed + 1
             end
@@ -262,10 +276,13 @@ function Gpu.install()
     end
 
     -- Toute primitive ou changement d'état qui affecte le rendu vide d'abord le lot
+    -- During a recording these state changes still apply, but the batch cannot hold them
+    -- (transforms, scissors...): they count as misses so the caller draws directly instead
     local function flushing(name)
         local raw = g[name]
         if not raw then return end
         g[name] = function(...)
+            if recordSB then recordMissed = recordMissed + 1 end
             if autoCount > 0 then flush() end
             return raw(...)
         end
