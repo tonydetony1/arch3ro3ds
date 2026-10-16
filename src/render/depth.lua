@@ -7,6 +7,7 @@
 local Depth = {
     eye = 0,
     strength = 0,
+    active = false, -- this frame has stereo offsets (set by Depth.begin)
     userScale = 1.0,   -- intensité du relief choisie par le joueur (0.0 à 1.5)
     override = nil, -- force une intensité (banc de test PC)
 }
@@ -42,6 +43,8 @@ function Depth.begin(eye)
         end
     end
     Depth.strength = s
+    -- Flat frame (2D, slider down or depth disabled): layers need no transform at all
+    Depth.active = Depth.eye ~= 0 and s ~= 0 and (Depth.userScale or 1.0) ~= 0
 end
 
 -- Décalage horizontal (entier) d'une couche pour l'œil courant
@@ -51,13 +54,18 @@ function Depth.offset(layer)
     return math.floor(-Depth.eye * Depth.strength * (Depth.userScale or 1.0) * layer + 0.5)
 end
 
+-- push/pop flush the sprite batch in progress (src/core/gpu.lua): skipped on flat frames, where
+-- they cost one GPU call per layer for nothing. Depth.active is fixed for the whole frame, so
+-- pushes and pops stay paired.
 function Depth.push(layer)
+    if not Depth.active then return end
     love.graphics.push()
     local dx = Depth.offset(layer)
     if dx ~= 0 then love.graphics.translate(dx, 0) end
 end
 
 function Depth.pop()
+    if not Depth.active then return end
     love.graphics.pop()
 end
 
