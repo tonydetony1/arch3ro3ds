@@ -16,6 +16,12 @@ PxColors.EXTRA = {
     redLip = Palette.hex("6b1622"),
 }
 
+-- Hero card colours (src/data/heroes.lua), the very same tables: Skin.rect recognises them by
+-- identity, so the menu's hero cards can go into a recorded sprite batch
+for id, hero in pairs(require("src.data.heroes").ROSTER) do
+    if hero.color then PxColors.EXTRA["hero_" .. id] = hero.color end
+end
+
 -- Couleurs déclinées sur les 20 niveaux d'opacité (voiles, ombres, surbrillances)
 PxColors.ALL_ALPHAS = {
     ink = true, night = true, slate = true, abyss = true, white = true, red = true,

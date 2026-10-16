@@ -15,6 +15,10 @@ local PixelFont = {
 local floor = math.floor
 local GpuMod = nil -- src.core.gpu (chargé à la demande : évite un cycle de require)
 local BATCH_AFTER = 30
+-- A string drawn from its own SpriteBatch costs one GPU call (~80 µs on Old 3DS) and breaks the
+-- automatic batch; letter by letter it joins the batch in progress for a few µs of Lua per
+-- letter. Only long strings are worth a SpriteBatch.
+local MIN_BATCH_GLYPHS = 16
 
 -- Couleurs de texte précuites dans l'atlas (lettre colorée + contour encre).
 -- Un texte dans une de ces couleurs se dessine en blanc "neutre" : l'auto-batcher de
@@ -400,7 +404,7 @@ function PixelFont.print(text, x, y, color, id, scale, style)
     -- automatique au lieu de créer un SpriteBatch à chaque nouvelle valeur.
     GpuMod = GpuMod or require("src.core.gpu")
     layout.uses = (layout.uses or 0) + 1
-    if key and layout.n > 0 and layout.uses > BATCH_AFTER and not GpuMod.isRecording() then
+    if key and layout.n >= MIN_BATCH_GLYPHS and layout.uses > BATCH_AFTER and not GpuMod.isRecording() then
         local bkey = plain and "p" or key
         local batches = layout.batches
         if not batches then

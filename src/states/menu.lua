@@ -24,6 +24,10 @@ local Pet = require("src.entities.pet")
 local SettingsPanel = require("src.ui.settings_panel")
 local WorldManager = require("src.core.world_manager")
 local MenuTop = require("src.ui.menu_top")
+local Gpu = require("src.core.gpu")
+local Slice = require("src.core.slice")
+local Screen = require("src.core.screen")
+local RunLoop = require("src.core.runloop")
 
 local MenuState = {}
 MenuState.__index = MenuState
@@ -131,9 +135,15 @@ function MenuState:enter()
     self.openingChest = nil
     self.rewardItem = nil
     self.particles = {}
+    if self.pageCache then self.pageCache.valid, self.pageCache.task = false, nil end
 end
 
 function MenuState:update(dt)
+    self:step(dt)
+    self:updatePageCache(dt)
+end
+
+function MenuState:step(dt)
     self.godRaysAngle = (self.godRaysAngle + dt * 1.4) % (math.pi * 2)
     self.settingsPanel:update(dt)
 
@@ -239,6 +249,101 @@ function MenuState:drawBottom()
     love.graphics.setColor(0.06, 0.07, 0.10, 1.0)
     love.graphics.rectangle("fill", 0, 0, botW, botH)
 
+    local cache = self.pageCache
+    if cache and cache.valid and not Screen.bottomDirty then
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.draw(cache.front)
+    else
+        self:drawPageContent()
+    end
+end
+
+-- ============================================================================
+-- TOUCH-SCREEN PAGE CACHE (3DS loop only)
+-- ============================================================================
+-- Drawn directly, a page costs 80 to 200 GPU calls (about 10 ms on Old 3DS). It is recorded into a
+-- sprite batch in the spare time of a few frames (a sliced task, src/core/slice.lua: the recording
+-- yields every few sprites, src/core/gpu.lua), then drawn in one call until it changes. A frame with
+-- an interaction draws the page directly (immediate feedback) and the next frames record it again;
+-- an unchanged page is recorded again every PAGE_REFRESH seconds (patrol gold, timers). Pages a
+-- batch cannot hold (transforms, scissors, primitives) or that animate all the time stay direct.
+local PAGE_REFRESH = 0.5
+local PAGE_BATCH_SIZE = 3000
+local PAGE_RESERVE = 0.003 -- rest of the frame's update, and margin before the vertical sync
+local FRAME_PERIOD = 1 / 60
+
+-- True while the same page is shown; remembers the page otherwise
+function MenuState:samePage(c)
+    local settingsPage = self.settingsPanel.page
+    local gacha = self.openingChest and true or false
+    if c.tab == self.currentTab and c.quest == self.questSubPage and c.hero == self.heroSubPage
+        and c.chest == self.chestSubPage and c.settings == settingsPage and c.gacha == gacha then
+        return true
+    end
+    c.tab, c.quest, c.hero, c.chest = self.currentTab, self.questSubPage, self.heroSubPage, self.chestSubPage
+    c.settings, c.gacha = settingsPage, gacha
+    return false
+end
+
+-- Pages animated all the time, or while a short effect runs (talent flash, collected gold, toast):
+-- drawn directly so the animation stays smooth
+local function running(timer) return timer ~= nil and timer > 0 end
+function MenuState:pageAnimated()
+    local tab = self.currentTab
+    return self.openingChest ~= nil or tab == "chests" or tab == "equipment"
+        or (tab == "heroes" and self.heroSubPage == "bestiary")
+        or running(self.talentUpgradeTimer) or running(self.talentFailTimer)
+        or running(self.patrolRewardTimer) or running(self.settingsPanel.toastTimer)
+end
+
+function MenuState:updatePageCache(dt)
+    local c = self.pageCache
+    if not c then
+        c = { age = 0 }
+        self.pageCache = c
+    end
+    local sync = RunLoop.syncTime
+    if not sync or not Art.image then return end
+    if not self:samePage(c) then
+        c.valid, c.task, c.uncacheable = false, nil, false
+    end
+    if Screen.bottomDirty then
+        c.valid, c.task = false, nil -- drawn directly this frame, recorded again from the next one
+        return
+    end
+    if c.uncacheable or self:pageAnimated() then
+        c.valid = false
+        return
+    end
+    c.age = c.age + dt
+    if not c.task and (not c.valid or c.age >= PAGE_REFRESH) then
+        if not c.front then
+            c.front = love.graphics.newSpriteBatch(Art.image, PAGE_BATCH_SIZE, "stream")
+            c.back = love.graphics.newSpriteBatch(Art.image, PAGE_BATCH_SIZE, "stream")
+        end
+        c.back:clear()
+        c.misses = Gpu.recordMisses()
+        c.task = coroutine.create(function() self:drawPageContent() end)
+        c.age = 0
+    end
+    if not c.task then return end
+    local budget = FRAME_PERIOD - (love.timer.getTime() - sync) - PAGE_RESERVE
+    if budget <= 0 then return end
+    Gpu.resumeRecord(c.back)
+    local done, err = Slice.resume(c.task, budget)
+    Gpu.endRecord()
+    love.graphics.setColor(1, 1, 1, 1) -- a slice may stop on any colour
+    if not done then return end
+    c.task = nil
+    if err or Gpu.recordMisses() ~= c.misses or c.back:getCount() >= PAGE_BATCH_SIZE then
+        c.uncacheable, c.valid = true, false -- drawn directly until another page is shown
+        return
+    end
+    c.front, c.back = c.back, c.front
+    c.valid = true
+end
+
+function MenuState:drawPageContent()
     -- 1. Contenu selon l'onglet actif (Zone utile : y=4 à y=200)
     if self.openingChest then
         self:drawGachaSequence()
@@ -843,8 +948,7 @@ function MenuState:drawHeroesTab()
         local isCur = (h.id == curPreview)
         Skin.roundRect(isCur and C.yellow or C.ink, x, HERO_CARD_Y, HERO_CARD_W, HERO_CARD_H, 3)
         Skin.roundRect(C.night, x + 1, HERO_CARD_Y + 1, HERO_CARD_W - 2, HERO_CARD_H - 2, 2)
-        love.graphics.setColor(h.color[1], h.color[2], h.color[3], 1)
-        love.graphics.rectangle("fill", x + 2, HERO_CARD_Y + 2, HERO_CARD_W - 4, 3)
+        Skin.rect(h.color, x + 2, HERO_CARD_Y + 2, HERO_CARD_W - 4, 3)
         Skin.rect(C.slate, x + 6, HERO_CARD_Y + 60, HERO_CARD_W - 12, 2)
     end
     -- 2. Passive panel and right column

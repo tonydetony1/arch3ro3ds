@@ -158,6 +158,15 @@ function Audio.stopMusic()
     Audio.fade = nil
 end
 
+-- Loads the sound effects still pending at once (they normally load one per frame while the menu
+-- is shown; the PC/console bench starts a run straight away, src/dev/bench.lua)
+function Audio.loadPending()
+    for i = #pendingSfx, 1, -1 do
+        Audio.loadSfx(pendingSfx[i])
+        pendingSfx[i] = nil
+    end
+end
+
 function Audio.update(dt)
     -- Effets restants : un par image après le démarrage
     local n = #pendingSfx

@@ -515,6 +515,11 @@ end
 -- ============================================================================
 local Art = require("src.render.art")
 local Palette = require("src.render.palette")
+
+-- Pre-faded water ripple copies baked into the atlas (Props.RIPPLE_FADES, src/render/sprites/props.lua)
+local RIPPLE_FADES = 8
+local RIPPLE_VARIANT = {}
+for i = 1, RIPPLE_FADES do RIPPLE_VARIANT[i] = "fade" .. i end
 local SpriteAtlas = require("src.render.sprite_atlas")
 local Slice = require("src.core.slice")
 local C = Palette.C
@@ -553,12 +558,15 @@ end
 
 function Painter.new(x, y, w, h)
     local self = setmetatable({ ox = math.floor(x), oy = math.floor(y), w = math.floor(w), h = math.floor(h) }, Painter)
-    local n = self.w * self.h
     local R, G, B, A = bufR, bufG, bufB, bufA
-    for i = #A + 1, n do R[i], G[i], B[i] = 0, 0, 0 end
+    -- Row by row so a sliced task can yield (a whole region at once stalled a frame for tens of ms)
+    local grown = #A
     for py = 0, self.h - 1 do
         Slice.check()
-        for i = py * self.w + 1, (py + 1) * self.w do A[i] = 0 end
+        for i = py * self.w + 1, (py + 1) * self.w do
+            if i > grown then R[i], G[i], B[i] = 0, 0, 0 end
+            A[i] = 0
+        end
     end
     self.r, self.g, self.b, self.a = R, G, B, A
     return self
@@ -615,6 +623,7 @@ function Painter:toImage()
             if A[i] > 0 then data:setPixel(px, py, R[i], G[i], B[i], A[i]) end
         end
     end
+    Slice.heavy() -- the texture upload cannot be sliced: kept off busy frames
     local img = love.graphics.newImage(data)
     img:setFilter("nearest", "nearest")
     return img
@@ -697,7 +706,10 @@ local function blockCells(w, h, H, seed)
     local W, HH = w, h + H
     local floor, ceil = math.floor, math.ceil
     local m = {}
-    for i = 1, W * HH do m[i] = "." end
+    for y = 0, HH - 1 do
+        Slice.check()
+        for i = y * W + 1, y * W + W do m[i] = "." end
+    end
     local s = seed or 1
     local function rand()
         s = (s * 1664525 + 1013904223) % 4294967296
@@ -1097,11 +1109,16 @@ function ObstacleManager:draw()
     end
 
 
+    love.graphics.setColor(1, 1, 1, 1)
     for i, wtr in ipairs(self.waters) do
         local phase = (t * 0.6 + i * 0.37) % 1
-        love.graphics.setColor(1, 1, 1, 0.55 * (1 - math.abs(phase - 0.5) * 2))
-        Art.draw("ripple", 1, wtr.x + wtr.w * 0.35, wtr.y + wtr.h * 0.55 - phase * 3)
-        Art.draw("ripple", 1, wtr.x + wtr.w * 0.7, wtr.y + wtr.h * 0.3 + phase * 2)
+        -- Pre-faded ripple (white draw, stays in the sprite batch): fade level 0..RIPPLE_FADES
+        local fade = math.floor(RIPPLE_FADES * (1 - math.abs(phase - 0.5) * 2) + 0.5)
+        if fade > 0 then
+            local variant = RIPPLE_VARIANT[fade]
+            Art.draw("ripple", 1, wtr.x + wtr.w * 0.35, wtr.y + wtr.h * 0.55 - phase * 3, false, false, variant)
+            Art.draw("ripple", 1, wtr.x + wtr.w * 0.7, wtr.y + wtr.h * 0.3 + phase * 2, false, false, variant)
+        end
     end
 
     for _, s in ipairs(self.spikes) do
@@ -1153,8 +1170,9 @@ function ObstacleManager.prefetch(spec)
     }
 end
 
--- Avance la préparation de `budget` secondes ; renvoie true quand il n'y a plus rien à faire
-function ObstacleManager.stepPrefetch(budget)
+-- Avance la préparation de `budget` secondes ; renvoie true quand il n'y a plus rien à faire.
+-- allowHeavy = false holds back its texture uploads (Slice.heavy) until a calmer frame
+function ObstacleManager.stepPrefetch(budget, allowHeavy)
     local task = prefetchTask
     ObstacleManager.lastPrefetchTime = 0
     if not task then return true end
@@ -1163,7 +1181,7 @@ function ObstacleManager.stepPrefetch(budget)
     local screenPaint = paint
     paint = task.paint
     local t0 = love.timer.getTime()
-    local done, err = Slice.resume(task.co, budget)
+    local done, err = Slice.resume(task.co, budget, allowHeavy)
     ObstacleManager.lastPrefetchTime = love.timer.getTime() - t0
     task.paint = paint
     paint = screenPaint
