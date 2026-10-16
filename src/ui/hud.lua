@@ -22,6 +22,7 @@ local Bestiary = require("src.data.bestiary")
 local Perf = require("src.core.perf")
 local WorldManager = require("src.core.world_manager")
 local Gpu = require("src.core.gpu")
+local RunLoop = require("src.core.runloop")
 local PxColors = require("src.render.px_colors")
 local Encounters = require("src.data.encounters")
 
@@ -185,9 +186,33 @@ function HUD:drawDashboard(game, pauseBtn)
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.draw(self.staticBatch)
     Perf.sec("b:fixe")
-    self:drawLive(game, boss)
+    self:drawLivePrimitives(game)
+    if self.liveFrame == RunLoop.frame and self.liveFrame then
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.draw(self.liveBatch)
+    else
+        self:drawLiveSprites(game, boss)
+    end
+    self.liveFrame = nil
     Perf.sec("b:vivant")
     if self.tooltip then self:drawTooltip(self.tooltip) end
+end
+
+-- Records the sprites of the live layer during the update, which runs before the wait for the
+-- vertical sync: the touch-screen drawing after the sync then only sends this batch. If anything
+-- could not be recorded (not a white atlas sprite), the layer is drawn directly as before.
+local LIVE_BATCH_SIZE = 800
+function HUD:prepareLive(game)
+    if not Art.image then return end
+    if not self.liveBatch then
+        self.liveBatch = love.graphics.newSpriteBatch(Art.image, LIVE_BATCH_SIZE, "stream")
+    end
+    local misses = Gpu.recordMisses()
+    Gpu.beginRecord(self.liveBatch)
+    local ok = pcall(self.drawLiveSprites, self, game, self:findBoss(game))
+    Gpu.endRecord()
+    local complete = ok and Gpu.recordMisses() == misses and self.liveBatch:getCount() < LIVE_BATCH_SIZE
+    self.liveFrame = complete and RunLoop.frame or nil
 end
 
 -- Gauge: fixed frame / live fill (2 flat rects)
@@ -508,7 +533,32 @@ end
 -- ----------------------------------------------------------------------------
 -- LIVE LAYER (every time the bottom screen is redrawn)
 -- ----------------------------------------------------------------------------
-function HUD:drawLive(game, boss)
+-- Primitives (rings, round buttons) are drawn directly; the sprites (gauges, icons, map dots,
+-- texts) lie above them and never under one, so they can come from a batch recorded earlier in
+-- the frame (HUD:prepareLive) instead of being sent one by one after the wait for the vertical sync.
+local function dashState(player)
+    local cd = player.dashCooldownTimer or 0
+    local dashReady = cd <= 0
+    return cd, dashReady, dashReady and 1 or (1 - cd / (player.dashCooldown or 1.5))
+end
+
+function HUD:drawLivePrimitives(game)
+    local dc, uc = self.dashCircle, self.ultCircle
+    local _, dashReady, dashRatio = dashState(game.player)
+    local ultCharge = game.ultimateCharge or 0
+    local ready = ultCharge >= 1.0
+    if ready then
+        local pulse = floor((math.sin(self.ultPulse) + 1) * 2)
+        Skin.disc(C.amber, uc.cx, uc.cy, uc.radius + 3 + pulse, 0.3)
+    end
+    -- Unlit parts in night blue: slate would melt into the raised panel
+    ringGauge(dc.cx, dc.cy, dc.radius, dashRatio, dashReady and C.cyan or C.blue, C.night)
+    Skin.disc(dashReady and C.blue or C.night, dc.cx, dc.cy, dc.radius - 5)
+    ringGauge(uc.cx, uc.cy, uc.radius, ultCharge, ready and C.yellow or C.amber, C.night)
+    Skin.disc(ready and C.orange or C.night, uc.cx, uc.cy, uc.radius - 5)
+end
+
+function HUD:drawLiveSprites(game, boss)
     local player = game.player
     local t = love.timer.getTime()
 
@@ -526,22 +576,10 @@ function HUD:drawLive(game, boss)
         barNotches(b.x, b.y, b.w, b.h, HP_NOTCHES)
     end
 
-    -- Rings and round buttons (primitives)
     local dc, uc = self.dashCircle, self.ultCircle
-    local cd = player.dashCooldownTimer or 0
-    local dashReady = cd <= 0
-    local dashRatio = dashReady and 1 or (1 - cd / (player.dashCooldown or 1.5))
+    local cd, dashReady = dashState(player)
     local ultCharge = game.ultimateCharge or 0
     local ready = ultCharge >= 1.0
-    if ready then
-        local pulse = floor((math.sin(self.ultPulse) + 1) * 2)
-        Skin.disc(C.amber, uc.cx, uc.cy, uc.radius + 3 + pulse, 0.3)
-    end
-    -- Unlit parts in night blue: slate would melt into the raised panel
-    ringGauge(dc.cx, dc.cy, dc.radius, dashRatio, dashReady and C.cyan or C.blue, C.night)
-    Skin.disc(dashReady and C.blue or C.night, dc.cx, dc.cy, dc.radius - 5)
-    ringGauge(uc.cx, uc.cy, uc.radius, ultCharge, ready and C.yellow or C.amber, C.night)
-    Skin.disc(ready and C.orange or C.night, uc.cx, uc.cy, uc.radius - 5)
 
     -- Sprites: icons, map dots, texts (merged by the auto-batcher)
     love.graphics.setColor(1, 1, 1, 1)
