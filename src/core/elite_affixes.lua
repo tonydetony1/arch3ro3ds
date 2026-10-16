@@ -71,7 +71,8 @@ function Elite.update(d, dt)
     return nil
 end
 
--- Explosion à déclencher à la mort (affixe volatile) : { x, y, radius, delay, damage } ou nil
+-- Blast to trigger on death (volatile affix): { x, y, radius, delay, damage } or nil.
+-- `chapterIndex` is the absolute world depth (WorldManager.worldDepth): it keeps growing in the Abyss
 function Elite.onDeath(d, chapterIndex)
     if not (d.elite and d.affixes and d.affixes.volatile) then return nil end
     return {

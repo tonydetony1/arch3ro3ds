@@ -858,10 +858,28 @@ function Save.getEvents()
 end
 
 function Save.setChapter(chapIndex)
+    local WorldManager = require("src.core.world_manager")
     local d = Save.get()
-    d.selectedChapter = math.max(1, math.min(6, chapIndex))
+    d.selectedChapter = math.max(1, math.min(#WorldManager.CHAPTERS, chapIndex))
     Save.save()
     return d.selectedChapter
+end
+
+-- The historical floor-50 victory, as it stood before the acts existed. Saves that got past it
+-- count as having cleared Act I. This is not the live Act I length.
+local LEGACY_VICTORY_FLOOR = 50
+
+-- Act I is always open. Act II opens with the first Act I clear, or on saves that went past
+-- the legacy victory floor before the victory existed. A missing act counts as Act I.
+function Save.isActUnlocked(act)
+    act = act or 1
+    if act <= 1 then return true end
+    local records = Save.get().records or {}
+    if act == 2 then
+        return (records.ascensionClears or 0) >= 1
+            or (records.ascensionMax or 1) > LEGACY_VICTORY_FLOOR
+    end
+    return false
 end
 
 -- Achievements: claim completed achievement reward

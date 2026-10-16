@@ -324,7 +324,7 @@ function PAGES.play(menu, save, t)
             PixelFont.print("HP", LEFT_X + 8, CARD_Y + 35, C.mint, "main")
             PixelFont.printf(tostring(hp), LEFT_X, CARD_Y + 35, CARD_W - 8, "right", C.white, "main")
             cardTitle(RIGHT_X, "BEST")
-            PixelFont.printf(best .. "/" .. WorldManager.ASCENSION_FLOORS, RIGHT_X, CARD_Y + 20, CARD_W, "center", C.white, "main", 2)
+            PixelFont.printf(best .. "/" .. (WorldManager.floorTotal("ascension", best) or best), RIGHT_X, CARD_Y + 20, CARD_W, "center", C.white, "main", 2)
         end,
         title = string.format("WORLD %d - %s", chap.id, chap.name:upper()),
         hints = { TABS_HINT, TABS_HINT_R, { "START", "PLAY", C.mint } },

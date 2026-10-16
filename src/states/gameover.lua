@@ -141,7 +141,8 @@ function GameOverState:drawVictoryTop()
     Skin.panel(mx - 150, 10, 300, 48, "dark")
     Skin.rect(C.yellow, mx - 147, 11, 294, 2)
     PixelFont.printf("VICTORY!", mx - 150, 15, 300, "center", C.yellow, "main", 2)
-    PixelFont.printf("ASCENSION COMPLETE - " .. (self.data.room or 50) .. " FLOORS", mx - 150, 40, 300, "center",
+    local actName = WorldManager.ACT_NAMES[self.data.act or 1] or "ASCENSION"
+    PixelFont.printf(actName .. " COMPLETE - FLOOR " .. (self.data.room or 50), mx - 150, 40, 300, "center",
         C.white, "main", 1, nil, 1)
     local clears = self.data.clears or 1
     Skin.pill(mx - 70, 64, 140, 18, "gold")
@@ -299,7 +300,11 @@ function GameOverState:drawBottom()
     love.graphics.setColor(1, 1, 1, 1)
     PixelFont.print("BATTLE REPORT", 12, 11, C.yellow, "main")
     local total = WorldManager.floorTotal(self.data.mode, self.data.room or 1)
-    if total then PixelFont.printf("BEST " .. (self.data.bestRoom or 1) .. "/" .. total, 4, 11, botW - 16, "right", C.fog, "main") end
+    if total then
+        -- The record is global (Act II floors included): show it clamped to the length of this act
+        local best = math.min(self.data.bestRoom or 1, total)
+        PixelFont.printf("BEST " .. best .. "/" .. total, 4, 11, botW - 16, "right", C.fog, "main")
+    end
     for i, st in ipairs(REPORT_STATS) do
         local x = 4 + (i - 1) * 105
         Art.draw(st.icon, 1, x + 14, 46)
@@ -371,9 +376,10 @@ function GameOverState:keypressed(key)
     end
 end
 
+-- AGAIN / RETRY: the same mode, and the same act (an Act II run starts again on floor 51)
 function GameOverState:retryRun()
     local mode = self.data.mode or "ascension"
-    self.sm:switch("game", { mode = mode })
+    self.sm:switch("game", { mode = mode, act = self.data.act })
 end
 
 function GameOverState:returnToHub()

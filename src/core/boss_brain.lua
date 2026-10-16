@@ -26,6 +26,7 @@ function BossBrain.has(monsterType)
     return Bosses.DEFS[monsterType] ~= nil
 end
 
+-- `d.chapterIndex` holds the absolute world depth (WorldManager.worldDepth): it keeps growing in the Abyss
 function BossBrain.damage(base, d)
     return base * (1 + Bosses.DAMAGE_PER_CHAPTER * ((d.chapterIndex or 1) - 1)) * Admin.get("bossDmgMult")
 end

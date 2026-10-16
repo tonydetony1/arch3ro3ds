@@ -386,7 +386,13 @@ function MenuState:drawPlayTab()
     local chap = self.chapters[chapIdx] or self.chapters[1]
     local records = self.saveData.records or {}
     local best = math.max(records.ascensionMax or 1, records.infiniteMax or 0)
-    local prog = WorldManager.worldProgress(chap.id, best)
+    -- An unlocked act opens its first world before any of its floors is reached
+    local act = WorldManager.actOfWorld(chap.id) or 1
+    local actOpen = Save.isActUnlocked(act)
+    local openFloor = actOpen and (WorldManager.actFloors(act)) or nil
+    local prog = WorldManager.worldProgress(chap.id, best, openFloor)
+    -- The best floor mixes in the Abyss record: it must not open (or fill) a world whose act is locked
+    if not actOpen then prog.unlocked, prog.reached = false, 0 end
 
     -- 1. World carousel: tall arrows on both sides, world card in the middle
     Skin.button(PLAY_PREV.x, PLAY_PREV.y, PLAY_PREV.w, PLAY_PREV.h, "blue", self.pressedBtn == "chap_prev")
@@ -394,9 +400,7 @@ function MenuState:drawPlayTab()
     local wc = PLAY_WORLD
     Skin.panel(wc.x, wc.y, wc.w, wc.h, "dark")
     Skin.pill(wc.x + 6, wc.y + 5, 64, 16, prog.unlocked and "green" or "gray")
-    if prog.total then
-        drawFloorPath(wc.x + 16, wc.y + 76, wc.w - 32, prog.reached, prog.unlocked)
-    end
+    drawFloorPath(wc.x + 16, wc.y + 76, wc.w - 32, prog.reached, prog.unlocked)
     love.graphics.setColor(1, 1, 1, 1)
     Art.draw("icon_arrow_l", 1, PLAY_PREV.x + 11, PLAY_PREV.y + 16)
     Art.draw("icon_arrow_r", 1, PLAY_NEXT.x + 11, PLAY_NEXT.y + 16)
@@ -405,9 +409,8 @@ function MenuState:drawPlayTab()
     PixelFont.printf(chap.name, wc.x + 76, wc.y + 7, wc.w - 80, "left", prog.unlocked and C.yellow or C.fog, "main", 1, nil, 1)
     PixelFont.printf(chap.boss:upper(), wc.x + 20, wc.y + 27, wc.w - 26, "left", C.silver, "main", 1, nil, 1)
     if not prog.unlocked then
-        PixelFont.printf(string.format("LOCKED: FLOOR %d+", prog.first), wc.x, wc.y + 48, wc.w, "center", C.fog, "main")
-    elseif not prog.total then
-        PixelFont.printf(string.format("ENDLESS - BEST %d", best), wc.x, wc.y + 56, wc.w, "center", C.pink, "main")
+        local lockText = actOpen and string.format("LOCKED: FLOOR %d+", prog.first) or "LOCKED: CLEAR ACT I"
+        PixelFont.printf(lockText, wc.x, wc.y + 48, wc.w, "center", C.fog, "main")
     end
 
     -- 2. Game modes
@@ -1573,6 +1576,15 @@ function MenuState:handlePanelRequest(request)
     end
 end
 
+-- Act a hub launch plays: the act of the selected world in Ascension when it is unlocked, Act I
+-- otherwise; nil for the other modes (they always start on floor 1)
+function MenuState.launchAct(mode, world, actUnlocked)
+    if mode ~= "ascension" then return nil end
+    local act = WorldManager.actOfWorld(world) or 1
+    if act > 1 and not actUnlocked then return 1 end
+    return act
+end
+
 function MenuState:launchGame()
     Audio.play("ui_confirm", 0, 0.8)
     local run = Save.getRun()
@@ -1583,9 +1595,11 @@ function MenuState:launchGame()
     -- The run always starts; available energy only grants a gold bonus.
     local boosted = Save.spendEnergy(self.selectedMode)
     self.saveData = Save.get()
+    local world = self.saveData.selectedChapter or 1
+    local act = MenuState.launchAct(self.selectedMode, world, Save.isActUnlocked(WorldManager.actOfWorld(world) or 1))
     self.sm:switch("game", {
         mode = self.selectedMode,
-        chapter = self.saveData.selectedChapter or 1,
+        act = act,
         boosted = boosted,
     })
 end

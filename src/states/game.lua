@@ -37,6 +37,7 @@ local Sanctuary = require("src.render.sanctuary")
 local Depth = require("src.render.depth")
 local Audio = require("src.audio.audio")
 local Banner = require("src.ui.banner")
+local ActChoice = require("src.ui.act_choice")
 local Bestiary = require("src.data.bestiary")
 local Perf = require("src.core.perf")
 local Bestiary = require("src.data.bestiary")
@@ -44,6 +45,9 @@ local Balance = require("src.data.balance")
 local ItemPassives = require("src.data.item_passives")
 
 local VICTORY_DELAY = 2.0 -- seconds of golden pause between the last floor and the victory screen
+-- Seconds after the Act I choice appears during which taps and keys are ignored (the panel sits
+-- over the HUD's DASH and ULT zones, which the player may still be mashing)
+local ACT_CHOICE_GRACE = 0.3
 
 -- Temps processeur par image accordé à la préparation de la salle suivante (secondes).
 -- Sur console, le budget est la marge laissée par l'image précédente avant 1/60 s ; hors
@@ -154,7 +158,7 @@ function GameState:enter(params)
     self.ultimateCharge = 0.5
 
     -- 5. Room state machine
-    self.phase = "combat" -- "combat", "clear", "transition"
+    self.phase = "combat" -- "combat", "clear", "transition", "wheel", "boss_wheel", "victory", "act_choice"
     self.isGateOpen = false
     self.fadeAlpha = 0
     self.fadeDirection = 0 -- 1 = fade out, -1 = fade in
@@ -175,7 +179,13 @@ function GameState:enter(params)
     self.gameOverTimer = 0
     self.isVictory = false
     self.victoryTimer = 0
+    self.actChoiceCursor = 1 -- Act I choice (CONTINUE / END THE RUN)
+    self.actChoiceGrace = 0
     self.hasSpunStartWheel = false
+    -- First floor of this run (51 for Act II): the start wheel is played there
+    self.runStartRoom = 1
+    -- Drafts waiting to open one after the other (Glory talent, Act II head start)
+    self.queuedDrafts = 0
 
     -- Permanent talents (effects described in src/data/talents.lua)
     local talents = Save.getTalents()
@@ -195,18 +205,24 @@ function GameState:enter(params)
         self.hasSpunStartWheel = self.roomNumber > 1
     end
 
-    -- Lancement de la première salle
-    self:setupRoom(self.roomNumber)
-
-    -- Talent Gloire : offre immédiatement un Draft de départ gratuit !
-    -- Si la salle 1 débute par la Roue de la Fortune, différer le Draft juste après la roue
-    if talents and (talents.glory or 0) >= 1 then
-        if self.phase == "wheel" then
-            self.pendingGloryDraft = true
-        else
-            self:openDraft()
+    -- Act II launched from the hub: the run starts on the act's first floor with a head start
+    if params.act and self.gameMode == "ascension" and not params.resume and not params.startRoom then
+        local first = WorldManager.actFloors(params.act)
+        if first and first > 1 then
+            self.runStartRoom = first
+            self.roomNumber = first
+            self.queuedDrafts = Balance.ACT2_HEAD_START_DRAFTS
         end
     end
+
+    -- Launch the first room
+    self:setupRoom(self.roomNumber)
+
+    -- Glory talent: one free draft at the start. Queued drafts open after the start wheel.
+    if talents and (talents.glory or 0) >= 1 then
+        self.queuedDrafts = self.queuedDrafts + 1
+    end
+    if self.phase ~= "wheel" then self:openQueuedDraft() end
 end
 
 -- Multiplier on every coin of the run: the energy bonus and the admin GOLD setting
@@ -329,10 +345,10 @@ function GameState:roomSpec(roomNum)
     elseif self.gameMode == "survival" then
         roomType = "combat"
     end
-    -- Grille de la salle : centre dégagé pour boss / roue / survie, vide pour les sanctuaires
+    -- Room grid: clear centre for boss / wheel / survival, empty for sanctuaries
     local kind = "combat"
     if roomType == "boss" or self.gameMode == "survival"
-        or (roomNum == 1 and not self.hasSpunStartWheel) then
+        or (roomNum == self.runStartRoom and not self.hasSpunStartWheel) then
         kind = "arena"
     elseif roomType == "angel" or roomType == "devil" then
         kind = "sanctuary"
@@ -358,7 +374,7 @@ function GameState:prefetchNextRoom()
 end
 
 function GameState:setupRoom(roomNum)
-    if roomNum > 1 then Save.addQuestProgress("rooms", 1) end
+    if roomNum > self.runStartRoom then Save.addQuestProgress("rooms", 1) end
     local spec = self:roomSpec(roomNum)
     Audio.playMusic(spec.roomType == "boss" and "boss" or (spec.kind == "sanctuary" and "hub" or "battle"), 0.5)
     -- Salle préparée pendant la précédente : on termine ce qui reste (souvent rien)
@@ -438,8 +454,8 @@ function GameState:setupRoom(roomNum)
         self.pendingSpawns = {}
         self.specialRoomManager:setup(self.roomType, self.player, self.roomNumber, nil, { approach = true })
         self.sanctuary = Sanctuary.new(self.roomType, self.mapW, self.mapH)
-    elseif roomNum == 1 and not self.hasSpunStartWheel then
-        -- ROUE DE LA FORTUNE DE DÉPART (LUCKY WHEEL)
+    elseif roomNum == self.runStartRoom and not self.hasSpunStartWheel then
+        -- STARTING LUCKY WHEEL
         self.hasSpunStartWheel = true
         self.phase = "wheel"
         self.spawnWarningTimer = 0
@@ -461,7 +477,7 @@ function GameState:setupRoom(roomNum)
     self.camera:setPosition(self.player.x, self.player.y)
 
     -- Sauvegarde automatique : la course reprend ici si la console est éteinte
-    if roomNum > 1 and not self.isGameOver then
+    if roomNum > self.runStartRoom and not self.isGameOver then
         Save.saveRun(self)
     end
 
@@ -490,7 +506,8 @@ function GameState:spawnMonstersNow()
         if d then
             d:spawn(sp.x, sp.y, sp.hp, sp.type)
             d.isBoss = sp.isBoss or false
-            d.chapterIndex = self.chapterIndex -- dégâts des boss selon le chapitre
+            -- Boss damage scales with the absolute world depth (the Abyss cycles the worlds)
+            d.chapterIndex = WorldManager.worldDepth(self.roomNumber)
             if d.isBoss then bossType = sp.type end
             if sp.affixes then
                 EliteAffixes.apply(d, sp.affixes, sp.champion)
@@ -521,6 +538,14 @@ function GameState:openDraft()
     self.draftCursor = 2
     self.draftOptions = Skills.getRandomDraft(3, self.acquiredSkills, self.player)
     VFX.shakeLight()
+end
+
+-- Opens the next queued draft, if any: the head start chains several, one per pick
+function GameState:openQueuedDraft()
+    if self.queuedDrafts > 0 and not self.isDrafting then
+        self.queuedDrafts = self.queuedDrafts - 1
+        self:openDraft()
+    end
 end
 
 -- Fait sauter du butin physique lors de l'élimination d'un monstre
@@ -616,8 +641,8 @@ function GameState:handleMonsterDeath(target)
         VFX.addRing(target.x, target.y + 4, target.elite and "amber" or "white", target.elite and 3 or 2)
     end
     AIController.onDeath(target, self.dummyPool, self.fctPool)
-    -- Élite "volatile" : explosion télégraphiée à l'endroit de sa mort (bombe ennemie)
-    local blast = EliteAffixes.onDeath(target, self.chapterIndex)
+    -- "Volatile" elite: telegraphed explosion where it died (enemy bomb)
+    local blast = EliteAffixes.onDeath(target, WorldManager.worldDepth(self.roomNumber))
     if blast then
         local bomb = self.projectilePool:obtain()
         if bomb then
@@ -987,16 +1012,49 @@ function GameState:dodgeLightning()
     Audio.play("hit", 0.1, 0.6)
 end
 
--- Last Ascension floor cleared: golden pause on the hero before the victory screen
+-- Last floor of an act cleared: golden pause on the hero, then the victory screen or, at the end
+-- of Act I, the choice to go on to Act II
 function GameState:winRun()
     self.isVictory = true
     self.victoryTimer = 0
     self.phase = "victory"
     Audio.play("victory", 0, 1.0)
     Audio.playMusic("hub", 0.8)
-    Banner.show("chapter", "VICTORY!", "ASCENSION COMPLETE")
+    local act = WorldManager.actOfRoom(self.roomNumber) or 1
+    Banner.show("chapter", "VICTORY!", WorldManager.ACT_NAMES[act] .. " COMPLETE")
     VFX.addSparks(self.player.x, self.player.y - 10, 30, { 1.0, 0.85, 0.3, 1.0 })
     self:triggerShake(0.25, 3.0)
+end
+
+-- Act I cleared and the player goes on: the clear counts (floor record, clears), the gold stays
+-- in the run, and the fade leads to the first floor of Act II with the same hero and build
+function GameState:continueToNextAct()
+    local records = Save.get().records
+    Save.setFloorRecord(self.gameMode, self.roomNumber)
+    records.ascensionClears = (records.ascensionClears or 0) + 1
+    Save.save()
+    self.isVictory = false
+    self.victoryTimer = 0
+    Audio.playMusic("battle", 0.6)
+    self.phase = "transition"
+    self.fadeDirection = 1
+end
+
+-- Moves the act choice cursor up (-1) or down (1), wrapping around
+function GameState:moveActChoice(step)
+    local n = #ActChoice.BUTTONS
+    self.actChoiceCursor = (self.actChoiceCursor - 1 + step) % n + 1
+end
+
+-- Act choice made (touch, buttons or keys): "continue" or "finish"
+function GameState:chooseAct(id)
+    if self.phase ~= "act_choice" or self.actChoiceGrace > 0 then return end
+    Audio.play("ui_confirm", 0, 0.9)
+    if id == "continue" then
+        self:continueToNextAct()
+    elseif id == "finish" then
+        self:finishRun(true)
+    end
 end
 
 -- Ends the run (death or victory): banks the gold, updates records and quests, clears the saved
@@ -1008,8 +1066,11 @@ function GameState:finishRun(victory)
     local sData = Save.get()
     local recordKey = (self.gameMode == "ascension") and "ascensionMax" or "infiniteMax"
     local isNewRecord = Save.setFloorRecord(self.gameMode, self.roomNumber)
+    -- Each act counts its own clears (Act I: ascensionClears, shipped before the acts)
+    local act = WorldManager.actOfRoom(self.roomNumber) or 1
+    local clearsKey = (act == 2) and "act2Clears" or "ascensionClears"
     if victory then
-        sData.records.ascensionClears = (sData.records.ascensionClears or 0) + 1
+        sData.records[clearsKey] = (sData.records[clearsKey] or 0) + 1
     else
         Audio.play("defeat", 0, 0.9)
         Audio.playMusic("hub", 0.8)
@@ -1033,7 +1094,8 @@ function GameState:finishRun(victory)
         mode = self.gameMode,
         isNewRecord = isNewRecord,
         bestRoom = sData.records[recordKey],
-        clears = sData.records.ascensionClears or 0,
+        clears = sData.records[clearsKey] or 0,
+        act = act,
     })
 end
 
@@ -1065,10 +1127,21 @@ function GameState:update(dt)
         dt = dt * 0.3
     end
 
-    -- Victory: a short golden pause, then the end-of-run screen
+    -- Victory: a short golden pause, then the choice to go on to the next act (end of Act I) or
+    -- the end-of-run screen
     if self.isVictory then
         self.victoryTimer = self.victoryTimer + dt
-        if self.victoryTimer >= VICTORY_DELAY then self:finishRun(true) end
+        if self.phase == "victory" and self.victoryTimer >= VICTORY_DELAY then
+            if WorldManager.offersNextAct(self.gameMode, self.roomNumber) then
+                self.phase = "act_choice"
+                self.actChoiceCursor = 1
+                self.actChoiceGrace = ACT_CHOICE_GRACE
+            else
+                self:finishRun(true)
+            end
+        elseif self.phase == "act_choice" and self.actChoiceGrace > 0 then
+            self.actChoiceGrace = self.actChoiceGrace - dt
+        end
         return
     end
 
@@ -1675,6 +1748,10 @@ function GameState:drawBottom()
         self.hud:drawDraftModal(self.draftOptions, self.acquiredSkills, self.draftCursor)
     end
 
+    if self.phase == "act_choice" then
+        ActChoice.draw(self.actChoiceCursor)
+    end
+
     -- Voile sombre lors du Game Over
     if self.isGameOver then
         local deathAlpha = math.min(1.0, self.gameOverTimer / 1.0)
@@ -1690,6 +1767,12 @@ function GameState:touchpressed(id, tx, ty)
     local pb = self.pauseBtn
     if tx >= pb.x and tx <= pb.x + pb.w and ty >= pb.y and ty <= pb.y + pb.h then
         self:triggerPause()
+        return
+    end
+
+    if self.phase == "act_choice" then
+        local choice = ActChoice.hit(tx, ty)
+        if choice then self:chooseAct(choice) end
         return
     end
 
@@ -1734,6 +1817,7 @@ function GameState:pickDraft(idx)
     Audio.play("ui_confirm", 0, 0.9)
     self.isDrafting = false
     self:triggerShake(0.1, 2.5)
+    self:openQueuedDraft()
 end
 
 -- Ultime : uniquement si la jauge est pleine
@@ -1750,11 +1834,8 @@ function GameState:specialRoomDone()
     if self.phase == "wheel" then
         self.phase = "combat"
         self.spawnWarningTimer = 0.55
-        -- Talent Gloire en attente : le tirage s'ouvre maintenant que la roue est résolue
-        if self.pendingGloryDraft then
-            self.pendingGloryDraft = false
-            self:openDraft()
-        end
+        -- Drafts queued at the start (Glory, Act II head start) open once the wheel is done
+        self:openQueuedDraft()
     else
         self.isGateOpen = true
         self.phase = "clear"
@@ -1774,6 +1855,9 @@ function GameState:touchreleased(id, tx, ty)
 end
 
 function GameState:triggerPause()
+    -- No pause from the golden victory pause to the act choice: the clear is only recorded at the
+    -- end of it, so abandoning from the pause screen would lose it
+    if self.isVictory then return end
     self.sm:push("pause", {
         room = self.roomNumber,
         goldEarned = self.goldEarnedRun,
@@ -1906,6 +1990,17 @@ function GameState:gamepadpressed(joystick, button)
         return
     end
 
+    if self.phase == "act_choice" then
+        if button == "dpup" then
+            self:moveActChoice(-1)
+        elseif button == "dpdown" then
+            self:moveActChoice(1)
+        elseif button == "a" then
+            self:chooseAct(ActChoice.BUTTONS[self.actChoiceCursor].id)
+        end
+        return
+    end
+
     if self.specialRoomManager and self.specialRoomManager:isOfferOpen() then
         local key = ({ a = "a", b = "b", x = "x", y = "b" })[button]
         if key then self:keypressed(key) end
@@ -1935,6 +2030,21 @@ function GameState:gamepadpressed(joystick, button)
 end
 
 function GameState:keypressed(key)
+    if self.phase == "act_choice" then
+        if key == "up" then
+            self:moveActChoice(-1)
+        elseif key == "down" then
+            self:moveActChoice(1)
+        elseif key == "return" or key == "space" or key == "a" then
+            self:chooseAct(ActChoice.BUTTONS[self.actChoiceCursor].id)
+        elseif key == "1" then
+            self:chooseAct("continue")
+        elseif key == "2" then
+            self:chooseAct("finish")
+        end
+        return
+    end
+
     if key == "return" or key == "start" or key == "p" or key == "escape" then
         if not (self.specialRoomManager and self.specialRoomManager:isOfferOpen() and (key == "return" or key == "space")) then
             self:triggerPause()
