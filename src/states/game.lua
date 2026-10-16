@@ -45,14 +45,11 @@ local ItemPassives = require("src.data.item_passives")
 
 local VICTORY_DELAY = 2.0 -- seconds of golden pause between the last floor and the victory screen
 
--- Temps processeur par image accordé à la préparation de la salle suivante (secondes).
--- Sur console, le budget est la marge laissée par l'image précédente avant 1/60 s ; hors
--- console (pas de mesure), budgets fixes.
+-- CPU time per frame given to preparing the next room (seconds). On console the slice gets what the
+-- current 1/60 s interval has left (prefetchBudget); off console (no measurement), fixed budgets.
 local PREFETCH_BUDGET_COMBAT = 0.002
 local PREFETCH_BUDGET_CALM = 0.008
-local PREFETCH_MIN_COMBAT = 0.0005 -- avance garantie même quand l'image est pleine
-local PREFETCH_MIN_CALM = 0.002
-local FRAME_TARGET = 0.0155        -- 1/60 s moins une marge pour le present()
+local PREFETCH_MIN_CALM = 0.002 -- guaranteed progress out of combat even when the frame is full
 
 -- Renforts (src/core/wave_runner.lua) : runes au sol avant leur arrivée, et distance
 -- minimale au héros (sinon renvoyés de l'autre côté du centre de la salle)
@@ -62,11 +59,21 @@ local REINFORCE_CLEARANCE = 16
 local VOLATILE_COLOR = { 1.0, 0.45, 0.1, 1.0 }
 local C_ADMIN = Palette.C.red
 
+-- The update runs before the wait for the vertical sync, in the same 1/60 s as the previous frame's
+-- drawing (both screens) and present(): the background slice gets what is left of that interval
+-- once the rest of the update is reserved. Combat caps the slice and holds back its texture uploads.
+local FRAME_PERIOD = 1 / 60
+local UPDATE_RESERVE = 0.003 -- rest of the update after the slice, plus margin
+
 local function prefetchBudget(busy)
-    local work = RunLoop.lastWork
-    if not work then return busy and PREFETCH_BUDGET_COMBAT or PREFETCH_BUDGET_CALM end
-    local slack = FRAME_TARGET - (work - ObstacleManager.lastPrefetchTime)
-    return math.max(busy and PREFETCH_MIN_COMBAT or PREFETCH_MIN_CALM, math.min(PREFETCH_BUDGET_CALM, slack))
+    local cap = busy and PREFETCH_BUDGET_COMBAT or PREFETCH_BUDGET_CALM
+    local sync = RunLoop.syncTime
+    if not sync then return cap end
+    local slack = FRAME_PERIOD - (love.timer.getTime() - sync) - UPDATE_RESERVE
+    -- In combat a full interval (after a touch-screen redraw) skips the slice: even a short one
+    -- plus its overshoot made the next vertical sync slip by a fraction of a millisecond
+    if busy then return math.min(cap, slack) end
+    return math.max(PREFETCH_MIN_CALM, math.min(cap, slack))
 end
 
 local GameState = {}
@@ -1038,6 +1045,15 @@ function GameState:finishRun(victory)
 end
 
 function GameState:update(dt)
+    self:step(dt)
+    -- Touch screen redrawn this frame (decided before the update): its live layer is recorded now,
+    -- before the wait for the vertical sync, rather than drawn sprite by sprite after it
+    if RunLoop.bottomThisFrame and not (self.specialRoomManager and self.specialRoomManager:isOfferOpen()) then
+        self.hud:prepareLive(self)
+    end
+end
+
+function GameState:step(dt)
     -- Panneau admin : invincibilité et ultime infini
     if Admin.get("god") then
         self.player.hp = self.player.maxHp
@@ -1051,7 +1067,14 @@ function GameState:update(dt)
 
     -- Préparation de la salle suivante : petite tranche en plein combat, plus large au calme
     local busy = self.phase == "combat" and self.dummyPool.activeCount > 0
-    ObstacleManager.stepPrefetch(prefetchBudget(busy))
+    Perf.sec("u:avant")
+    local budget = prefetchBudget(busy)
+    if budget > 0 then
+        ObstacleManager.stepPrefetch(budget, not busy)
+    else
+        ObstacleManager.lastPrefetchTime = 0
+    end
+    Perf.sec("u:prefetch")
 
     -- 1. Moteur VFX : Screen Shake, FCT, Particules & Hit-Stop micro-pause (0.05s sur crit / mort)
     if VFX.update(dt) then

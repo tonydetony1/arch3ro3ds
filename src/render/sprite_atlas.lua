@@ -415,7 +415,10 @@ local floor, min, max, sqrt = math.floor, math.min, math.max, math.sqrt
 -- Distance (4-voisins) au bord de la silhouette, deux passes comme shade3d
 local function distanceMap(col, gw, gh)
     local dist = {}
-    for i = 1, gw * gh do dist[i] = col[i] and 99 or 0 end
+    for y = 1, gh do
+        Slice.check()
+        for i = (y - 1) * gw + 1, y * gw do dist[i] = col[i] and 99 or 0 end
+    end
     for y = 1, gh do
         Slice.check()
         local row = (y - 1) * gw
@@ -453,8 +456,12 @@ local function shadeFlat(col, gw, gh, opts)
     -- Hauteur en dôme sur une grille bordée de zéros : hm[y * W2 + x + 1], x et y de 0 à g+1
     local W2 = gw + 2
     local hm = {}
-    for i = 1, W2 * (gh + 2) do hm[i] = 0 end
+    for y = 0, gh + 1 do
+        Slice.check()
+        for i = y * W2 + 1, (y + 1) * W2 do hm[i] = 0 end
+    end
     for y = 1, gh do
+        Slice.check()
         local row = (y - 1) * gw
         for x = 1, gw do
             local d = dist[row + x]
@@ -502,15 +509,22 @@ function SpriteAtlas.cellsToImage(cells, gw, gh, palette, outline, shadeOpts)
     local pal = {}
     for k, v in pairs(palette) do pal[k] = toColor(v) end
     local col = {}
-    for i = 1, gw * gh do col[i] = pal[cells[i]] or false end
+    for y = 1, gh do
+        Slice.check()
+        for i = (y - 1) * gw + 1, y * gw do col[i] = pal[cells[i]] or false end
+    end
     if shadeOpts then col = shadeFlat(col, gw, gh, shadeOpts) end
 
     -- Grille finale avec marge de contour : px[y * w + x + 1], x de 0 à w-1
     local pad = outline and 1 or 0
     local w, h = gw + pad * 2, gh + pad * 2
     local px = {}
-    for i = 1, w * h do px[i] = false end
+    for y = 0, h - 1 do
+        Slice.check()
+        for i = y * w + 1, (y + 1) * w do px[i] = false end
+    end
     for y = 1, gh do
+        Slice.check()
         local src, dst = (y - 1) * gw, (y - 1 + pad) * w + pad
         for x = 1, gw do px[dst + x] = col[src + x] end
     end
@@ -539,6 +553,7 @@ function SpriteAtlas.cellsToImage(cells, gw, gh, palette, outline, shadeOpts)
             if c then imgData:setPixel(x, y, c[1], c[2], c[3], c[4] or 1) end
         end
     end
+    Slice.heavy() -- the texture upload cannot be sliced: kept off busy frames
     local img = love.graphics.newImage(imgData)
     img:setFilter("nearest", "nearest")
     return img, w, h
