@@ -396,6 +396,14 @@ local LILY_FLOWER = { "..GGGGG.", ".GGpwpGG", "GGGpppGG", "GGGGGG..", ".GGGGGG."
 local REEDS = { ".b...", ".b..b", "Rb..b", "R.RRb", "R.R.R", "RRR.R", ".RRRR" }
 local ROOT = { "b.", "b.", ".b", ".b", "b.", "b." }
 local RIPPLE = { ".WWW.", "W...W" }
+-- Water ripples fade in and out: pre-faded copies are drawn in white, so they stay in the sprite
+-- batch instead of costing one GPU call each with a translucent colour (src/core/obstacle_manager.lua)
+Props.RIPPLE_FADES = 8
+Props.RIPPLE_MAX_ALPHA = 0.55
+local RIPPLE_VARIANTS = {}
+for i = 1, Props.RIPPLE_FADES do
+    RIPPLE_VARIANTS["fade" .. i] = { W = { 1, 1, 1, Props.RIPPLE_MAX_ALPHA * i / Props.RIPPLE_FADES } }
+end
 
 function Props.define(atlas)
     local function d(name, frames, pal, outline, anchor, shade, variants)
@@ -530,7 +538,7 @@ function Props.define(atlas)
     d("loot_chest", { LOOT_CHEST }, { W = "b86f50", w = "733e39", G = "feae34", Y = "fee761", k = "3e2731" }, "181425", "center")
     d("lily", { LILY, LILY_FLOWER }, { G = "63c74d", L = "3e8948", p = "f6757a", w = "ffffff" }, "193c3e")
     d("reeds", { REEDS }, { R = "3e8948", b = "733e39" }, nil, "bottom")
-    d("ripple", { RIPPLE }, { W = "ffffff" }, nil)
+    d("ripple", { RIPPLE }, { W = "ffffff" }, nil, nil, nil, RIPPLE_VARIANTS)
 end
 
 return Props

@@ -38,12 +38,32 @@ end
 -- sinon rectangle teinté classique. Toujours en sprite quand la couleur existe : un
 -- rectangle teinté coûte un appel GPU (~40-80 µs sur Old 3DS) et coupe le lot en cours ;
 -- le menu principal en dessinait plus de 100 par image.
+-- Quad of the pre-coloured pixel for (colour table, opacity in twentieths), or false: resolved
+-- once, so a flat costs one table lookup and one Gpu.addSprite call on the hot path
+local rectQuads = setmetatable({}, { __mode = "k" })
+local function rectQuad(c, a)
+    if not Art.ready then return false end -- no atlas yet: nothing cached
+    local a20 = floor((a or c[4] or 1) * 20 + 0.5)
+    local byAlpha = rectQuads[c]
+    if not byAlpha then
+        byAlpha = {}
+        rectQuads[c] = byAlpha
+    end
+    local q = byAlpha[a20]
+    if q == nil then
+        local name = PxColors.nameOf(c)
+        q = (name and a20 > 0 and Art.pxQuad(name, math.min(20, a20))) or false
+        byAlpha[a20] = q
+    end
+    return q
+end
+
 local function rect(c, x, y, w, h, a)
     if w <= 0 or h <= 0 then return end
-    local sprite = pxSpriteAny(c, a)
-    if sprite then
+    local q = rectQuad(c, a)
+    if q then
         love.graphics.setColor(1, 1, 1, 1)
-        Art.drawEx(sprite, 1, x, y, 0, w, h)
+        Gpu.addSprite(Art.image, q, x, y, 0, w, h)
         return
     end
     set(c, a)
@@ -64,10 +84,18 @@ function Skin.roundRect(c, x, y, w, h, r, a)
             rect(c, x, y, w, h, a)
             return
         end
+        -- Opaque colour: the staircase is the union of r + 1 nested bands (band k spans columns
+        -- k..w-1-k and rows r-k..h-1-r+k), pixel for pixel the same shape as 2r + 1 columns but
+        -- with fewer sprites. Translucent colours keep disjoint columns (overlaps would darken).
+        if (a or c[4] or 1) >= 1 then
+            for k = 0, r do
+                rect(c, x + k, y + r - k, w - k * 2, h - (r - k) * 2, a)
+            end
+            return
+        end
         rect(c, x + r, y, w - r * 2, h, a)
         for i = 1, r do
             local inset = r - i + 1
-            if i == r then inset = 1 end
             rect(c, x + i - 1, y + inset, 1, h - inset * 2, a)
             rect(c, x + w - i, y + inset, 1, h - inset * 2, a)
         end

@@ -408,6 +408,8 @@ function Arena:buildGround(mapW, mapH, palette, obstacleManager)
         self.obstacleManager:buildProps()
     end
     self:buildWalls(w, h, makeRng(w * 3 + h * 5), theme)
+    -- GPU batches of the ground built now, with the room, rather than on its first frame
+    if b.split and b.count > 0 then b:compile() end
 end
 
 -- Rétrocompatibilité : buildCanvas pointe vers buildGround
@@ -460,6 +462,7 @@ function Arena:buildWalls(w, h, rng, theme)
     -- Porte de pierre
     addSprite(b, "gate_arch", 1, math.floor(w / 2), 32)
     b:setColor(1, 1, 1, 1)
+    b:compile()
 end
 
 -- ============================================================================
@@ -519,14 +522,14 @@ end
 -- ============================================================================
 -- 5. ATMOSPHÈRE (espace écran) : vignettage léger optimisé
 -- ============================================================================
+-- Pre-coloured ink pixels stretched over the edges: they stay in the sprite batch, where 4 tinted
+-- rectangles cost 4 GPU calls per frame
+local VIGNETTE_ALPHA = 0.16
 local function drawVignetteDirect(w, h)
-    local ink = C.ink
-    love.graphics.setColor(ink[1], ink[2], ink[3], 0.16)
-    love.graphics.rectangle("fill", 0, 0, w, 8)
-    love.graphics.rectangle("fill", 0, h - 8, w, 8)
-    love.graphics.rectangle("fill", 0, 0, 8, h)
-    love.graphics.rectangle("fill", w - 8, 0, 8, h)
-    love.graphics.setColor(1, 1, 1, 1)
+    Art.px("ink", 0, 0, w, 8, VIGNETTE_ALPHA)
+    Art.px("ink", 0, h - 8, w, 8, VIGNETTE_ALPHA)
+    Art.px("ink", 0, 0, 8, h, VIGNETTE_ALPHA)
+    Art.px("ink", w - 8, 0, 8, h, VIGNETTE_ALPHA)
 end
 
 -- Murs + porte (couche Depth.WALLS, 1 seul draw call SpriteBatch)
@@ -549,7 +552,7 @@ function Arena:drawWalls(isGateOpen, mapW)
 end
 
 function Arena:drawAtmosphere()
-    -- 4 aplats : moins cher qu'une texture plein écran et sans Canvas
+    -- 4 flat strips: cheaper than a full-screen texture, and no Canvas
     drawVignetteDirect(Config.TOP_WIDTH, Config.TOP_HEIGHT)
 end
 

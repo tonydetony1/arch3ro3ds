@@ -41,6 +41,7 @@ local installed = false
 -- Chemin chaud (appelé à chaque dessin) : aucune branche de profilage ici.
 local frameVertices = 0
 local frameCalls = 0
+local spriteCount = 0 -- sprites sent since boot (Perf: sprites per section)
 local limit = Gpu.VERTEX_LIMIT
 local function reserve(n)
     local total = frameVertices + n
@@ -72,6 +73,11 @@ local function reserveProfiled(n)
 end
 Gpu.reserve = reserve
 
+-- Running totals for src/core/perf.lua (sprites and draw calls per section)
+function Gpu.counters()
+    return spriteCount, frameCalls
+end
+
 local function ellipsePoints(r)
     local p = math.sqrt(math.max(r, 0) * 20)
     if p < 8 then p = 8 end
@@ -101,6 +107,7 @@ end
 -- ============================================================================
 local AUTO_SIZE = 512
 local auto = nil        -- SpriteBatch réutilisé
+local autoAdd = nil     -- auto.add, looked up once (saves a metatable lookup per sprite)
 local autoImage = nil   -- texture de l'atlas (Art.image)
 local autoCount = 0
 local colorIsWhite = true
@@ -116,14 +123,22 @@ local cr, cg, cb, ca = 1, 1, 1, 1 -- couleur courante (suivie par l'enveloppe de
 -- ensuite en 1 seul appel GPU tant qu'elles ne changent pas.
 -- ============================================================================
 local recordSB = nil
+local recordMissed = 0 -- draws dropped by a recording (not white atlas sprites): see Gpu.recordMisses
 
 function Gpu.isRecording()
     return recordSB ~= nil
 end
 
+-- Running count of draws a recording could not keep; a caller compares it before and after its
+-- recording to know whether the batch holds everything it drew
+function Gpu.recordMisses()
+    return recordMissed
+end
+
 function Gpu.setAutoBatchImage(image)
     autoImage = image
     auto = nil
+    autoAdd = nil
     autoCount = 0
 end
 
@@ -170,6 +185,7 @@ Gpu.flush = flush
 -- même effet que love.graphics.draw(image, quad, …) mais sans l'enveloppe générique, dont le
 -- coût Lua par sprite comptait sur Old 3DS.
 function Gpu.addSprite(image, quad, x, y, r, sx, sy, ox, oy)
+    spriteCount = spriteCount + 1
     if image ~= autoImage or not colorIsWhite then
         return g.draw(image, quad, x, y, r, sx, sy, ox, oy)
     end
@@ -177,8 +193,11 @@ function Gpu.addSprite(image, quad, x, y, r, sx, sy, ox, oy)
         recordSB:add(quad, x, y, r or 0, sx or 1, sy or 1, ox or 0, oy or 0)
         return
     end
-    if not auto then auto = g.newSpriteBatch(autoImage, AUTO_SIZE, "stream") end
-    auto:add(quad, x, y, r or 0, sx or 1, sy or 1, ox or 0, oy or 0)
+    if not auto then
+        auto = g.newSpriteBatch(autoImage, AUTO_SIZE, "stream")
+        autoAdd = auto.add
+    end
+    autoAdd(auto, quad, x, y, r or 0, sx or 1, sy or 1, ox or 0, oy or 0)
     autoCount = autoCount + 1
     if autoCount >= AUTO_SIZE then flush() end
 end
@@ -215,13 +234,21 @@ function Gpu.install()
     end
 
     g.draw = function(obj, a, ...)
+        spriteCount = spriteCount + 1
         if recordSB then
-            if obj == autoImage and colorIsWhite and type(a) == "userdata" then recordSB:add(a, ...) end
+            if obj == autoImage and colorIsWhite and type(a) == "userdata" then
+                recordSB:add(a, ...)
+            else
+                recordMissed = recordMissed + 1
+            end
             return
         end
         if obj == autoImage and colorIsWhite and type(a) == "userdata" then
-            if not auto then auto = g.newSpriteBatch(autoImage, AUTO_SIZE, "stream") end
-            auto:add(a, ...)
+            if not auto then
+                auto = g.newSpriteBatch(autoImage, AUTO_SIZE, "stream")
+                autoAdd = auto.add
+            end
+            autoAdd(auto, a, ...)
             autoCount = autoCount + 1
             if autoCount >= AUTO_SIZE then flush() end
             return
@@ -252,7 +279,7 @@ function Gpu.install()
 
     local rawRect = g.rectangle
     g.rectangle = function(mode, x, y, w, h, rx, ...)
-        if recordSB then return end
+        if recordSB then recordMissed = recordMissed + 1 return end
         if autoCount > 0 then flush() end
         local cost = (mode == "line") and 24 or 4
         if rx and rx > 0 then cost = cost + 16 end
@@ -261,7 +288,7 @@ function Gpu.install()
 
     local rawCircle = g.circle
     g.circle = function(mode, x, y, r, seg)
-        if recordSB then return end
+        if recordSB then recordMissed = recordMissed + 1 return end
         if autoCount > 0 then flush() end
         local n = seg or ellipsePoints(r)
         local cost = (mode == "line") and n * 6 or n + 2
@@ -271,6 +298,7 @@ function Gpu.install()
     local rawEllipse = g.ellipse
     if rawEllipse then
         g.ellipse = function(mode, x, y, rx, ry, seg)
+            if recordSB then recordMissed = recordMissed + 1 return end
             if autoCount > 0 then flush() end
             local n = seg or ellipsePoints((rx + (ry or rx)) / 2)
             local cost = (mode == "line") and n * 6 or n + 2
@@ -281,7 +309,7 @@ function Gpu.install()
     local rawArc = g.arc
     if rawArc then
         g.arc = function(mode, ...)
-            if recordSB then return end
+            if recordSB then recordMissed = recordMissed + 1 return end
             if autoCount > 0 then flush() end
             if reserve(48) then return rawArc(mode, ...) end
         end
@@ -289,7 +317,7 @@ function Gpu.install()
 
     local rawPolygon = g.polygon
     g.polygon = function(mode, ...)
-        if recordSB then return end
+        if recordSB then recordMissed = recordMissed + 1 return end
         if autoCount > 0 then flush() end
         local n = select("#", ...)
         local first = ...
@@ -301,7 +329,7 @@ function Gpu.install()
 
     local rawLine = g.line
     g.line = function(...)
-        if recordSB then return end
+        if recordSB then recordMissed = recordMissed + 1 return end
         if autoCount > 0 then flush() end
         local n = select("#", ...)
         local first = ...
@@ -320,6 +348,7 @@ function Gpu.install()
 
     local rawPrint = g.print
     g.print = function(text, ...)
+        if recordSB then recordMissed = recordMissed + 1 return end
         if autoCount > 0 then flush() end
         local str = tostring(text or "")
         if reserve(#str * 6) then return rawPrint(text, ...) end
@@ -327,6 +356,7 @@ function Gpu.install()
 
     local rawPrintf = g.printf
     g.printf = function(text, ...)
+        if recordSB then recordMissed = recordMissed + 1 return end
         if autoCount > 0 then flush() end
         local str = tostring(text or "")
         if reserve(#str * 6) then return rawPrintf(text, ...) end
@@ -557,6 +587,16 @@ function Chunked:addRect(quad, x, y, w, h)
             cx = nx
         end
         cy = ny
+    end
+end
+
+-- Builds every cell's GPU batches now (normally done on a cell's first draw, which stalled a frame
+-- whenever the camera revealed new cells); called once the decor is built
+function Chunked:compile()
+    for _, cells in pairs(self.layers) do
+        for _, c in pairs(cells) do
+            if c.split and c.static and not c.segments and c.count > 0 then c:compile() end
+        end
     end
 end
 
