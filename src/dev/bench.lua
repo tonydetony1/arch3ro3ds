@@ -31,6 +31,8 @@ function Bench.parse(args)
         if a == "--menu" then Bench.menu = true end
         if a == "--alloc" then Bench.alloc = {} end
         if a == "--roomload" then Bench.roomload = true end
+        -- Circle Pad held: every frame carries an input event, like real play
+        if a == "--input" then Bench.input = true end
         if a == "--showcase" then Bench.showcase = true end
         local tab = a:match("^%-%-tab=(%a+)$")
         if tab then Bench.tab = tab end
@@ -220,6 +222,8 @@ function Bench.start(sm)
         end
         return
     end
+    -- Real play reaches a run through the menu, where the sound effects finish loading
+    require("src.audio.audio").loadPending()
     sm:switch("game", { mode = "ascension" })
     local g = sm.current
     if Bench.roomload then
@@ -268,6 +272,12 @@ function Bench.update(dt)
     end
     local g = Bench.sm.current
     if g and g.player and not Bench.menu then autopilot(g, Bench.t) end
+    if Bench.input and love.event and love.event.push then
+        -- Real play moves the Circle Pad: LÖVE Potion then sends gamepadaxis every frame
+        -- (the 3DS loop must not redraw the touch screen for it, src/core/runloop.lua)
+        local joy = love.joystick and love.joystick.getJoysticks()[1]
+        love.event.push("gamepadaxis", joy, "leftx", math.sin(Bench.t * 3) * 0.5)
+    end
 
     local st = Gpu.stats
     if st.vertices > Bench.peakVertices then Bench.peakVertices = st.vertices end
@@ -279,6 +289,11 @@ function Bench.update(dt)
         local projs = g and g.projectilePool and g.projectilePool.activeCount or 0
         Bench.log(string.format("[BENCH] t=%2ds sommets=%5d appels=%4d rejets=%d monstres=%d projectiles=%d RAM=%.0fKo",
             math.floor(Bench.t), st.vertices, st.calls, st.skipped, mobs, projs, collectgarbage("count")))
+        if Bench.t < 2 and g and g.arena then
+            local function n(sb) return sb and sb.getCount and sb:getCount() or 0 end
+            Bench.log(string.format("[BENCH] persistent batches: ground %d, walls %d, hud fixed %d, map %dx%d",
+                n(g.arena.groundBatch), n(g.arena.wallBatch), n(g.hud and g.hud.staticBatch), g.mapW or 0, g.mapH or 0))
+        end
     end
 
     local shotAt = Bench.shots[Bench.shotIndex]

@@ -165,6 +165,7 @@ function love.load(arg)
         end
         if love.filesystem.getInfo("bench_lprof") then Bench.lprof = {} end
         if love.filesystem.getInfo("bench_alloc") then Bench.alloc = {} end
+        if love.filesystem.getInfo("bench_input") then Bench.input = true end
         Bench.start(gameStateMachine)
     end
 
